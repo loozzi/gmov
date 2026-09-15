@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   ChevronDown,
   Clapperboard,
+  Heart,
   LogIn,
   LogOut,
   Menu,
@@ -109,7 +110,9 @@ function AccountMenu() {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/me/favorites">Phim yêu thích</Link>
+          <Link href="/me/favorites">
+            <Heart /> Phim yêu thích
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
