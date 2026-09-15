@@ -40,3 +40,16 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     by passlib 1.7.4. Verified hash/verify in tests.
 13. **`/me` lives under `/users`** (`/api/v1/users/me`), auth actions under
     `/api/v1/auth/*`. `/health` always HTTP 200 with per-component status.
+
+## 2026-09-15 — Phase 2 movies + cache
+
+14. **Re-probed episodes: servers use `items: [{name, slug, embed}]`** (not
+    `server_data`); parser accepts both keys. No `link_m3u8` exists upstream —
+    only `embed.php` page URLs — so our schema exposes `embed_url` +
+    nullable `m3u8_url` instead of inventing stream fields.
+15. **Stale-on-error**: fresh key (TTL 5/10/30 min) + `:stale` copy (24h);
+    upstream failure serves stale with `X-Cache: STALE`, else 502.
+    `invalidate()` is code-only, no public endpoint (avoids unauthenticated
+    cache purges).
+16. **Tests mock httpx via respx + redis via fakeredis** (fakeredis>=2.23 for
+    redis-py 5.x compat); one `@pytest.mark.integration` test hits the real API.

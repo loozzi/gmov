@@ -10,11 +10,13 @@ from app.api.v1 import api_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.db.session import close_connections, engine, get_redis_client
+from app.services.nguonc import aclose_client as aclose_nguonc_client
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     yield
+    await aclose_nguonc_client()
     await close_connections()
 
 

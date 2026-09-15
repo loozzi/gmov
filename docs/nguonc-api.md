@@ -124,15 +124,17 @@ Top-level keys: `status`, `movie`. No `paginate`.
 }
 ```
 
-Notes (observed 2026-09-15):
+Notes (observed 2026-09-15, re-probed):
 - `category` is a dict keyed by `"1".."4"` (Định dạng / Thể loại / Năm / Quốc gia),
   NOT a list. Backend must parse it as `dict[str, CategoryGroup]`.
-- `episodes` is a list of `{server_name, server_data}`. On all films probed today
-  (`mao`, `hoa-thien-cot`, `ve-dep`, `gto-...`, `avengers-cuoc-chien-bi-mat`),
-  `server_data` was `[]` (one film had 0 servers). Stream-URL field names
-  (`link_m3u8` etc.) are therefore NOT yet confirmed — MUST re-probe in the
-  player phase and update this doc before writing the episode parser.
-  The episode parser must tolerate empty `server_data` and `episodes: []`.
+- `episodes` is a list of server objects. Observed server keys:
+  `{server_name, items}` on current responses (older probes also showed an empty
+  `server_data` key — the parser MUST accept both `items` and `server_data`).
+- Episode item keys observed: `{name, slug, embed}` where `embed` is an
+  `https://embed*.streamc.xyz/embed.php?hash=...` page URL. **No `link_m3u8`
+  field exists in real responses** — our API exposes `embed_url` and a nullable
+  `m3u8_url` (null until upstream provides direct streams).
+- The episode parser must tolerate empty `items`/`server_data` and `episodes: []`.
 - `description` may contain raw HTML (`<p>...</p>`) — sanitize before rendering.
 - Unknown slug → HTTP 404 `{"status":"error","message":"Movie doesn't exist"}`.
 - Timestamps are `YYYY-MM-DDTHH:mm:ss.ffffffZ` strings.
