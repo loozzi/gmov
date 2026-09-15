@@ -15,6 +15,7 @@ import { useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { SearchBox } from "@/components/layout/search-box";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -196,7 +197,10 @@ export function SiteHeader() {
         <div className="ml-auto hidden w-64 md:block xl:w-80">
           <SearchBox />
         </div>
-        <AccountMenu />
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          <AccountMenu />
+        </div>
       </div>
       <div className="px-4 pb-3 md:hidden">
         <SearchBox />

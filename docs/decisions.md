@@ -226,3 +226,13 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     routes-manifest.json lúc build (đã chứng minh: build với `:9`, chạy với
     `:8008` vẫn đập vào `:9`). Xóa `/api/config`, `runtime-config.ts`,
     `PUBLIC_API_URL` khỏi mọi compose/script/doc; còn đúng 1 biến `BACKEND_URL`.
+
+## Fix: dark/light mode
+
+66. **Class-based dark mode cho Tailwind v4** (`@custom-variant dark` +
+    token sáng ở `:root`, token tối trong `.dark` — utilities dùng var() nên
+    tự đổi màu, không sửa từng component). **Provider tự viết, không thêm
+    `next-themes`**: localStorage `gmov-theme`, mặc định theo
+    `prefers-color-scheme` (fallback dark), tự bám OS khi user chưa chốt,
+    script inline chống FOUC + `suppressHydrationWarning` ở `<html>`.
+    Nút toggle Sun/Moon ở header cạnh avatar.
