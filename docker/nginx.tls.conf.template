@@ -1,0 +1,77 @@
+# Production nginx: ACME webroot + redirect 80->443 + TLS 443.
+# Mounted as /etc/nginx/templates/default.conf.template (auto-envsubst $DOMAIN).
+# NOTE: nginx variables here are all lowercase ($host, $scheme, ...) while the
+# image's envsubst only substitutes existing UPPER_CASE env names — so plain
+# $var is left alone and ONLY ${DOMAIN} gets replaced. Do NOT use UPPER_CASE
+# nginx variables in this file.
+#
+# Bootstrap order (see docs/deploy.md): start db/redis/api/web first, issue the
+# first cert with the certbot service, THEN start nginx.
+
+server {
+    listen 80;
+    server_name ${DOMAIN};
+
+    # Let's Encrypt webroot challenge (must stay on plain HTTP).
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${DOMAIN};
+
+    ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # HSTS: only enable once HTTPS is confirmed working end-to-end.
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    # Basic CSP: self + upstream image/stream origins. Tighten further
+    # (nonces) if inline-script requirements change.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://phim.nguonc.com https://*.streamc.xyz; media-src 'self' blob: https:; frame-src https://*.streamc.xyz; connect-src 'self' https:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
+
+    # Backend API (FastAPI): /api/* and /health.
+    location /api/ {
+        proxy_pass http://api:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /health {
+        proxy_pass http://api:8000;
+        proxy_set_header Host $host;
+    }
+
+    # Frontend (Next.js standalone).
+    location / {
+        proxy_pass http://web:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+}
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}

@@ -27,6 +27,9 @@ cp .env.example .env   # sửa JWT_SECRET + POSTGRES_PASSWORD thật
 docker compose up --build -d
 ```
 
+Có domain + muốn HTTPS: làm theo `docs/deploy.md` (`scripts/gen-secrets.sh` +
+`docker-compose.prod.yml` với nginx TLS + certbot).
+
 - Web: http://localhost (nginx → web), API trực tiếp: http://localhost:8000
 - API qua nginx: http://localhost/api/v1/movies/latest, health: http://localhost/health
 - Xem logs: `docker compose logs -f api web`

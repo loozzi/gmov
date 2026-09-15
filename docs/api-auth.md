@@ -6,7 +6,7 @@ Base: `/api/v1`. All errors are JSON `{"detail": ..., "code": ...}`.
 
 | Method | Path | Auth | Body | Success |
 |--------|------|------|------|---------|
-| POST | `/auth/register` | no | `{email, username(3–32, `[a-zA-Z0-9_.]`), password(≥8)}` | 201 `UserOut` |
+| POST | `/auth/register` | no | `{email, username(3–32, `[a-zA-Z0-9_.]`), password(≥8)}` + honeypot `website` (phải để trống) | 201 `UserOut` |
 | POST | `/auth/login` | no | OAuth2 form `username` (= email **or** username) + `password` | 200 `TokenPair` |
 | POST | `/auth/refresh` | no | `{refresh_token}` (rotates: old revoked, new pair issued) | 200 `TokenPair` |
 | POST | `/auth/logout` | no | `{refresh_token}` (idempotent, always 200) | 200 `{"ok": true}` |
@@ -29,8 +29,16 @@ Base: `/api/v1`. All errors are JSON `{"detail": ..., "code": ...}`.
 
 `EMAIL_TAKEN` / `USERNAME_TAKEN` (409), `INVALID_CREDENTIALS` (401),
 `ACCOUNT_DISABLED` (403), `INVALID_REFRESH_TOKEN` (401),
+`BOT_DETECTED` (400, honeypot có giá trị),
 `UNAUTHORIZED` (401), `VALIDATION_ERROR` (422), `HTTP_ERROR`,
 `INTERNAL_ERROR` (500).
+
+## Throttling
+
+- Login sai: 5 lần / 15 phút / IP → 429 `RATE_LIMITED` + header `Retry-After`.
+- Register: 3 tài khoản / IP / giờ, 10 / IP / ngày → 429 + `Retry-After`.
+  IP client đọc từ `X-Forwarded-For` chỉ khi peer là proxy nội bộ tin cậy
+  (`TRUSTED_PROXIES`, mặc định dải private + loopback).
 
 ## Notes
 

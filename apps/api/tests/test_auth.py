@@ -148,3 +148,30 @@ async def test_login_success_resets_failures(client, user_payload, _fake_redis):
         assert r.status_code == 401
     r = await _login(client, user_payload["username"], "wrongpassword")
     assert r.status_code == 429
+
+
+def _reg_payload(i: int):
+    return {
+        "email": f"throttle{i}@gmov.dev",
+        "username": f"throttleuser{i}",
+        "password": "password123",
+    }
+
+
+async def test_register_throttled_after_3_per_hour(client, _fake_redis):
+    for i in range(3):
+        r = await _register(client, _reg_payload(i))
+        assert r.status_code == 201, r.text
+    r = await _register(client, _reg_payload(3))
+    assert r.status_code == 429
+    assert r.json()["code"] == "RATE_LIMITED"
+    assert "retry-after" in r.headers
+    r = await _register(client, _reg_payload(4))
+    assert r.status_code == 429
+
+
+async def test_register_honeypot_rejected(client, _fake_redis):
+    payload = {**_reg_payload(9), "website": "http://spam.example"}
+    r = await _register(client, payload)
+    assert r.status_code == 400
+    assert r.json()["code"] == "BOT_DETECTED"

@@ -1,0 +1,71 @@
+# Production override: real secrets (no defaults), TLS nginx, certbot.
+# Requires env (see scripts/gen-secrets.sh):
+#   DOMAIN, ACME_EMAIL, JWT_SECRET, POSTGRES_USER, POSTGRES_PASSWORD,
+#   POSTGRES_DB, CORS_ORIGINS, NEXT_PUBLIC_API_URL
+# Boot order for a fresh domain (details in docs/deploy.md):
+#   1. docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build db redis api web
+#   2. First cert:  docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm -p 80:80 certbot \
+#        certonly --standalone --non-interactive --agree-tos -m "${ACME_EMAIL:?}" -d "${DOMAIN:?}"
+#   3. docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build nginx
+services:
+  api:
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      REFRESH_TOKEN_EXPIRE_DAYS: 30
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
+      TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+
+  web:
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL is required}
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL is required}
+      BACKEND_URL: http://api:8000
+
+  nginx:
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN is required}
+    volumes:
+      # Same target as base compose -> replaces the plain-HTTP conf.
+      - ./docker/nginx.empty.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/nginx.tls.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - certbot-www:/var/www/certbot
+      - letsencrypt:/etc/letsencrypt
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  # Webroot-mode certbot. Default CMD is safe to re-run (no-op while the cert
+  # is valid). Run manually for issuance/renewal, then reload nginx:
+  #   docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm certbot
+  #   docker compose -f docker-compose.yml -f docker-compose.prod.yml exec nginx nginx -s reload
+  certbot:
+    image: certbot/certbot:v2.11
+    profiles: ["certbot"]
+    command: >
+      certonly --webroot --non-interactive --agree-tos
+      --email ${ACME_EMAIL:?ACME_EMAIL is required}
+      -w /var/www/certbot -d ${DOMAIN:?DOMAIN is required}
+      --keep-until-expiring
+    volumes:
+      - certbot-www:/var/www/certbot
+      - letsencrypt:/etc/letsencrypt
+    networks:
+      - gmov-net
+
+volumes:
+  certbot-www:
+  letsencrypt:

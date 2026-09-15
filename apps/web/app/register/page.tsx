@@ -25,6 +25,8 @@ const registerSchema = z
       ),
     password: z.string().min(8, "Mật khẩu cần ít nhất 8 ký tự."),
     confirm: z.string().min(1, "Vui lòng nhập lại mật khẩu."),
+    // Honeypot chống bot: người thật không bao giờ điền ô này.
+    website: z.string().max(255).optional(),
   })
   .refine((v) => v.password === v.confirm, {
     message: "Mật khẩu nhập lại chưa khớp.",
@@ -46,7 +48,12 @@ export default function RegisterPage() {
   const onSubmit = async (values: RegisterForm) => {
     setServerError(null);
     try {
-      await signUp(values.email.trim(), values.username.trim(), values.password);
+      await signUp(
+        values.email.trim(),
+        values.username.trim(),
+        values.password,
+        values.website || undefined,
+      );
       router.push("/");
       router.refresh();
     } catch (e) {
@@ -128,6 +135,18 @@ export default function RegisterPage() {
               {serverError}
             </p>
           )}
+          {/* Honeypot chống bot: ẩn với người thật, bot điền vào sẽ bị từ chối. */}
+          <div aria-hidden="true" className="absolute h-0 overflow-hidden opacity-0">
+            <label htmlFor="website">Website</label>
+            <Input
+              id="website"
+              type="text"
+              autoComplete="off"
+              tabIndex={-1}
+              placeholder="Để trống ô này"
+              {...register("website")}
+            />
+          </div>
           <Button type="submit" className="w-full" disabled={isSubmitting}>
             {isSubmitting ? "Đang tạo tài khoản..." : "Đăng ký"}
           </Button>

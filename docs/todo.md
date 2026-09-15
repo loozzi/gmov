@@ -4,8 +4,8 @@ Brought forward — none blocks current functionality.
 
 ## Backend
 
-1. **No rate limit on `/auth/register`** — open to mass account creation.
-   Add IP-based throttling (or CAPTCHA) before public exposure.
+1. ~~No rate limit on `/auth/register`~~ — DONE (Batch 2: 3/h + 10/day/IP,
+   honeypot, trusted-proxy IP). Còn lại: CAPTCHA nếu bị abuse có chủ đích.
 2. **No refresh-token reuse detection** — rotation revokes the old token, but a
    stolen refresh used twice isn't flagged. Consider invalidating the whole
    token family on reuse.
@@ -37,7 +37,10 @@ Brought forward — none blocks current functionality.
 
 14. **No registry push / deploy pipeline** — CI only builds images. Add push +
     release versioning when a registry is chosen.
-15. **Secrets are dev-defaults in compose** — production must set `JWT_SECRET`
-    + `POSTGRES_PASSWORD` (warned in `.env.example`/README, not enforced).
+15. ~~Secrets are dev-defaults in compose~~ — DONE (Batch 2: production guard
+    chết ngay khi boot + `docker-compose.prod.yml` với `${VAR:?}` +
+    `scripts/gen-secrets.sh`). Còn lại: xoay secret định kỳ.
 16. **No DB backups** — `pgdata` volume has no backup/restore documented.
-17. **Nginx has no TLS** — terminate HTTPS at a real edge (or add certbot sidecar).
+17. ~~Nginx has no TLS~~ — DONE (Batch 2: `nginx.tls.conf.template` + certbot
+    service + `docs/deploy.md`). Còn lại: deploy thật lên domain + thắt CSP
+    bằng nonce thay `'unsafe-inline'`.

@@ -24,6 +24,7 @@ const CODE_MESSAGES: Record<string, string> = {
   INVALID_LIST_TYPE: "Danh mục không hợp lệ.",
   INVALID_YEAR: "Năm không hợp lệ.",
   RATE_LIMITED: "Bạn thao tác quá nhanh. Hãy thử lại sau ít phút.",
+  BOT_DETECTED: "Yêu cầu đăng ký không hợp lệ.",
   UPSTREAM_ERROR: "Nguồn phim tạm thời lỗi. Hãy thử lại sau.",
   HTTP_ERROR: "Đã xảy ra lỗi. Hãy thử lại.",
   INTERNAL_ERROR: "Lỗi hệ thống. Hãy thử lại sau.",

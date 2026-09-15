@@ -13,23 +13,30 @@ class AppException(Exception):
         detail: str,
         code: str,
         status_code: int = status.HTTP_400_BAD_REQUEST,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(detail)
         self.detail = detail
         self.code = code
         self.status_code = status_code
+        self.headers = headers
 
 
 def _error_response(
-    detail: object, code: str, status_code: int
+    detail: object,
+    code: str,
+    status_code: int,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     return JSONResponse(
-        status_code=status_code, content={"detail": detail, "code": code}
+        status_code=status_code,
+        content={"detail": detail, "code": code},
+        headers=headers,
     )
 
 
 async def _app_exception_handler(_: Request, exc: AppException) -> JSONResponse:
-    return _error_response(exc.detail, exc.code, exc.status_code)
+    return _error_response(exc.detail, exc.code, exc.status_code, exc.headers)
 
 
 async def _http_exception_handler(

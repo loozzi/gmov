@@ -16,9 +16,20 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def register(
-    data: RegisterIn, db: AsyncSession = Depends(get_db)
+    request: Request,
+    data: RegisterIn,
+    db: AsyncSession = Depends(get_db),
 ) -> UserOut:
+    ip = ratelimit.client_ip(request)
+    await ratelimit.check_register_allowed(ip)
+    if data.website:
+        raise AppException(
+            "Yêu cầu đăng ký không hợp lệ.",
+            "BOT_DETECTED",
+            400,
+        )
     user = await auth_service.register(db, data)
+    await ratelimit.record_register_success(ip)
     return UserOut.model_validate(user)
 
 

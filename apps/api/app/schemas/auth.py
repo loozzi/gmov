@@ -7,6 +7,9 @@ class RegisterIn(BaseModel):
     email: EmailStr
     username: str = Field(min_length=3, max_length=32, pattern=r"^[a-zA-Z0-9_.]+$")
     password: str = Field(min_length=8, max_length=128)
+    # Honeypot: real users always leave this empty. Bots that fill it in
+    # are rejected outright (see auth router).
+    website: str | None = Field(default=None, max_length=255)
 
 
 class TokenPair(BaseModel):

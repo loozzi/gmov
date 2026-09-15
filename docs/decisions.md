@@ -133,3 +133,21 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     headless Chromium; hero `fetchPriority=high` + preconnect to image origin.
 42. **Leftover debt logged in `docs/todo.md`** instead of being silently dropped
     (register throttling, token-family reuse detection, sitemap, TLS, backups).
+
+## Batch 2 — register throttling, enforced secrets, TLS
+
+43. **Register throttle đếm tài khoản tạo thành công** (3/giờ, 10/ngày/IP),
+    không đếm request lỗi — đúng chữ "3 tài khoản". Honeypot `website` trả 400
+    `BOT_DETECTED` công khai (theo spec "từ chối", không fake-201).
+44. **`X-Forwarded-For` chỉ tin khi peer thuộc `TRUSTED_PROXIES`** (mặc định
+    private + loopback, bao trùm nginx compose 172.x). Spoof từ IP public bị
+    bỏ qua, dùng peer IP.
+45. **Production guard chết ngay lúc import settings** (SystemExit qua
+    `_load_settings`), kiểm tra cả default lẫn độ dài <32 cho JWT_SECRET và
+    POSTGRES_PASSWORD. Dev hoàn toàn không ảnh hưởng.
+46. **Prod compose dùng `${VAR:?}`** — thiếu secret là compose báo lỗi ngay,
+    không boot nửa vời. Certbot chạy tay (first: standalone, renew: webroot +
+    cron host) vì auto-certonly mỗi lần `up` sẽ dính rate limit Let's Encrypt.
+47. **TLS template dùng `$$` escape cho envsubst**; CSP cơ bản vẫn giữ
+    `'unsafe-inline'` cho script/style (Next cần) — ghi nợ thắt chặt bằng
+    nonce ở `docs/todo.md`.
