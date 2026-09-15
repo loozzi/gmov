@@ -20,8 +20,9 @@ Brought forward — none blocks current functionality.
 
 ## Frontend
 
-7. **No web E2E tests** — only backend pytest exists. Add Playwright flows
-   (register → browse → watch → resume) in CI.
+7. ~~No web E2E tests~~ — DONE (Batch 4: Playwright, 8 specs auth/browse/
+    library/player-resume + CI job + trace upload). Còn lại: mở rộng khi có
+    tính năng mới.
 8. **No `sitemap.xml` / `robots.txt`** — dynamic slugs unknown at build; add a
    sitemap route backed by upstream latest pages.
 9. **`NEXT_PUBLIC_API_URL` baked at build time** — switching API domain needs a

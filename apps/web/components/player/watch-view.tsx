@@ -65,6 +65,7 @@ export function WatchView({ detail, episodeSlug }: Props) {
   const posRef = useRef({ t: 0, d: 0 });
   const playingRef = useRef(false);
   const markedRef = useRef(false);
+  const resumeDoneRef = useRef(false);
   const embedRegisteredRef = useRef(false);
 
   const server =
@@ -103,17 +104,37 @@ export function WatchView({ detail, episodeSlug }: Props) {
     [detail, episodeSlug, currentEp, server, poster],
   );
 
-  // Resume: jump to saved position of THIS episode.
+  // Reset per-episode transient state. Client components persist across
+  // episode navigations within the same route, so stale startAt/toast from
+  // the previous episode must not leak into the next one.
   useEffect(() => {
-    if (!progressFetched || !savedProgress) return;
-    if (
-      savedProgress.episode_slug === episodeSlug &&
-      savedProgress.position_seconds > 10
-    ) {
-      setStartAt(savedProgress.position_seconds);
-      setToast(savedProgress.position_seconds);
-      setPlayKey((k) => k + 1);
-    }
+    resumeDoneRef.current = false;
+    markedRef.current = false;
+    posRef.current = { t: 0, d: 0 };
+    playingRef.current = false;
+    setStartAt(0);
+    setToast(null);
+    setToastGone(false);
+    setFatal(null);
+    setCountdown(null);
+    const hit = servers.find((s) =>
+      s.episodes.some((e) => (e.slug ?? e.name) === episodeSlug),
+    );
+    setServerName(hit?.name ?? servers[0]?.name ?? "");
+  }, [episodeSlug, servers]);
+
+  // Resume: decide EXACTLY ONCE per episode. Re-deciding on every progress
+  // refetch (e.g. after a heartbeat save) would remount the player mid-watch
+  // and interrupt playback. Never yank a viewer who already started watching.
+  useEffect(() => {
+    if (resumeDoneRef.current || !progressFetched || !savedProgress) return;
+    resumeDoneRef.current = true;
+    if (savedProgress.episode_slug !== episodeSlug) return;
+    if (savedProgress.position_seconds <= 10) return;
+    if (posRef.current.t > 10) return;
+    setStartAt(savedProgress.position_seconds);
+    setToast(savedProgress.position_seconds);
+    setPlayKey((k) => k + 1);
   }, [progressFetched, savedProgress, episodeSlug]);
 
   // Auto-dismiss resume toast.

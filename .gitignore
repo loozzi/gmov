@@ -56,3 +56,8 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Playwright e2e
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/e2e/.last-user.json

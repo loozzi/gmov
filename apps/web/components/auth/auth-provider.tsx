@@ -6,7 +6,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -35,28 +34,54 @@ async function fetchMe(): Promise<User> {
   return apiFetch<User>("/api/v1/users/me");
 }
 
+// Module-level boot handshake shared by every AuthProvider mount in this JS
+// context. Without it, StrictMode double-mounts (dev) or overlapping mounts
+// fire two silent refreshes with the SAME cookie concurrently — rotation
+// revokes the token for the loser and wipes a perfectly valid session.
+let bootPromise: Promise<{ access_token: string } | null> | null = null;
+
+function bootOnce(): Promise<{ access_token: string } | null> {
+  if (!bootPromise) {
+    bootPromise = (async () => {
+      try {
+        const res = await fetch("/api/auth/refresh", { method: "POST" });
+        if (!res.ok) return null;
+        return (await res.json()) as { access_token: string };
+      } catch {
+        return null;
+      } finally {
+        bootPromise = null;
+      }
+    })();
+  }
+  return bootPromise;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const booted = useRef(false);
 
   useEffect(() => {
-    if (booted.current) return;
-    booted.current = true;
+    let cancelled = false;
     (async () => {
-      try {
-        const res = await fetch("/api/auth/refresh", { method: "POST" });
-        if (res.ok) {
-          const data = (await res.json()) as { access_token: string };
-          setAccessToken(data.access_token);
-          setUser(await fetchMe());
+      const data = await bootOnce();
+      if (cancelled) return;
+      if (data) {
+        setAccessToken(data.access_token);
+        try {
+          const me = await fetchMe();
+          if (!cancelled) setUser(me);
+        } catch {
+          if (!cancelled) setAccessToken(null);
         }
-      } catch {
+      } else {
         setAccessToken(null);
-      } finally {
-        setIsLoading(false);
       }
+      if (!cancelled) setIsLoading(false);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {

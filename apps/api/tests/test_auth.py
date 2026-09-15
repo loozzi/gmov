@@ -1,6 +1,7 @@
 """Auth flow tests: register -> login -> /me -> refresh -> logout."""
 
 import pytest
+import pytest_asyncio
 from fakeredis.aioredis import FakeRedis
 
 from app.core import ratelimit
@@ -61,24 +62,28 @@ async def test_full_auth_flow(client, user_payload):
     assert r.status_code == 200, r.text
     rotated = r.json()
 
-    # old refresh token is now revoked
+    # duplicate delivery of the just-rotated token (double boot, two tabs):
+    # inside the grace window it re-issues instead of 401
     r = await client.post(
         f"{AUTH}/refresh", json={"refresh_token": tokens["refresh_token"]}
     )
-    assert r.status_code == 401
-    assert r.json()["code"] == "INVALID_REFRESH_TOKEN"
+    assert r.status_code == 200, r.text
+    graced = r.json()
+    assert graced["refresh_token"] not in (
+        tokens["refresh_token"],
+        rotated["refresh_token"],
+    )
 
-    # logout revokes the rotated refresh token
+    # logout DESTROYS the session: replay is rejected immediately (no grace)
     r = await client.post(
-        f"{AUTH}/logout", json={"refresh_token": rotated["refresh_token"]}
+        f"{AUTH}/logout", json={"refresh_token": graced["refresh_token"]}
     )
     assert r.status_code == 200
-
-    # logged-out refresh token is rejected
     r = await client.post(
-        f"{AUTH}/refresh", json={"refresh_token": rotated["refresh_token"]}
+        f"{AUTH}/refresh", json={"refresh_token": graced["refresh_token"]}
     )
     assert r.status_code == 401
+    assert r.json()["code"] == "INVALID_REFRESH_TOKEN"
 
 
 async def test_login_with_email(client, user_payload):
@@ -206,3 +211,69 @@ async def test_refresh_atomic_when_issue_fails(
     r = await client.post(f"{AUTH}/refresh", json={"refresh_token": old_refresh})
     assert r.status_code == 200, r.text
     assert r.json()["refresh_token"] != old_refresh
+
+
+
+@pytest_asyncio.fixture
+async def sqlite_factory(tmp_path):
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.db.base import Base
+
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/grace.db")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    yield factory
+    await engine.dispose()
+
+
+async def test_refresh_grace_and_stale_paths(sqlite_factory):
+    """Recently-revoked -> re-issue; long-revoked/unknown -> hard 401."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.core import security
+    from app.core.exceptions import AppException
+    from app.db.models.refresh_token import RefreshToken
+    from app.schemas.auth import RegisterIn
+    from app.services import auth_service, user_service
+
+    async with sqlite_factory() as db:
+        user = await user_service.create(
+            db,
+            RegisterIn(
+                email="grace@gmov.dev",
+                username="graceuser",
+                password="password123",
+            ),
+        )
+        # Plain UUID: later rollbacks expire ORM state, this stays usable.
+        user_id = user.id
+        now = datetime.now(UTC)
+
+        async def _row(offset_revoked=None):
+            token, jti = security.create_refresh_token(user_id)
+            db.add(
+                RefreshToken(
+                    user_id=user_id,
+                    jti=jti,
+                    expires_at=now + timedelta(days=30),
+                    revoked_at=(now + offset_revoked if offset_revoked else None),
+                )
+            )
+            await db.commit()
+            return token
+
+        # 1. duplicate delivery 5s after rotation -> re-issued (200 path)
+        pair = await auth_service.refresh(db, await _row(timedelta(seconds=-5)))
+        assert pair.access_token
+
+        # 2. revoked an hour ago -> hard 401
+        with pytest.raises(AppException) as exc:
+            await auth_service.refresh(db, await _row(timedelta(hours=-1)))
+        assert exc.value.status_code == 401
+
+        # 3. valid signature, unknown jti -> hard 401
+        foreign, _ = security.create_refresh_token(user_id)
+        with pytest.raises(AppException):
+            await auth_service.refresh(db, foreign)

@@ -164,3 +164,26 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     được); file 644 nên host vẫn đọc/copy được, mọi thao tác qua container.
 51. **Dump dùng `--clean --if-exists`** để restore được cả vào DB đã có schema
     (ghi đè), không bắt buộc DB trống.
+
+## Batch 4 — Playwright E2E (phát hiện 2 bug thật, đã sửa code)
+
+52. **Refresh boot dedupe phía client** (`bootPromise` module-level +
+    cancelled flag): StrictMode double-mount/dev remount bắn 2 silent refresh
+    cùng cookie → rotation đốt token của request thua → bay session oan.
+53. **Rotation grace 30s phía server**: token vừa revoke xong mà được trình lại
+    trong 30s → re-issue thay vì 401 (duplicate delivery, không phải theft).
+    Đánh đổi có ý thức: phát hiện trộm thật (reuse muộn) vẫn là việc tương lai
+    (todo #2). **Logout thì DELETE row** (không revoke) để có hiệu lực ngay,
+    không dính grace.
+54. **Không dùng storageState chung cho E2E**: rotation đốt cookie lần đầu nên
+    file cookie tĩnh chỉ đúng cho đúng 1 test — mỗi spec tự login qua route
+    handler (`loginViaApi`).
+55. **Trang harness `/e2e/player` chỉ tồn tại ở dev** (`notFound()` khi
+    production): dựng MovieDetail giả với m3u8 mẫu công khai để test đường HLS
+    resume — episode upstream thật chỉ có embed (Batch 1 verdict C đứng vững).
+56. **CORS defaults mở rộng** (`:3100`, `127.0.0.1`) cho dev/E2E — prod override
+    qua env như cũ. E2E bắt được lỗi này ở lần chạy đầu (preflight fail).
+57. **Resume effect "quyết định đúng 1 lần/episode"** + seek retry tới 8 lần +
+    reset state khi đổi tập: heartbeat refetch trước đây remount player giữa
+    lúc đang xem (giật về 0s), seek một phát có thể rơi vào lúc chưa có
+    duration. Chỉ lộ ở đường HLS — đường embed không bao giờ thấy.

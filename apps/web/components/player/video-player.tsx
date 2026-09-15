@@ -74,19 +74,49 @@ export function VideoPlayer({
   onEndedRef.current = onEnded;
   const onFatalErrorRef = useRef(onFatalError);
   onFatalErrorRef.current = onFatalError;
+  const startAtRef = useRef(startAt);
+  startAtRef.current = startAt;
+  const seekAttemptsRef = useRef(0);
+
+  // Seek to the resume point, retrying across media events. A single attempt
+  // (e.g. on MANIFEST_PARSED before duration is known) can silently fail and
+  // strand playback at 0 — so keep trying until the clock is actually there.
+  const trySeekStart = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || startedRef.current) return;
+    const target = startAtRef.current;
+    if (!(target > 0)) {
+      startedRef.current = true;
+      return;
+    }
+    if (!Number.isFinite(video.duration) || video.duration <= target) return;
+    if (Math.abs(video.currentTime - target) <= 1.5) {
+      startedRef.current = true;
+      return;
+    }
+    if (seekAttemptsRef.current >= 8) {
+      startedRef.current = true; // give up rather than fight the user forever
+      return;
+    }
+    seekAttemptsRef.current += 1;
+    try {
+      video.currentTime = target;
+    } catch {
+      // Seeking not ready yet; a later media event will retry.
+    }
+  }, []);
 
   // Attach source (hls.js with native Safari fallback).
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     startedRef.current = false;
+    seekAttemptsRef.current = 0;
     let hls: Hls | null = null;
 
     const seekStart = () => {
-      if (!startedRef.current && startAt > 0 && video.duration > startAt) {
-        video.currentTime = startAt;
-      }
-      startedRef.current = true;
+      trySeekStart();
+      if (autoPlay) void video.play().catch(() => {});
     };
 
     if (src.includes(".m3u8") && Hls.isSupported()) {
@@ -244,12 +274,15 @@ export function VideoPlayer({
           const v = e.currentTarget;
           setTime(v.currentTime);
           if (Number.isFinite(v.duration)) setDuration(v.duration);
+          trySeekStart();
           onProgressRef.current?.(v.currentTime, v.duration);
         }}
         onLoadedMetadata={(e) => {
           const v = e.currentTarget;
           if (Number.isFinite(v.duration)) setDuration(v.duration);
+          trySeekStart();
         }}
+        onCanPlay={trySeekStart}
         onEnded={() => onEndedRef.current?.()}
       />
 
@@ -289,6 +322,7 @@ export function VideoPlayer({
             onChange={(e) => {
               const v = videoRef.current;
               if (!v || !Number.isFinite(duration) || duration <= 0) return;
+              startedRef.current = true; // user took over; stop resume-seek
               v.currentTime = (Number(e.target.value) / 1000) * duration;
             }}
             className="w-full cursor-pointer accent-rose-600"

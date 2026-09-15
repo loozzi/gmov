@@ -40,7 +40,12 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = Field(default=3600)
 
     cors_origins: Annotated[list[str], NoDecode] = Field(
-        default=["http://localhost:3000"]
+        default=[
+            "http://localhost:3000",
+            "http://localhost:3100",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3100",
+        ]
     )
 
     @field_validator("cors_origins", "trusted_proxies", mode="before")

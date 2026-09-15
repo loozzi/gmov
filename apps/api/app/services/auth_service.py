@@ -65,14 +65,16 @@ def _decode_refresh(token: str) -> dict:
     return payload
 
 
-async def _load_valid_refresh(db: AsyncSession, jti: str) -> RefreshToken:
+# A revoked token presented again within this window is treated as a
+# duplicate delivery (double boot, two tabs racing rotation), NOT theft:
+# re-issue instead of 401. Anything older still fails hard. Genuine theft
+# detection (token-family invalidation) remains future work.
+REFRESH_GRACE_SECONDS = 30
+
+
+async def _load_row(db: AsyncSession, jti: str) -> RefreshToken | None:
     stmt = select(RefreshToken).where(RefreshToken.jti == jti)
-    row = (await db.execute(stmt)).scalar_one_or_none()
-    now = datetime.now(UTC)
-    expires_at = row.expires_at if row is None else _as_aware(row.expires_at)
-    if row is None or row.revoked_at is not None or expires_at <= now:
-        raise AppException("Invalid refresh token", "INVALID_REFRESH_TOKEN", 401)
-    return row
+    return (await db.execute(stmt)).scalar_one_or_none()
 
 
 def _as_aware(value: datetime) -> datetime:
@@ -88,11 +90,27 @@ async def refresh(db: AsyncSession, token: str) -> TokenPair:
     usable and the user is never logged out by a half-finished rotation."""
     payload = _decode_refresh(token)
     try:
-        row = await _load_valid_refresh(db, str(payload["jti"]))
-        row.revoked_at = datetime.now(UTC)  # rotate: revoke old
+        row = await _load_row(db, str(payload["jti"]))
+        now = datetime.now(UTC)
+        if row is None or _as_aware(row.expires_at) <= now:
+            raise AppException(
+                "Invalid refresh token", "INVALID_REFRESH_TOKEN", 401
+            )
+        if row.revoked_at is None:
+            row.revoked_at = now  # normal rotation
+        elif (now - _as_aware(row.revoked_at)).total_seconds() > (
+            REFRESH_GRACE_SECONDS
+        ):
+            raise AppException(
+                "Invalid refresh token", "INVALID_REFRESH_TOKEN", 401
+            )
+        # Grace path (recently revoked): duplicate delivery — re-issue
+        # without touching the row.
         user = await user_service.get_by_id(db, row.user_id)
         if user is None or not user.is_active:
-            raise AppException("Invalid refresh token", "INVALID_REFRESH_TOKEN", 401)
+            raise AppException(
+                "Invalid refresh token", "INVALID_REFRESH_TOKEN", 401
+            )
         pair, new_row = _build_pair(user.id)
         db.add(new_row)
         await db.commit()
@@ -103,7 +121,11 @@ async def refresh(db: AsyncSession, token: str) -> TokenPair:
 
 
 async def logout(db: AsyncSession, token: str) -> None:
-    """Revoke a refresh token. Idempotent: unknown tokens still return 200."""
+    """Destroy a refresh session. Idempotent: unknown tokens still return 200.
+
+    The row is DELETED (not revoked) so logout takes effect immediately —
+    unlike rotation revokes, it is NOT covered by the re-issue grace window.
+    """
     try:
         payload = security.decode_token(token)
     except jwt.PyJWTError:
@@ -113,6 +135,6 @@ async def logout(db: AsyncSession, token: str) -> None:
         return
     stmt = select(RefreshToken).where(RefreshToken.jti == str(jti))
     row = (await db.execute(stmt)).scalar_one_or_none()
-    if row is not None and row.revoked_at is None:
-        row.revoked_at = datetime.now(UTC)
+    if row is not None:
+        await db.delete(row)
         await db.commit()
