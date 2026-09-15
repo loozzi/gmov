@@ -187,3 +187,19 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     reset state khi đổi tập: heartbeat refetch trước đây remount player giữa
     lúc đang xem (giật về 0s), seek một phát có thể rơi vào lúc chưa có
     duration. Chỉ lộ ở đường HLS — đường embed không bao giờ thấy.
+
+## Batch 5 — sitemap, runtime config, a11y, PWA
+
+58. **Sitemap lấy 100 trang latest upstream (concurrency 5), dừng sớm khi batch
+    rỗng/lỗi** — chịu được upstream chập chờn, revalidate 6h. `/xem/` disallow
+    trong robots (player nhúng, nội dung mỏng, tiết kiệm crawl budget).
+59. **Runtime config qua `/api/config` (no-store) + cache promise phía client**,
+    warm 1 lần ở Providers. `sendProgressKeepalive` thành async (caller
+    fire-and-forget sẵn nên tương thích). Fallback localhost khi fetch fail.
+60. **Combobox đúng chuẩn ARIA 1.2**: `role=combobox` trên input +
+    `listbox/option` + `aria-activedescendant`; Enter khi chưa highlight thì
+    submit form như cũ (không cướp hành vi).
+61. **PWA tối giản, không dependency**: SW hand-rolled chỉ cache shell
+    (`_next/static`, icon, manifest) + fallback `/offline` cho navigation;
+    bypass tuyệt đối cross-origin/API/media/Range. Đăng ký SW chỉ ở production.
+    OG image vẽ bằng JSX (ImageResponse), không dùng poster phim.

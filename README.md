@@ -35,9 +35,9 @@ Có domain + muốn HTTPS: làm theo `docs/deploy.md` (`scripts/gen-secrets.sh` 
 - Xem logs: `docker compose logs -f api web`
 - Dừng: `docker compose down` (giữ data) / `docker compose down -v` (xóa sạch DB)
 
-> `NEXT_PUBLIC_API_URL` được bake vào bundle lúc build. Muốn browser gọi API qua
-> domain riêng (vd `https://api.ten-mien.vn`), build lại với
-> `NEXT_PUBLIC_API_URL=https://api.ten-mien.vn docker compose up --build`.
+> Đổi API cho browser (vd `https://api.ten-mien.vn`): sửa `PUBLIC_API_URL`
+> rồi `docker compose restart web` — không cần build lại (đọc lúc runtime qua
+> `GET /api/config`).
 
 ## Chạy dev (hot reload)
 

@@ -23,16 +23,23 @@ Brought forward — none blocks current functionality.
 7. ~~No web E2E tests~~ — DONE (Batch 4: Playwright, 8 specs auth/browse/
     library/player-resume + CI job + trace upload). Còn lại: mở rộng khi có
     tính năng mới.
-8. **No `sitemap.xml` / `robots.txt`** — dynamic slugs unknown at build; add a
-   sitemap route backed by upstream latest pages.
-9. **`NEXT_PUBLIC_API_URL` baked at build time** — switching API domain needs a
-   rebuild. Consider runtime config endpoint for the public bundle.
-10. **Embed player is a black box** — no progress tracking or error detection
-    possible cross-origin; revisit if upstream ever serves direct `m3u8`.
-11. **`/xem` bundle ~190kB** (hls.js) — fine today since it's route-split, but
-    lazy-load the HLS path only when `m3u8_url` exists.
-12. **Search suggestions lack keyboard navigation** (arrow keys + enter).
-13. **No PWA / offline support**, no default OG image for pages without poster.
+8. ~~No `sitemap.xml` / `robots.txt`~~ — DONE (Batch 5: `app/sitemap.ts`
+    ~1000 URL từ upstream latest, revalidate 6h + `app/robots.ts`. Verify live:
+    1004 URL).
+9. ~~`NEXT_PUBLIC_API_URL` baked at build time~~ — DONE (Batch 5: Route Handler
+    `GET /api/config` đọc `PUBLIC_API_URL` lúc runtime, client fetch 1 lần và
+    cache. Đổi URL chỉ cần restart web, Dockerfile không còn build ARG).
+10. **Embed player is a black box** — GIỮ LẠI CỐ TÌNH: nguồn chỉ có embed
+    (Batch 1 verdict C, re-verify Batch 5 không thay đổi). Không có cách hợp lệ
+    nào để tracking cross-origin; "Xem tiếp" giữ ở mức tập phim + đánh dấu tay.
+11. **`/xem` bundle ~190kB** (hls.js) — GIỮ LẠI CỐ TÌNH: đã route-split (chỉ tải
+    ở trang xem), và là đường dự phòng khi upstream có m3u8. Lazy-load thêm chỉ
+    tiết kiệm vài chục kB với code phức tạp hơn — không đáng.
+12. ~~Search suggestions lack keyboard navigation~~ — DONE (Batch 5: ↑/↓/Enter/
+    Esc + `role=combobox/listbox/option`, `aria-activedescendant`. Có E2E test).
+13. ~~No PWA / offline support~~ — DONE (Batch 5: OG image tự thiết kế
+    `opengraph-image.tsx`, `manifest.ts`, `icon.svg`, SW app-shell + trang
+    `/offline`. SW KHÔNG cache video/media/API/cross-origin — cố tình).
 
 ## Infra / Docs
 
