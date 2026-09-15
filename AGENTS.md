@@ -8,8 +8,9 @@
   passlib[bcrypt], PyJWT. Dependencies via `uv` (`apps/api/pyproject.toml` + `uv.lock`).
 - Frontend: Next.js 15 (App Router) + TypeScript strict, Tailwind CSS v4,
   shadcn/ui, lucide-react, TanStack Query v5, zustand, hls.js, next/image.
-- Infra: multi-stage Dockerfiles in `docker/`, services in `docker-compose.yml`
-  (api, web, postgres, redis; nginx optional later).
+- Infra: multi-stage Dockerfiles in `docker/` (+ `entrypoint-api.sh`, `nginx.conf`),
+  `docker-compose.yml` (api, web, db, redis, nginx on `gmov-net`) and
+  `docker-compose.dev.yml` override (hot reload, source mounts).
 
 ## Directory layout
 
@@ -33,7 +34,8 @@ trust the response and update that doc.
 
 ```bash
 cp .env.example .env            # optional; compose has defaults
-docker compose up --build       # full stack: web :3000, api :8000
+docker compose up --build       # production-like: web :80 (nginx), api :8000
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build  # dev hot reload
 
 # backend (local, without docker)
 cd apps/api && uv sync && uv run uvicorn app.main:app --reload

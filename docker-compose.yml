@@ -1,5 +1,5 @@
 services:
-  postgres:
+  db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -10,6 +10,8 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - gmov-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gmov}"]
       interval: 5s
@@ -23,6 +25,8 @@ services:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redisdata:/data
+    networks:
+      - gmov-net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -40,19 +44,22 @@ services:
       - path: .env
         required: false
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-gmov}:${POSTGRES_PASSWORD:-gmov_dev_password}@postgres:5432/${POSTGRES_DB:-gmov}}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-gmov}:${POSTGRES_PASSWORD:-gmov_dev_password}@db:5432/${POSTGRES_DB:-gmov}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       NGUONC_BASE_URL: ${NGUONC_BASE_URL:-https://phim.nguonc.com/api}
       JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me-please}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-30}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost}
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - gmov-net
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -63,6 +70,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-3000}:3000"
@@ -72,7 +81,38 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    networks:
+      - gmov-net
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/').then(r => { if (!r.ok) process.exit(1) })"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    networks:
+      - gmov-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
 volumes:
   pgdata:
   redisdata:
+
+networks:
+  gmov-net:
+    driver: bridge

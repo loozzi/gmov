@@ -1,0 +1,41 @@
+# Dev override: hot reload cho api + web, mount source trực tiếp.
+# Chạy: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+services:
+  api:
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-gmov}:${POSTGRES_PASSWORD:-gmov_dev_password}@db:5432/${POSTGRES_DB:-gmov}}
+      UVICORN_WORKERS: 1
+    volumes:
+      - ./apps/api/app:/app/app
+      - ./apps/api/alembic.ini:/app/alembic.ini
+    command:
+      - sh
+      - -c
+      - uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  web:
+    build:
+      target: builder
+    working_dir: /app
+    environment:
+      BACKEND_URL: ${BACKEND_URL:-http://api:8000}
+    volumes:
+      - ./apps/web:/app/apps/web
+      - ./package.json:/app/package.json
+      - ./pnpm-workspace.yaml:/app/pnpm-workspace.yaml
+      - web-node-modules:/app/node_modules
+      - web-app-modules:/app/apps/web/node_modules
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    command: ["sh", "-c", "pnpm --filter gmov-web dev --hostname 0.0.0.0 --port 3000"]
+    # Dev server tự reload, không cần healthcheck production.
+    healthcheck:
+      disable: true
+
+  nginx:
+    # Dev truy cập trực tiếp :3000/:8000 nên tắt nginx cho nhẹ.
+    profiles: ["prod"]
+
+volumes:
+  web-node-modules:
+  web-app-modules:

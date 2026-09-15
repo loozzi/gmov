@@ -108,3 +108,17 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     prerender-cache writes as non-root).
 33. **Watched = progress ≥90% of known duration** (+ explicit POST marker for
     embed mode stored as a completed 1s/1s row).
+
+## 2026-09-15 — Phase 7 production packaging
+
+34. **Postgres service renamed `postgres` → `db`** (matches spec; volume data
+    kept under the same `pgdata` volume name).
+35. **API entrypoint runs `alembic upgrade head` then execs uvicorn**
+    (`docker/entrypoint-api.sh`); workers via `UVICORN_WORKERS` (default 2,
+    dev override pins 1 for `--reload` compatibility).
+36. **nginx terminates :80** (`/` → web, `/api/*` + `/health` → api) with basic
+    security headers; direct ports stay exposed for debugging.
+37. **`NEXT_PUBLIC_API_URL` is a build ARG** (baked into client bundle);
+    server-side calls use runtime `BACKEND_URL`. Documented in README.
+38. **Dev override uses builder target + bind mounts** (anonymous volumes keep
+    container `node_modules`); nginx disabled in dev via `prod` profile.
