@@ -13,6 +13,7 @@ import {
 import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toaster";
 import { toVietnameseMessage } from "@/lib/errors";
 import { useContinueWatching, useDeleteProgress } from "@/lib/me";
 
@@ -27,6 +28,7 @@ function formatClock(totalSeconds: number): string {
 
 export default function HistoryPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const toast = useToast();
   const [page, setPage] = useState(1);
   const { data, isLoading, isError, error } = useContinueWatching(page);
   const del = useDeleteProgress();
@@ -120,7 +122,12 @@ export default function HistoryPage() {
                   </Link>
                 </Button>
                 <button
-                  onClick={() => del.mutate(p.movie_slug)}
+                  onClick={() =>
+                    del.mutate(p.movie_slug, {
+                      onSuccess: () => toast("Đã xóa khỏi lịch sử.", "success"),
+                      onError: () => toast("Xóa thất bại. Thử lại nhé.", "error"),
+                    })
+                  }
                   aria-label={`Xóa lịch sử ${p.movie_name}`}
                   className="cursor-pointer rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-red-400"
                 >

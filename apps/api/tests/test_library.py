@@ -1,6 +1,5 @@
 """Personal library tests: progress, continue-watching, favorites."""
 
-import pytest
 import pytest_asyncio
 from fakeredis.aioredis import FakeRedis
 from httpx import ASGITransport, AsyncClient
@@ -44,7 +43,11 @@ async def client(tmp_path, monkeypatch):
 async def _auth_headers(client) -> dict:
     await client.post(
         "/api/v1/auth/register",
-        json={"email": "lib@gmov.dev", "username": "libuser", "password": "password123"},
+        json={
+            "email": "lib@gmov.dev",
+            "username": "libuser",
+            "password": "password123",
+        },
     )
     r = await client.post(
         "/api/v1/auth/login",

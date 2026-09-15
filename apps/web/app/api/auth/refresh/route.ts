@@ -16,11 +16,19 @@ export async function POST() {
       { status: 401 },
     );
   }
-  const backend = await fetch(`${BACKEND_URL}/api/v1/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
+  let backend: Response;
+  try {
+    backend = await fetch(`${BACKEND_URL}/api/v1/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+  } catch {
+    return NextResponse.json(
+      { detail: "Không kết nối được máy chủ.", code: "UPSTREAM_ERROR" },
+      { status: 502 },
+    );
+  }
   const data = await backend.json();
   if (!backend.ok) {
     const res = NextResponse.json(data, { status: backend.status });

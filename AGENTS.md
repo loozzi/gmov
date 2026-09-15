@@ -39,10 +39,15 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build  # dev
 
 # backend (local, without docker)
 cd apps/api && uv sync && uv run uvicorn app.main:app --reload
+cd apps/api && uv run ruff check app tests && uv run pytest -q -m "not integration"
 
 # frontend (local, without docker)
 pnpm install                    # at repo root
 pnpm --filter gmov-web dev
+pnpm --filter gmov-web lint && pnpm --filter gmov-web typecheck
+
+# CI (.github/workflows/ci.yml) runs on push/PR: ruff + pytest (no integration),
+# web lint/typecheck/build, docker build of both images (no registry push).
 ```
 
 ## Conventions
@@ -54,7 +59,8 @@ pnpm --filter gmov-web dev
   Full type hints; Pydantic v2 schemas at API boundary.
 - TypeScript: `camelCase` vars, `PascalCase` components, strict TS, no `any`
   without justification. Server Components by default; `"use client"` only where needed.
-- API routes: `/api/<resource>` (e.g. `/api/films`, `/api/auth/login`).
+- API routes: `/api/v1/<resource>` (e.g. `/api/v1/movies/latest`,
+  `/api/v1/auth/login`, `/api/v1/me/progress`).
 - Env: new variable → add to `.env.example` + `docker-compose.yml` default the same PR.
   NEVER commit `.env` or secrets.
 - Ambiguous architecture choice → pick the most common option, log it in

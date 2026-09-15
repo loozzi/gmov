@@ -17,6 +17,7 @@ import { EmbedPlayer } from "@/components/player/embed-player";
 import { EpisodeGrid } from "@/components/player/episode-grid";
 import { VideoPlayer, formatClock } from "@/components/player/video-player";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toaster";
 import { getAccessToken } from "@/lib/api";
 import {
   sendProgressKeepalive,
@@ -38,6 +39,7 @@ interface Props {
 
 export function WatchView({ detail, episodeSlug }: Props) {
   const router = useRouter();
+  const notify = useToast();
   const { isAuthenticated } = useAuth();
   const upsert = useUpsertProgress();
   const markWatched = useMarkWatched(detail.slug);
@@ -361,13 +363,19 @@ export function WatchView({ detail, episodeSlug }: Props) {
             variant="secondary"
             disabled={markWatched.isPending || watched.has(currentKey)}
             onClick={() =>
-              markWatched.mutate({
-                movie_name: detail.name,
-                episode_slug: currentKey,
-                episode_name: currentEp.name,
-                poster_url: poster,
-                server_name: server?.name ?? null,
-              })
+              markWatched.mutate(
+                {
+                  movie_name: detail.name,
+                  episode_slug: currentKey,
+                  episode_name: currentEp.name,
+                  poster_url: poster,
+                  server_name: server?.name ?? null,
+                },
+                {
+                  onSuccess: () => notify("Đã đánh dấu tập này là đã xem.", "success"),
+                  onError: () => notify("Đánh dấu thất bại. Thử lại nhé.", "error"),
+                },
+              )
             }
           >
             <BadgeCheck />

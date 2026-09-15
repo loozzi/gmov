@@ -1,5 +1,7 @@
 # gmov — web xem phim
 
+[![CI](https://github.com/loozzi/gmov/actions/workflows/ci.yml/badge.svg)](https://github.com/loozzi/gmov/actions/workflows/ci.yml)
+
 Streaming web lấy dữ liệu từ API công khai NguonC (https://phim.nguonc.com):
 duyệt/tìm kiếm/lọc phim, xem qua trình phát nhúng, tài khoản thường, "Xem tiếp",
 yêu thích, lịch sử xem.
@@ -57,6 +59,13 @@ pnpm install
 pnpm --filter gmov-web dev
 pnpm --filter gmov-web build   # phải pass trước khi commit
 ```
+
+## CI
+
+GitHub Actions (`.github/workflows/ci.yml`) chạy mỗi push/PR: ruff + pytest
+backend (trừ test integration cần mạng), lint/typecheck/build frontend, và build
+2 Docker image (không push registry). Lighthouse đo tay 2026-09-15: trang chủ
+**93**, chi tiết phim **95** (mục tiêu ≥ 85).
 
 ## Tạo tài khoản đầu tiên
 

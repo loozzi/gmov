@@ -1,7 +1,19 @@
 """Auth flow tests: register -> login -> /me -> refresh -> logout."""
 
+import pytest
+from fakeredis.aioredis import FakeRedis
+
+from app.core import ratelimit
+
 AUTH = "/api/v1/auth"
 ME = "/api/v1/users/me"
+
+
+@pytest.fixture
+def _fake_redis(monkeypatch):
+    client = FakeRedis(decode_responses=True)
+    monkeypatch.setattr(ratelimit, "get_redis_client", lambda _c=client: _c)
+    return client
 
 
 async def _register(client, payload):
@@ -110,3 +122,29 @@ async def test_me_requires_token(client):
     r = await client.get(ME)
     assert r.status_code == 401
     assert r.json()["code"] == "UNAUTHORIZED"
+
+
+async def test_login_rate_limited_after_5_failures(
+    client, user_payload, _fake_redis
+):
+    await _register(client, user_payload)
+    for _ in range(5):
+        r = await _login(client, user_payload["username"], "wrongpassword")
+        assert r.status_code == 401
+    r = await _login(client, user_payload["username"], "wrongpassword")
+    assert r.status_code == 429
+    assert r.json()["code"] == "RATE_LIMITED"
+
+
+async def test_login_success_resets_failures(client, user_payload, _fake_redis):
+    await _register(client, user_payload)
+    for _ in range(4):
+        await _login(client, user_payload["username"], "wrongpassword")
+    r = await _login(client, user_payload["username"], user_payload["password"])
+    assert r.status_code == 200
+    # counter cleared: 5 more failures allowed before lockout again
+    for _ in range(5):
+        r = await _login(client, user_payload["username"], "wrongpassword")
+        assert r.status_code == 401
+    r = await _login(client, user_payload["username"], "wrongpassword")
+    assert r.status_code == 429

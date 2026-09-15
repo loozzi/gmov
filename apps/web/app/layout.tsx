@@ -20,6 +20,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="vi" className="dark">
+      <head>
+        <link rel="preconnect" href="https://phim.nguonc.com" />
+        <link rel="dns-prefetch" href="https://phim.nguonc.com" />
+      </head>
       <body className="flex min-h-screen flex-col antialiased">
         <Providers>
           <SiteHeader />

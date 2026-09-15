@@ -19,11 +19,19 @@ export async function POST(request: Request) {
     );
   }
   const form = new URLSearchParams({ username, password });
-  const backend = await fetch(`${BACKEND_URL}/api/v1/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: form,
-  });
+  let backend: Response;
+  try {
+    backend = await fetch(`${BACKEND_URL}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: form,
+    });
+  } catch {
+    return NextResponse.json(
+      { detail: "Không kết nối được máy chủ.", code: "UPSTREAM_ERROR" },
+      { status: 502 },
+    );
+  }
   const data = await backend.json();
   if (!backend.ok) {
     return NextResponse.json(data, { status: backend.status });

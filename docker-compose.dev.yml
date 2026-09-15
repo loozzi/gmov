@@ -17,6 +17,8 @@ services:
     build:
       target: builder
     working_dir: /app
+    # Chạy bằng UID host để file .next/cache không bị root chiếm.
+    user: "${UID:-1000}:${GID:-1000}"
     environment:
       BACKEND_URL: ${BACKEND_URL:-http://api:8000}
     volumes:

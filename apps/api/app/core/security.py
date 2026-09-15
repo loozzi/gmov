@@ -1,7 +1,7 @@
 """Password hashing (bcrypt via passlib) and JWT helpers (PyJWT)."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from passlib.context import CryptContext
@@ -23,7 +23,7 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 def _encode(subject: str, token_type: str, expires: timedelta) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": subject,
         "type": token_type,

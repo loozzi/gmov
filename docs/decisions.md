@@ -122,3 +122,14 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     server-side calls use runtime `BACKEND_URL`. Documented in README.
 38. **Dev override uses builder target + bind mounts** (anonymous volumes keep
     container `node_modules`); nginx disabled in dev via `prod` profile.
+
+## 2026-09-15 — Phase 8 hardening & handoff
+
+39. **Login brute-force guard: 5 failures / 15 min / IP** (Redis counter,
+    fail-open; success clears). Only failures count, correct logins always pass.
+40. **CI gates everything**: ruff + pytest (unit) + web lint/typecheck/build +
+    both image builds. Integration tests (`-m integration`) excluded from CI.
+41. **Lighthouse measured, not guessed**: home 93, detail 95 (target ≥85) via
+    headless Chromium; hero `fetchPriority=high` + preconnect to image origin.
+42. **Leftover debt logged in `docs/todo.md`** instead of being silently dropped
+    (register throttling, token-family reuse detection, sitemap, TLS, backups).

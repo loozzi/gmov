@@ -8,12 +8,14 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { MovieCard } from "@/components/movies/movie-card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toaster";
 import { toVietnameseMessage } from "@/lib/errors";
 import { useFavorites, useRemoveFavorite } from "@/lib/me";
 import type { MovieCard as MovieCardType } from "@/lib/types";
 
 export default function FavoritesPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const toast = useToast();
   const [page, setPage] = useState(1);
   const { data, isLoading, isError, error } = useFavorites(page);
   const remove = useRemoveFavorite();
@@ -88,7 +90,12 @@ export default function FavoritesPage() {
               <div key={f.id} className="relative">
                 <MovieCard movie={toCard(f)} />
                 <button
-                  onClick={() => remove.mutate(f.movie_slug)}
+                  onClick={() =>
+                    remove.mutate(f.movie_slug, {
+                      onSuccess: () => toast("Đã bỏ khỏi yêu thích.", "success"),
+                      onError: () => toast("Xóa thất bại. Thử lại nhé.", "error"),
+                    })
+                  }
                   aria-label={`Bỏ thích ${f.movie_name}`}
                   className="absolute top-2 right-2 cursor-pointer rounded-md bg-black/70 p-1.5 text-white hover:text-brand"
                 >

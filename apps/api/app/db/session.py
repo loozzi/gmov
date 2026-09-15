@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import (
 from app.core.config import settings
 
 engine = create_async_engine(settings.database_url, pool_pre_ping=True)
-session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+session_factory = async_sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False
+)
 
 _redis_client: redis.Redis | None = None
 

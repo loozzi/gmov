@@ -1,9 +1,11 @@
 """Auth router: register, login, refresh, logout."""
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import ratelimit
+from app.core.exceptions import AppException
 from app.db.session import get_db
 from app.schemas.auth import RefreshIn, RegisterIn, TokenPair
 from app.schemas.user import UserOut
@@ -22,10 +24,19 @@ async def register(
 
 @router.post("/login", response_model=TokenPair)
 async def login(
+    request: Request,
     form: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ) -> TokenPair:
-    return await auth_service.login(db, form.username, form.password)
+    ip = ratelimit.client_ip(request)
+    await ratelimit.check_login_allowed(ip)
+    try:
+        pair = await auth_service.login(db, form.username, form.password)
+    except AppException:
+        await ratelimit.record_login_failure(ip)
+        raise
+    await ratelimit.clear_login_failures(ip)
+    return pair
 
 
 @router.post("/refresh", response_model=TokenPair)

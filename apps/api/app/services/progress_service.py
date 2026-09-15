@@ -1,7 +1,7 @@
 """Watch-progress persistence (also serves as watch history)."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,7 @@ async def upsert(
         WatchProgress.episode_slug == data.episode_slug,
     )
     row = (await db.execute(stmt)).scalar_one_or_none()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if row is None:
         row = WatchProgress(
             user_id=user_id, **data.model_dump(), updated_at=now

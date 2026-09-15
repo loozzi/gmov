@@ -1,6 +1,6 @@
 """Auth business logic: register, login, refresh rotation, logout."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from sqlalchemy import select
@@ -18,7 +18,7 @@ from app.services import user_service
 async def _store_refresh(
     db: AsyncSession, user_id: object, jti: str
 ) -> None:
-    expires_at = datetime.now(timezone.utc) + timedelta(
+    expires_at = datetime.now(UTC) + timedelta(
         days=settings.refresh_token_expire_days
     )
     db.add(RefreshToken(user_id=user_id, jti=jti, expires_at=expires_at))
@@ -64,7 +64,7 @@ def _decode_refresh(token: str) -> dict:
 async def _load_valid_refresh(db: AsyncSession, jti: str) -> RefreshToken:
     stmt = select(RefreshToken).where(RefreshToken.jti == jti)
     row = (await db.execute(stmt)).scalar_one_or_none()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = row.expires_at if row is None else _as_aware(row.expires_at)
     if row is None or row.revoked_at is not None or expires_at <= now:
         raise AppException("Invalid refresh token", "INVALID_REFRESH_TOKEN", 401)
@@ -74,14 +74,14 @@ async def _load_valid_refresh(db: AsyncSession, jti: str) -> RefreshToken:
 def _as_aware(value: datetime) -> datetime:
     # SQLite returns naive datetimes; Postgres (tz-aware) returns aware ones.
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=UTC)
     return value
 
 
 async def refresh(db: AsyncSession, token: str) -> TokenPair:
     payload = _decode_refresh(token)
     row = await _load_valid_refresh(db, str(payload["jti"]))
-    row.revoked_at = datetime.now(timezone.utc)  # rotate: revoke old
+    row.revoked_at = datetime.now(UTC)  # rotate: revoke old
     user = await user_service.get_by_id(db, row.user_id)
     if user is None or not user.is_active:
         await db.commit()
@@ -102,5 +102,5 @@ async def logout(db: AsyncSession, token: str) -> None:
     stmt = select(RefreshToken).where(RefreshToken.jti == str(jti))
     row = (await db.execute(stmt)).scalar_one_or_none()
     if row is not None and row.revoked_at is None:
-        row.revoked_at = datetime.now(timezone.utc)
+        row.revoked_at = datetime.now(UTC)
         await db.commit()
