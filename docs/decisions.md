@@ -236,3 +236,15 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     `prefers-color-scheme` (fallback dark), tự bám OS khi user chưa chốt,
     script inline chống FOUC + `suppressHydrationWarning` ở `<html>`.
     Nút toggle Sun/Moon ở header cạnh avatar.
+
+## Feature: watchlist "Muốn xem" tách khỏi yêu thích
+
+67. **Hai ý định khác nhau, hai bảng khác nhau**: `watchlist` mirror
+    `favorites` (không gộp thành bảng "saved" + type — query đơn giản hơn,
+    không migration dữ liệu cũ). **Bắt đầu xem thì tự rớt khỏi watchlist**:
+    `progress_service.upsert` xóa row watchlist cùng commit (cả đường PUT
+    progress lẫn marker `/watched` đều trúng, vài giây sau khi bấm Xem ngay
+    chứ không phải lúc click). Triển khai theo TDD: test RED trước
+    (`test_watchlist_flow`, `test_progress_upsert_removes_from_watchlist`),
+    migration thử lên/xuống trên sqlite. E2E `library.spec` + teardown dọn
+    thêm watchlist; full suite 10/10.

@@ -69,3 +69,40 @@ test("continue-watching shows the seeded film", async ({ page }) => {
   await expect(rail).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("E2E Seeded Film").first()).toBeVisible();
 });
+
+test("watchlist add survives reload, watching drops it", async ({ page }) => {
+  await loginViaApi(page);
+  const slug = await firstMovieSlug(page);
+  await page.goto(`/phim/${slug}`);
+
+  const wlButton = page.getByRole("button", { name: /^muốn xem$/i });
+  await expect(wlButton).toBeVisible({ timeout: 20_000 });
+  await wlButton.click();
+  await expect(page.getByText(/đã thêm vào danh sách muốn xem/i)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: /đã lưu/i })).toBeVisible({
+    timeout: 20_000,
+  });
+
+  // Starting to watch removes it from the watchlist (server-side).
+  const token = await accessToken();
+  await api(`/api/v1/me/progress`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      movie_slug: slug,
+      movie_name: "E2E Seeded Film",
+      poster_url: null,
+      episode_slug: "tap-1",
+      episode_name: "Tập 1",
+      server_name: "E2E",
+      position_seconds: 123,
+      duration_seconds: 1200,
+    }),
+  });
+
+  await page.goto("/me/watchlist");
+  await expect(page.getByText(/danh sách trống/i)).toBeVisible({
+    timeout: 20_000,
+  });
+});

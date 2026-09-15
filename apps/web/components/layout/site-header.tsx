@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  Bookmark,
   ChevronDown,
   Clapperboard,
   Heart,
@@ -113,6 +114,11 @@ function AccountMenu() {
         <DropdownMenuItem asChild>
           <Link href="/me/favorites">
             <Heart /> Phim yêu thích
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/me/watchlist">
+            <Bookmark /> Muốn xem
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />

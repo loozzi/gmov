@@ -152,6 +152,109 @@ export function useRemoveFavorite() {
   });
 }
 
+export interface WatchlistItem {
+  id: string;
+  movie_slug: string;
+  movie_name: string;
+  poster_url: string | null;
+  created_at: string;
+}
+
+export interface PaginatedWatchlist {
+  items: WatchlistItem[];
+  page: number;
+  per_page: number;
+  total_items: number;
+}
+
+export function useWatchlist(page = 1) {
+  return useQuery({
+    queryKey: ["me", "watchlist", page],
+    queryFn: () =>
+      apiFetch<PaginatedWatchlist>(
+        `/api/v1/me/watchlist?page=${page}&per_page=20`,
+      ),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useWatchlistStatus(movieSlug: string, enabled = true) {
+  return useQuery({
+    queryKey: ["me", "watchlist-status", movieSlug],
+    queryFn: () =>
+      apiFetch<{ is_saved: boolean }>(
+        `/api/v1/me/watchlist/${movieSlug}/status`,
+      ),
+    enabled,
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+export function useToggleWatchlist(movieSlug: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      isSaved: boolean;
+      movie_name: string;
+      poster_url: string | null;
+    }) => {
+      if (input.isSaved) {
+        await apiFetch(`/api/v1/me/watchlist/${movieSlug}`, {
+          method: "DELETE",
+        });
+        return false;
+      }
+      await apiFetch("/api/v1/me/watchlist", {
+        method: "POST",
+        body: JSON.stringify({
+          movie_slug: movieSlug,
+          movie_name: input.movie_name,
+          poster_url: input.poster_url,
+        }),
+      });
+      return true;
+    },
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({
+        queryKey: ["me", "watchlist-status", movieSlug],
+      });
+      const previous = queryClient.getQueryData<{
+        is_saved: boolean;
+      }>(["me", "watchlist-status", movieSlug]);
+      queryClient.setQueryData(["me", "watchlist-status", movieSlug], {
+        is_saved: !input.isSaved,
+      });
+      return { previous };
+    },
+    onError: (_e, _v, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(
+          ["me", "watchlist-status", movieSlug],
+          context.previous,
+        );
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["me", "watchlist-status", movieSlug],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["me", "watchlist"] });
+    },
+  });
+}
+
+export function useRemoveWatchlist() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (movieSlug: string) =>
+      apiFetch(`/api/v1/me/watchlist/${movieSlug}`, { method: "DELETE" }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["me", "watchlist"] });
+    },
+  });
+}
+
 export function useDeleteProgress() {
   const queryClient = useQueryClient();
   return useMutation({

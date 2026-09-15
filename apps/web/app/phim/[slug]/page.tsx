@@ -6,6 +6,7 @@ import { Calendar, Clock, MonitorPlay } from "lucide-react";
 
 import { FavoriteButton } from "@/components/movies/favorite-button";
 import { ResumeButton } from "@/components/movies/resume-button";
+import { WatchlistButton } from "@/components/movies/watchlist-button";
 import { Button } from "@/components/ui/button";
 import { fetchMovieDetail, stripHtml } from "@/lib/server-movies";
 
@@ -130,6 +131,11 @@ export default async function MovieDetailPage({
             <div className="flex flex-wrap gap-2 pt-1">
               <ResumeButton movieSlug={movie.slug} firstEpisode={firstEpisode} />
               <FavoriteButton
+                movieSlug={movie.slug}
+                movieName={movie.name}
+                posterUrl={poster}
+              />
+              <WatchlistButton
                 movieSlug={movie.slug}
                 movieName={movie.name}
                 posterUrl={poster}

@@ -1,7 +1,7 @@
 /**
  * Global teardown: best-effort cleanup of data created by this run's account
- * (progress rows + favorites). The user row itself stays — there is no
- * delete-account endpoint, and one row per run is harmless.
+ * (progress rows + favorites + watchlist). The user row itself stays — there
+ * is no delete-account endpoint, and one row per run is harmless.
  */
 import { readFile } from "node:fs/promises";
 
@@ -26,7 +26,14 @@ export default async function globalTeardown() {
         headers: h,
       });
     }
-    console.log("[teardown] progress + favorites cleaned");
+    const wl = await api("/api/v1/me/watchlist", { headers: h });
+    for (const item of wl.items ?? []) {
+      await api(`/api/v1/me/watchlist/${item.movie_slug}`, {
+        method: "DELETE",
+        headers: h,
+      });
+    }
+    console.log("[teardown] progress + favorites + watchlist cleaned");
   } catch (e) {
     console.log(`[teardown] best-effort cleanup failed: ${String(e)}`);
   }

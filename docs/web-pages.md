@@ -23,6 +23,6 @@
   (optimistic + rollback), server/episode grid linking `/xem/...` (Phase 6).
 - `/tim-kiem?keyword=&page=` — server results; header search debounces 400ms
   and shows 5 quick suggestions. Old `/search` redirects here.
-- `/me`, `/me/favorites`, `/me/history` — auth pages (middleware-guarded).
+- `/me`, `/me/favorites`, `/me/watchlist`, `/me/history` — auth pages (middleware-guarded).
   History reuses continue-watching data (no separate table, see decisions #17).
 - `MovieCard` — client component with blur placeholder + error fallback icon.

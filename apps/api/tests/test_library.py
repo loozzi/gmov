@@ -1,4 +1,4 @@
-"""Personal library tests: progress, continue-watching, favorites."""
+"""Personal library tests: progress, continue-watching, favorites, watchlist."""
 
 import pytest_asyncio
 from fakeredis.aioredis import FakeRedis
@@ -195,3 +195,45 @@ async def test_watched_episodes_flow(client):
     assert r.status_code == 200
     r = await client.get(f"{ME}/watched/mao", headers=h)
     assert sorted(r.json()["episode_slugs"]) == ["tap-1", "tap-3"]
+
+
+async def test_watchlist_flow(client):
+    h = await _auth_headers(client)
+    item = {"movie_slug": "mao", "movie_name": "Mao"}
+
+    r = await client.post(f"{ME}/watchlist", headers=h, json=item)
+    assert r.status_code == 201, r.text
+
+    r = await client.get(f"{ME}/watchlist/mao/status", headers=h)
+    assert r.json() == {"is_saved": True}
+
+    r = await client.get(f"{ME}/watchlist", headers=h)
+    assert r.status_code == 200
+    assert r.json()["total_items"] == 1
+
+    # duplicate add is idempotent
+    r = await client.post(f"{ME}/watchlist", headers=h, json=item)
+    assert r.status_code == 200
+    r = await client.get(f"{ME}/watchlist", headers=h)
+    assert r.json()["total_items"] == 1
+
+    r = await client.delete(f"{ME}/watchlist/mao", headers=h)
+    assert r.status_code == 200
+    r = await client.get(f"{ME}/watchlist/mao/status", headers=h)
+    assert r.json() == {"is_saved": False}
+
+
+async def test_progress_upsert_removes_from_watchlist(client):
+    h = await _auth_headers(client)
+    r = await client.post(
+        f"{ME}/watchlist",
+        headers=h,
+        json={"movie_slug": "mao", "movie_name": "Mao"},
+    )
+    assert r.status_code == 201, r.text
+
+    r = await client.put(f"{ME}/progress", headers=h, json=_progress())
+    assert r.status_code == 200, r.text
+
+    r = await client.get(f"{ME}/watchlist/mao/status", headers=h)
+    assert r.json() == {"is_saved": False}

@@ -27,6 +27,20 @@ Unique key: `(user_id, movie_slug, episode_slug)` — repeat PUTs upsert.
 
 Unique key: `(user_id, movie_slug)`.
 
+## Watchlist ("Muốn xem", separate from favorites)
+
+| Method | Path | Success |
+|--------|------|---------|
+| POST | `/watchlist` `{movie_slug, movie_name, poster_url?}` | 201 created / 200 already exists |
+| GET | `/watchlist?page=&per_page=20` | 200 paginated, newest first |
+| GET | `/watchlist/{movie_slug}/status` | 200 `{"is_saved": bool}` |
+| DELETE | `/watchlist/{movie_slug}` | 200 `{"ok": true}` (idempotent) |
+
+Unique key: `(user_id, movie_slug)`. Saving progress (`PUT /progress`,
+including the explicit `/watched` marker) removes the movie from the
+watchlist in the same commit — "started watching" supersedes "want to
+watch".
+
 ## Watched episodes
 
 | Method | Path | Success |

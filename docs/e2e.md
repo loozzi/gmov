@@ -21,7 +21,7 @@ pnpm --filter gmov-web exec playwright show-report
 - `playwright.config.ts`: 1 worker, trace + video khi fail, webServer `next dev :3100`.
 - `e2e/global-setup.ts`: chờ backend healthy → reset throttle redis → tái dùng
   1 account duy nhất (register bị throttle 3/giờ/IP).
-- `e2e/global-teardown.ts`: xóa progress + favorites của account test (user row
+- `e2e/global-teardown.ts`: xóa progress + favorites + watchlist của account test (user row
   ở lại vì chưa có API xóa account).
 - Mỗi spec tự login qua `loginViaApi()` (POST `/api/auth/login` trên context
   riêng). KHÔNG dùng storageState chung: refresh rotation đốt cookie ngay lần

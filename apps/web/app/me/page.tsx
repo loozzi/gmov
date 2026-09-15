@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Heart, History, LogOut } from "lucide-react";
+import { Bookmark, Heart, History, LogOut } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,7 @@ export default function ProfilePage() {
           </p>
         </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Link
           href="/me/favorites"
           className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-brand"
@@ -55,6 +55,18 @@ export default function ProfilePage() {
             <p className="font-semibold">Phim yêu thích</p>
             <p className="text-xs text-muted-foreground">
               Danh sách phim bạn đã lưu
+            </p>
+          </div>
+        </Link>
+        <Link
+          href="/me/watchlist"
+          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-brand"
+        >
+          <Bookmark className="size-6 text-brand" />
+          <div>
+            <p className="font-semibold">Muốn xem</p>
+            <p className="text-xs text-muted-foreground">
+              Phim để dành xem sau
             </p>
           </div>
         </Link>

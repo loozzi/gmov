@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
 from app.db.models.watch_progress import WatchProgress
+from app.db.models.watchlist import Watchlist
 from app.schemas.library import ProgressUpsert
 
 
@@ -30,6 +31,13 @@ async def upsert(
         for field, value in data.model_dump().items():
             setattr(row, field, value)
         row.updated_at = now
+    # Started watching: drop the movie from the watchlist in the same commit.
+    await db.execute(
+        delete(Watchlist).where(
+            Watchlist.user_id == user_id,
+            Watchlist.movie_slug == data.movie_slug,
+        )
+    )
     await db.commit()
     await db.refresh(row)
     return row

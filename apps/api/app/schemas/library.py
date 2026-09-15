@@ -1,4 +1,4 @@
-"""Library schemas: watch progress + favorites (API boundary)."""
+"""Library schemas: watch progress + favorites + watchlist (API boundary)."""
 
 import uuid
 from datetime import datetime
@@ -73,6 +73,33 @@ class PaginatedFavorites(BaseModel):
 
 class FavoriteStatus(BaseModel):
     is_favorite: bool
+
+
+class WatchlistAdd(BaseModel):
+    movie_slug: str = Field(min_length=1, max_length=255)
+    movie_name: str = Field(min_length=1, max_length=255)
+    poster_url: str | None = Field(default=None, max_length=2048)
+
+
+class WatchlistOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    movie_slug: str
+    movie_name: str
+    poster_url: str | None
+    created_at: datetime
+
+
+class PaginatedWatchlist(BaseModel):
+    items: list[WatchlistOut]
+    page: int
+    per_page: int
+    total_items: int
+
+
+class WatchlistStatus(BaseModel):
+    is_saved: bool
 
 
 class WatchedAdd(BaseModel):
