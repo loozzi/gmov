@@ -2,12 +2,28 @@
 
 import pytest
 import pytest_asyncio
+from fakeredis.aioredis import FakeRedis
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _isolated_redis(monkeypatch):
+    """Every test gets a fresh FakeRedis in ALL namespaces.
+
+    Without this, tests either hit a real redis on localhost (when the
+    compose stack happens to be up) — leaking throttle counters between
+    tests — or share the global client across event loops.
+    """
+    client = FakeRedis(decode_responses=True)
+    monkeypatch.setattr("app.db.session.get_redis_client", lambda: client)
+    monkeypatch.setattr("app.core.ratelimit.get_redis_client", lambda: client)
+    monkeypatch.setattr("app.services.cache.get_redis_client", lambda: client)
+    return client
 
 
 @pytest_asyncio.fixture

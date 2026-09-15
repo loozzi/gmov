@@ -1,5 +1,6 @@
 """gmov API application factory."""
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -11,11 +12,19 @@ from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.db.session import close_connections, engine, get_redis_client
 from app.services.nguonc import aclose_client as aclose_nguonc_client
+from app.services.token_cleanup import start_scheduler
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    scheduler = start_scheduler()
     yield
+    scheduler.shutdown(wait=False)
     await aclose_nguonc_client()
     await close_connections()
 

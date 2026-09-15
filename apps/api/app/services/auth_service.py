@@ -1,5 +1,6 @@
 """Auth business logic: register, login, refresh rotation, logout."""
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -15,21 +16,24 @@ from app.schemas.auth import RegisterIn, TokenPair
 from app.services import user_service
 
 
-async def _store_refresh(
-    db: AsyncSession, user_id: object, jti: str
-) -> None:
+def _build_pair(user_id: uuid.UUID) -> tuple[TokenPair, RefreshToken]:
+    """Create tokens + the (unsaved) refresh row. Caller commits."""
+    access = security.create_access_token(user_id)
+    refresh, jti = security.create_refresh_token(user_id)
     expires_at = datetime.now(UTC) + timedelta(
         days=settings.refresh_token_expire_days
     )
-    db.add(RefreshToken(user_id=user_id, jti=jti, expires_at=expires_at))
-    await db.commit()
+    return (
+        TokenPair(access_token=access, refresh_token=refresh),
+        RefreshToken(user_id=user_id, jti=jti, expires_at=expires_at),
+    )
 
 
 async def _issue_pair(db: AsyncSession, user: User) -> TokenPair:
-    access = security.create_access_token(user.id)
-    refresh, jti = security.create_refresh_token(user.id)
-    await _store_refresh(db, user.id, jti)
-    return TokenPair(access_token=access, refresh_token=refresh)
+    pair, row = _build_pair(user.id)
+    db.add(row)
+    await db.commit()
+    return pair
 
 
 async def register(db: AsyncSession, data: RegisterIn) -> User:
@@ -79,15 +83,23 @@ def _as_aware(value: datetime) -> datetime:
 
 
 async def refresh(db: AsyncSession, token: str) -> TokenPair:
+    """Rotate refresh tokens atomically: revoke-old + issue-new share ONE
+    transaction. Any failure rolls everything back, so the old token stays
+    usable and the user is never logged out by a half-finished rotation."""
     payload = _decode_refresh(token)
-    row = await _load_valid_refresh(db, str(payload["jti"]))
-    row.revoked_at = datetime.now(UTC)  # rotate: revoke old
-    user = await user_service.get_by_id(db, row.user_id)
-    if user is None or not user.is_active:
+    try:
+        row = await _load_valid_refresh(db, str(payload["jti"]))
+        row.revoked_at = datetime.now(UTC)  # rotate: revoke old
+        user = await user_service.get_by_id(db, row.user_id)
+        if user is None or not user.is_active:
+            raise AppException("Invalid refresh token", "INVALID_REFRESH_TOKEN", 401)
+        pair, new_row = _build_pair(user.id)
+        db.add(new_row)
         await db.commit()
-        raise AppException("Invalid refresh token", "INVALID_REFRESH_TOKEN", 401)
-    await db.commit()
-    return await _issue_pair(db, user)
+        return pair
+    except Exception:
+        await db.rollback()
+        raise
 
 
 async def logout(db: AsyncSession, token: str) -> None:

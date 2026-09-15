@@ -9,10 +9,10 @@ Brought forward — none blocks current functionality.
 2. **No refresh-token reuse detection** — rotation revokes the old token, but a
    stolen refresh used twice isn't flagged. Consider invalidating the whole
    token family on reuse.
-3. **Refresh flow isn't atomic** — if issuing the new pair fails after revoking
-   the old row, the user must log in again. Wrap rotate+issue in one transaction.
-4. **`expires_at` never pruned** — `refresh_tokens` grows forever. Add periodic
-   cleanup of expired/revoked rows.
+3. ~~Refresh flow isn't atomic~~ — DONE (Batch 3: single-transaction rotation
+   + rollback, proven by signer-outage test).
+4. ~~`expires_at` never pruned~~ — DONE (Batch 3: APScheduler purge every 6h +
+   `expires_at` index). Còn lại: theo dõi log purge sau deploy thật.
 5. **Login rate-limit key is IP-only** — shared NATs share a bucket; consider
    `ip+username` composite key.
 6. **`GET /health` always returns 200** — orchestrators can't distinguish
@@ -40,7 +40,9 @@ Brought forward — none blocks current functionality.
 15. ~~Secrets are dev-defaults in compose~~ — DONE (Batch 2: production guard
     chết ngay khi boot + `docker-compose.prod.yml` với `${VAR:?}` +
     `scripts/gen-secrets.sh`). Còn lại: xoay secret định kỳ.
-16. **No DB backups** — `pgdata` volume has no backup/restore documented.
+16. ~~No DB backups~~ — DONE (Batch 3: `db-backup` service daily+gzip+rotation,
+    `scripts/restore.sh`, `docs/backup.md`, live restore test PASS 2026-09-15).
+    Còn lại: copy backup off-site (S3/rclone).
 17. ~~Nginx has no TLS~~ — DONE (Batch 2: `nginx.tls.conf.template` + certbot
     service + `docs/deploy.md`). Còn lại: deploy thật lên domain + thắt CSP
     bằng nonce thay `'unsafe-inline'`.

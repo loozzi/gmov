@@ -151,3 +151,16 @@ Log ambiguous decisions here (Phase 0+). Newest last.
 47. **TLS template dùng `$$` escape cho envsubst**; CSP cơ bản vẫn giữ
     `'unsafe-inline'` cho script/style (Next cần) — ghi nợ thắt chặt bằng
     nonce ở `docs/todo.md`.
+
+## Batch 3 — backups, token cleanup, atomic refresh
+
+48. **Refresh rotation is one transaction** (revoke-old + issue-new share a
+    single commit, explicit rollback in `except`). Proven by breaking the
+    signer mid-rotation in tests: the old token stays usable.
+49. **Cleanup token chạy in-process (APScheduler) + Redis lock** thay vì cron
+    container riêng — ít moving part hơn; lock `SET NX EX` chống chạy trùng
+    giữa các uvicorn workers. Index `expires_at` (migration 3).
+50. **Backup sidecar chạy root** (volume mới root-owned, UID host không ghi
+    được); file 644 nên host vẫn đọc/copy được, mọi thao tác qua container.
+51. **Dump dùng `--clean --if-exists`** để restore được cả vào DB đã có schema
+    (ghi đè), không bắt buộc DB trống.

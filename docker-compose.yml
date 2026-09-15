@@ -33,6 +33,36 @@ services:
       timeout: 5s
       retries: 10
 
+  db-backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # Chạy root để ghi được volume pgbackups mới tạo (root-owned); file dump
+    # tạo ra 644 nên host vẫn đọc/copy được. Mọi thao tác qua container.
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER:-gmov}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-gmov_dev_password}
+      PGDATABASE: ${POSTGRES_DB:-gmov}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+      BACKUP_RETENTION_WEEKS: ${BACKUP_RETENTION_WEEKS:-4}
+    volumes:
+      - pgbackups:/backups
+      - ./docker/db-backup.sh:/usr/local/bin/db-backup.sh:ro
+    command: ["sh", "/usr/local/bin/db-backup.sh", "loop"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - gmov-net
+    healthcheck:
+      test: ["CMD-SHELL", "ls /backups/gmov-*.sql.gz >/dev/null 2>&1"]
+      interval: 30m
+      timeout: 10s
+      retries: 3
+      start_period: 5m
+
   api:
     build:
       context: .
@@ -115,6 +145,7 @@ services:
 volumes:
   pgdata:
   redisdata:
+  pgbackups:
 
 networks:
   gmov-net:

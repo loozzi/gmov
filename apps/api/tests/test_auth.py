@@ -175,3 +175,34 @@ async def test_register_honeypot_rejected(client, _fake_redis):
     r = await _register(client, payload)
     assert r.status_code == 400
     assert r.json()["code"] == "BOT_DETECTED"
+
+
+async def test_refresh_atomic_when_issue_fails(
+    client, user_payload, _fake_redis, monkeypatch
+):
+    """If issuing the new pair explodes, the old token must stay usable."""
+    from httpx import ASGITransport, AsyncClient
+
+    import app.services.auth_service as svc
+    from app.main import app
+
+    await _register(client, user_payload)
+    r = await _login(client, user_payload["username"], user_payload["password"])
+    old_refresh = r.json()["refresh_token"]
+
+    def _boom(user_id):
+        raise RuntimeError("simulated signer outage")
+
+    monkeypatch.setattr(svc.security, "create_refresh_token", _boom)
+    # raise_app_exceptions=False so we see the real 500 response.
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as raw:
+        r = await raw.post(f"{AUTH}/refresh", json={"refresh_token": old_refresh})
+    assert r.status_code == 500
+    assert r.json()["code"] == "INTERNAL_ERROR"
+    monkeypatch.undo()
+
+    # Old token was NOT revoked: rotation can proceed, user stays logged in.
+    r = await client.post(f"{AUTH}/refresh", json={"refresh_token": old_refresh})
+    assert r.status_code == 200, r.text
+    assert r.json()["refresh_token"] != old_refresh
