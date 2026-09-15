@@ -1,11 +1,10 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { Toaster } from "@/components/ui/toaster";
-import { warmRuntimeConfig } from "@/lib/runtime-config";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -20,9 +19,6 @@ export function Providers({ children }: { children: ReactNode }) {
         },
       }),
   );
-  useEffect(() => {
-    warmRuntimeConfig();
-  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

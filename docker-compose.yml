@@ -107,8 +107,7 @@ services:
     ports:
       - "${WEB_PORT:-3000}:3000"
     environment:
-      # Public API base, read at RUNTIME by /api/config (restart to change).
-      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+      # Browser chỉ gọi cùng origin; /api/v1/* proxy server-side tới đây.
       BACKEND_URL: ${BACKEND_URL:-http://api:8000}
     depends_on:
       api:

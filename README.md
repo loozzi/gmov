@@ -35,9 +35,11 @@ Có domain + muốn HTTPS: làm theo `docs/deploy.md` (`scripts/gen-secrets.sh` 
 - Xem logs: `docker compose logs -f api web`
 - Dừng: `docker compose down` (giữ data) / `docker compose down -v` (xóa sạch DB)
 
-> Đổi API cho browser (vd `https://api.ten-mien.vn`): sửa `PUBLIC_API_URL`
-> rồi `docker compose restart web` — không cần build lại (đọc lúc runtime qua
-> `GET /api/config`).
+> Browser chỉ gọi cùng origin với web (`/api/v1/*` được proxy server-side
+> tới backend). Backend chạy port khác `:8000`? Báo cho web lúc chạy dev:
+> `BACKEND_URL=http://localhost:8008 pnpm --filter gmov-web dev`.
+> Lưu ý: request `/api/*` luôn cùng origin với web (httpOnly cookie bắt buộc
+> same-origin) — đó là thiết kế, không phải bug.
 
 ## Chạy dev (hot reload)
 
@@ -63,11 +65,9 @@ pnpm --filter gmov-web dev
 pnpm --filter gmov-web build   # phải pass trước khi commit
 ```
 
-> Backend chạy port khác `:8000`? Báo cho web biết lúc chạy dev (không cần
-> build lại, console cũng sẽ warn nếu quên):
-> `PUBLIC_API_URL=http://localhost:8008 pnpm --filter gmov-web dev`.
-> Lưu ý: request `/api/auth/*` và `/api/config` luôn cùng origin với web
-> (httpOnly cookie bắt buộc same-origin) — đó là thiết kế, không phải bug.
+> Backend chạy port khác `:8000`? Báo cho web biết lúc chạy dev:
+> `BACKEND_URL=http://localhost:8008 pnpm --filter gmov-web dev`.
+> Mọi request `/api/*` luôn cùng origin với web — đó là thiết kế, không phải bug.
 
 ## CI
 

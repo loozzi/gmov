@@ -1,7 +1,7 @@
 # Production override: real secrets (no defaults), TLS nginx, certbot.
 # Requires env (see scripts/gen-secrets.sh):
 #   DOMAIN, ACME_EMAIL, JWT_SECRET, POSTGRES_USER, POSTGRES_PASSWORD,
-#   POSTGRES_DB, CORS_ORIGINS, PUBLIC_API_URL
+#   POSTGRES_DB, CORS_ORIGINS
 # Boot order for a fresh domain (details in docs/deploy.md):
 #   1. docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build db redis api web
 #   2. First cert:  docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm -p 80:80 certbot \
@@ -24,7 +24,6 @@ services:
 
   web:
     environment:
-      PUBLIC_API_URL: ${PUBLIC_API_URL:?PUBLIC_API_URL is required}
       BACKEND_URL: http://api:8000
 
   nginx:

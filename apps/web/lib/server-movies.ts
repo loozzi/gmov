@@ -2,10 +2,7 @@ import "server-only";
 
 import type { MovieDetail, PaginatedMovies } from "@/lib/types";
 
-const BACKEND_URL =
-  process.env.BACKEND_URL ??
-  process.env.NEXT_PUBLIC_API_URL ??
-  "http://localhost:8000";
+const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 async function get<T>(path: string, revalidate: number): Promise<T | null> {
   try {

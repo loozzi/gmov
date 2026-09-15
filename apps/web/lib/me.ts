@@ -6,9 +6,7 @@ import {
   useQueryClient,
   keepPreviousData,
 } from "@tanstack/react-query";
-
 import { apiFetch } from "@/lib/api";
-import { getApiUrl } from "@/lib/runtime-config";
 
 export interface Progress {
   id: string;
@@ -201,8 +199,7 @@ export async function sendProgressKeepalive(
   accessToken: string,
 ): Promise<void> {
   try {
-    const base = await getApiUrl();
-    await fetch(`${base}/api/v1/me/progress`, {
+    await fetch("/api/v1/me/progress", {
       method: "PUT",
       keepalive: true,
       headers: {

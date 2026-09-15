@@ -15,8 +15,8 @@
 - `AuthProvider` (boot: silent refresh → `/users/me`), `useAuth()` hook.
 - `middleware.ts` redirects `/me/*` → `/login?next=...` when the cookie is absent.
 - Server→backend base URL: `BACKEND_URL` (docker: `http://api:8000`);
-  browser→backend: `PUBLIC_API_URL`, đọc lúc runtime qua `GET /api/config`
-  (cache 1 lần, warm ở Providers; fallback localhost).
+  browser→backend: KHÔNG có — browser chỉ gọi cùng origin, `/api/v1/*` được
+  proxy server-side bởi `app/api/v1/[...path]/route.ts` (streaming, runtime).
 
 ## UI
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { ApiError, parseApiError } from "./errors";
-import { getApiUrl } from "./runtime-config";
 
 // Access token lives only in memory (never localStorage).
 let accessToken: string | null = null;
@@ -44,9 +43,10 @@ export async function apiFetch<T>(
   path: string,
   { auth = true, headers, ...init }: ApiOptions = {},
 ): Promise<T> {
-  const base = await getApiUrl();
+  // Same-origin: /api/v1/* is proxied to the backend by the
+  // app/api/v1/[...path] Route Handler. No client-side base URL.
   const request = async (token: string | null): Promise<Response> =>
-    fetch(`${base}${path}`, {
+    fetch(path, {
       ...init,
       headers: {
         ...(init.body instanceof FormData ? {} : { "Content-Type": "application/json" }),

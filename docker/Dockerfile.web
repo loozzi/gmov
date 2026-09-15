@@ -17,8 +17,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY package.json pnpm-workspace.yaml ./
 COPY apps/web ./apps/web
-# No NEXT_PUBLIC_* build args: the client resolves the API base at RUNTIME
-# via /api/config (see lib/runtime-config.ts).
+# No NEXT_PUBLIC_* API base: the browser only calls the same origin and
+# /api/v1/* is proxied server-side (see app/api/v1/[...path]/route.ts).
 RUN pnpm --filter gmov-web build
 
 # ---- runner: minimal standalone server, non-root ----

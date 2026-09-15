@@ -215,3 +215,14 @@ Log ambiguous decisions here (Phase 0+). Newest last.
 63. **Sửa**: `/api/config` trả thêm `isDefault`, client `console.warn` hướng dẫn
     cụ thể khi rơi vào fallback + README ghi rõ lệnh dev với port tùy chỉnh.
     Không đoán port, không magic probe.
+64. **Tái phát với split-brain 2 biến**: browser (`PUBLIC_API_URL=:8008`) OK
+    nhưng SSR (`server-movies.ts`) + auth handlers (`lib/server.ts`) dùng
+    `BACKEND_URL` (unset → fallback `:8000` chết) → homepage 5 `fetch failed`,
+    login 502. Hai biến độc lập = hai sự thật độc lập.
+65. **Xóa cơ chế 2 biến, single-origin thật**: browser chỉ gọi relative
+    `/api/v1/*`, Route Handler `app/api/v1/[...path]/route.ts` proxy streaming
+    server-side tới `BACKEND_URL` (đọc per-request = runtime thật). `rewrites()`
+    trong next.config KHÔNG làm được việc này — destination bị bake vào
+    routes-manifest.json lúc build (đã chứng minh: build với `:9`, chạy với
+    `:8008` vẫn đập vào `:9`). Xóa `/api/config`, `runtime-config.ts`,
+    `PUBLIC_API_URL` khỏi mọi compose/script/doc; còn đúng 1 biến `BACKEND_URL`.

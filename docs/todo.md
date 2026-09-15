@@ -26,9 +26,9 @@ Brought forward — none blocks current functionality.
 8. ~~No `sitemap.xml` / `robots.txt`~~ — DONE (Batch 5: `app/sitemap.ts`
     ~1000 URL từ upstream latest, revalidate 6h + `app/robots.ts`. Verify live:
     1004 URL).
-9. ~~`NEXT_PUBLIC_API_URL` baked at build time~~ — DONE (Batch 5: Route Handler
-    `GET /api/config` đọc `PUBLIC_API_URL` lúc runtime, client fetch 1 lần và
-    cache. Đổi URL chỉ cần restart web, Dockerfile không còn build ARG).
+9. ~~`NEXT_PUBLIC_API_URL` baked at build time~~ — DONE rồi SUPERSEDED:
+    single-origin proxy (`app/api/v1/[...path]/route.ts` streaming tới
+    `BACKEND_URL`); xóa `/api/config` + `PUBLIC_API_URL` hoàn toàn, còn 1 biến.
 10. **Embed player is a black box** — GIỮ LẠI CỐ TÌNH: nguồn chỉ có embed
     (Batch 1 verdict C, re-verify Batch 5 không thay đổi). Không có cách hợp lệ
     nào để tracking cross-origin; "Xem tiếp" giữ ở mức tập phim + đánh dấu tay.
