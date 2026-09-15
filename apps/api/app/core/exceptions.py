@@ -1,6 +1,7 @@
 """Unified error model: every error responds {"detail": ..., "code": ...}."""
 
 from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -41,7 +42,9 @@ async def _http_exception_handler(
 async def _validation_handler(
     _: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    return _error_response(exc.errors(), "VALIDATION_ERROR", 422)
+    return _error_response(
+        jsonable_encoder(exc.errors()), "VALIDATION_ERROR", 422
+    )
 
 
 async def _unhandled_handler(_: Request, __: Exception) -> JSONResponse:

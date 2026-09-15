@@ -53,3 +53,17 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     cache purges).
 16. **Tests mock httpx via respx + redis via fakeredis** (fakeredis>=2.23 for
     redis-py 5.x compat); one `@pytest.mark.integration` test hits the real API.
+
+## 2026-09-15 — Phase 3 library
+
+17. **No `watch_history` table.** `watch_progress` rows already capture
+    movie/episode/timestamp, so history and continue-watching are queries over
+    one table (latest-episode-per-movie via `ROW_NUMBER()` partition). Avoids
+    dual-write inconsistency.
+18. **Progress rate limit 20 req/min/user** (Redis fixed window, fail-open).
+    Matches player heartbeat every 15s with headroom for seeks.
+19. **`updated_at` set explicitly in Python on upsert** (not only DB default):
+    sqlite `CURRENT_TIMESTAMP` has 1-second precision, causing ties that broke
+    latest-per-movie ordering; UUID PKs can't break ties (random order).
+20. **Validation errors are JSON-sanitized** (`jsonable_encoder`): raw
+    `exc.errors()` contains non-serializable `ValueError` in `ctx`.
