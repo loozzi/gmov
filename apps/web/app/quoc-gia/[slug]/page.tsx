@@ -1,23 +1,26 @@
-"use client";
-
-import { useState } from "react";
-import { useParams } from "next/navigation";
-
-import { MovieGrid } from "@/components/movies/movie-grid";
+import { BrowseGrid } from "@/components/movies/browse-grid";
 import { COUNTRIES, labelFor } from "@/lib/catalog";
-import { useCountry } from "@/lib/movies";
+import { fetchCountry } from "@/lib/server-movies";
 
-export default function CountryPage() {
-  const params = useParams<{ slug: string }>();
-  const [page, setPage] = useState(1);
-  const query = useCountry(params.slug, page);
+export const dynamic = "force-dynamic";
+
+export default async function CountryPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { slug } = await params;
+  const { page } = await searchParams;
+  const pageNum = Math.max(1, Number.parseInt(page ?? "1", 10) || 1);
+  const data = await fetchCountry(slug, pageNum);
 
   return (
-    <MovieGrid
-      title={`Quốc gia: ${labelFor(COUNTRIES, params.slug, params.slug)}`}
-      query={query}
-      page={page}
-      onPage={setPage}
+    <BrowseGrid
+      title={`Quốc gia: ${labelFor(COUNTRIES, slug, slug)}`}
+      data={data}
+      basePath={`/quoc-gia/${slug}`}
     />
   );
 }

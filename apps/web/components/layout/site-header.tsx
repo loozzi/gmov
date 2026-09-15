@@ -1,20 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   Clapperboard,
   LogIn,
   LogOut,
   Menu,
-  Search,
   User,
   UserPlus,
 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
+import { SearchBox } from "@/components/layout/search-box";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -24,7 +23,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetClose,
@@ -65,32 +63,6 @@ function MenuDropdown({
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-function SearchBox({ onNavigate }: { onNavigate?: () => void }) {
-  const router = useRouter();
-  const [keyword, setKeyword] = useState("");
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    const q = keyword.trim();
-    if (!q) return;
-    onNavigate?.();
-    router.push(`/search?keyword=${encodeURIComponent(q)}`);
-  };
-
-  return (
-    <form onSubmit={submit} className="relative w-full">
-      <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        value={keyword}
-        onChange={(e) => setKeyword(e.target.value)}
-        placeholder="Tìm kiếm phim..."
-        className="pl-9"
-        aria-label="Tìm kiếm phim"
-      />
-    </form>
   );
 }
 

@@ -1,34 +1,38 @@
-"use client";
+import { ContinueWatchingRail } from "@/components/movies/continue-watching-rail";
+import { HeroCarousel } from "@/components/movies/hero-carousel";
+import { MovieRail } from "@/components/movies/movie-rail";
+import {
+  fetchGenre,
+  fetchLatest,
+  fetchList,
+} from "@/lib/server-movies";
 
-import { useState } from "react";
+export const dynamic = "force-dynamic";
 
-import { MovieGrid } from "@/components/movies/movie-grid";
-import { useLatest } from "@/lib/movies";
+export default async function Home() {
+  const [latest, phimLe, phimBo, hoatHinh, tvShows] = await Promise.all([
+    fetchLatest(1),
+    fetchList("phim-le", 1),
+    fetchList("phim-bo", 1),
+    fetchGenre("hoat-hinh", 1),
+    fetchList("tv-shows", 1),
+  ]);
 
-export default function Home() {
-  const [page, setPage] = useState(1);
-  const query = useLatest(page);
+  const heroMovies = (latest?.items ?? []).slice(0, 5);
 
   return (
     <div className="space-y-8">
-      <section className="overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-brand/30 via-card to-card p-8 sm:p-12">
-        <p className="text-sm font-medium text-brand">Xem phim mỗi ngày</p>
-        <h1 className="mt-2 max-w-xl text-3xl font-bold sm:text-4xl">
-          Khám phá hàng nghìn bộ phim hay, cập nhật liên tục
-        </h1>
-        <p className="mt-3 max-w-lg text-sm text-muted-foreground sm:text-base">
-          Tìm kiếm, lọc theo thể loại, quốc gia, năm phát hành — và theo dõi
-          tiến độ xem của bạn trên mọi thiết bị.
-        </p>
-      </section>
-
-      <MovieGrid
-        title="Mới cập nhật"
-        subtitle="Những bộ phim vừa được bổ sung"
-        query={query}
-        page={page}
-        onPage={setPage}
+      <HeroCarousel movies={heroMovies} />
+      <ContinueWatchingRail />
+      <MovieRail title="Mới cập nhật" movies={(latest?.items ?? []).slice(0, 10)} />
+      <MovieRail title="Phim lẻ" href="/list/phim-le" movies={phimLe?.items ?? []} />
+      <MovieRail title="Phim bộ" href="/list/phim-bo" movies={phimBo?.items ?? []} />
+      <MovieRail
+        title="Hoạt hình"
+        href="/the-loai/hoat-hinh"
+        movies={hoatHinh?.items ?? []}
       />
+      <MovieRail title="TV Shows" href="/list/tv-shows" movies={tvShows?.items ?? []} />
     </div>
   );
 }

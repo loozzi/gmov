@@ -82,3 +82,13 @@ Log ambiguous decisions here (Phase 0+). Newest last.
 25. **Route handlers use `BACKEND_URL`** (`http://api:8000` in compose) since
     `localhost` inside the web container is wrong; browser calls still use
     `NEXT_PUBLIC_API_URL`.
+
+## 2026-09-15 — Phase 5 content pages
+
+26. **Browse pages are `force-dynamic`, not pre-rendered.** Docker build has no
+    backend, so static prerender would bake EMPTY grids until revalidation.
+    SSR-on-request keeps SEO (full HTML) with fresh data; backend Redis cache
+    absorbs the load. Detail keeps `revalidate=1800` (dynamic route).
+27. **Search moved `/search` → `/tim-kiem`** per spec (old path 307-redirects).
+28. **`/xem/[slug]/[episode]` links are dead until Phase 6** (player) —
+    accepted per phasing; detail/resume/history all point there.

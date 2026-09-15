@@ -1,24 +1,28 @@
-"use client";
-
-import { useState } from "react";
-import { useParams } from "next/navigation";
-
-import { MovieGrid } from "@/components/movies/movie-grid";
+import { BrowseGrid } from "@/components/movies/browse-grid";
 import { labelFor, LIST_TYPES } from "@/lib/catalog";
-import { useList } from "@/lib/movies";
+import { fetchList } from "@/lib/server-movies";
 
-export default function ListPage() {
-  const params = useParams<{ type: string }>();
-  const type = params.type;
-  const [page, setPage] = useState(1);
-  const query = useList(type, page);
+export const dynamic = "force-dynamic";
+
+const VALID_TYPES = new Set(LIST_TYPES.map((t) => t.slug));
+
+export default async function ListPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ type: string }>;
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { type } = await params;
+  const { page } = await searchParams;
+  const pageNum = Math.max(1, Number.parseInt(page ?? "1", 10) || 1);
+  const data = VALID_TYPES.has(type) ? await fetchList(type, pageNum) : null;
 
   return (
-    <MovieGrid
+    <BrowseGrid
       title={labelFor(LIST_TYPES, type, "Danh mục")}
-      query={query}
-      page={page}
-      onPage={setPage}
+      data={data}
+      basePath={`/list/${type}`}
     />
   );
 }

@@ -1,29 +1,42 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 import { Clapperboard } from "lucide-react";
 
 import type { MovieCard as MovieCardType } from "@/lib/types";
 
+// Tiny shimmer placeholder (base64 SVG) while posters load.
+const BLUR_PLACEHOLDER =
+  "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMWMxYzIyIi8+PC9zdmc+";
+
 export function MovieCard({ movie }: { movie: MovieCardType }) {
+  const [failed, setFailed] = useState(false);
   const src = movie.poster_url || movie.thumb_url;
+
   return (
     <Link
       href={`/phim/${movie.slug}`}
       className="group block overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-brand"
     >
       <div className="relative aspect-[2/3] w-full overflow-hidden bg-muted">
-        {src ? (
+        {src && !failed ? (
           <Image
             src={src}
             alt={movie.name}
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
+            placeholder="blur"
+            blurDataURL={BLUR_PLACEHOLDER}
             className="object-cover transition-transform duration-300 group-hover:scale-105"
             loading="lazy"
+            onError={() => setFailed(true)}
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
+          <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-muted-foreground">
             <Clapperboard className="size-8" />
+            <span className="line-clamp-2 text-xs">{movie.name}</span>
           </div>
         )}
         {movie.quality && (

@@ -9,6 +9,15 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "phim.nguonc.com", pathname: "/**" },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/search",
+        destination: "/tim-kiem",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

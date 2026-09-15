@@ -1,22 +1,25 @@
-"use client";
+import { BrowseGrid } from "@/components/movies/browse-grid";
+import { fetchYear } from "@/lib/server-movies";
 
-import { useState } from "react";
-import { useParams } from "next/navigation";
+export const dynamic = "force-dynamic";
 
-import { MovieGrid } from "@/components/movies/movie-grid";
-import { useYear } from "@/lib/movies";
-
-export default function YearPage() {
-  const params = useParams<{ year: string }>();
-  const [page, setPage] = useState(1);
-  const query = useYear(params.year, page);
+export default async function YearPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ year: string }>;
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { year } = await params;
+  const { page } = await searchParams;
+  const pageNum = Math.max(1, Number.parseInt(page ?? "1", 10) || 1);
+  const data = await fetchYear(year, pageNum);
 
   return (
-    <MovieGrid
-      title={`Phim năm ${params.year}`}
-      query={query}
-      page={page}
-      onPage={setPage}
+    <BrowseGrid
+      title={`Phim năm ${year}`}
+      data={data}
+      basePath={`/nam/${year}`}
     />
   );
 }
