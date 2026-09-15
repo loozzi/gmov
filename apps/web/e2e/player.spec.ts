@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 import { loginViaApi } from "./helpers/auth";
+import { skipIfNoMux } from "./helpers/net";
+
+skipIfNoMux();
 
 // THE key test: play for real 20s -> reload -> the player must resume at
 // ~20s (±5s). This runs against the genuine HLS path (VideoPlayer + heartbeat

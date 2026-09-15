@@ -61,3 +61,4 @@ logs/
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/e2e/.last-user.json
+apps/web/e2e/.probe.json

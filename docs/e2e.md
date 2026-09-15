@@ -40,3 +40,17 @@ clock (tối đa 150s), không phải 20s wall-clock.
 
 Job `e2e` trong `.github/workflows/ci.yml`: dựng db/redis/api → chạy suite →
 upload `playwright-report/` + `test-results/` (trace) khi fail, giữ 7 ngày.
+
+## Fail-open khi mất mạng ngoài (không phải skip mù)
+
+Upstream đứng sau Cloudflare và chặn IP datacenter (xác minh: `server:
+cloudflare` + CI fail đúng 6 specs cần data, 3 specs auth thuần nội bộ vẫn
+pass). `global-setup` probe 2 thứ và ghi `e2e/.probe.json`:
+
+- `upstream`: backend trả `latest` có items (fresh CI redis không có stale
+  cache nên đây chính là "runner có tới được nguồn không").
+- `mux`: sample HLS stream trả playlist `#EXTM3U` thật.
+
+`browse`/`library` skip khi `!upstream`, `player` skip khi `!mux` — skip HIỆN
+rõ trong report với lý do, không phải pass giả. Auth specs KHÔNG bao giờ skip
+(chỉ đụng code của ta). Test skip path local: `E2E_NET=down`.

@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+import { skipIfNoUpstream } from "./helpers/net";
+
+skipIfNoUpstream();
+
 test("home -> movie detail loads full info", async ({ page }) => {
   await page.goto("/");
   await expect(

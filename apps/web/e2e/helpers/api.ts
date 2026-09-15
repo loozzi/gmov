@@ -71,3 +71,42 @@ export async function waitForBackend(timeoutMs = 120_000): Promise<void> {
     await new Promise((r) => setTimeout(r, 2000));
   }
 }
+
+/** Public sample stream used by the dev-only /e2e/player harness.
+ * MUST stay in sync with apps/web/app/e2e/player/page.tsx. */
+export const SAMPLE_M3U8 =
+  "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8";
+
+/** True when OUR backend can serve upstream catalog data right now
+ * (fresh CI redis has no stale cache to fall back on, so this fails
+ * exactly when runners can't reach the source). */
+export async function probeUpstream(): Promise<boolean> {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 25000);
+    const res = await fetch(`${BACKEND}/api/v1/movies/latest?page=1`, {
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return false;
+    const data = await res.json();
+    return Array.isArray(data?.items) && data.items.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** True when the sample HLS stream for the resume test is reachable. */
+export async function probeMux(): Promise<boolean> {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 25000);
+    const res = await fetch(SAMPLE_M3U8, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return false;
+    const text = await res.text();
+    return text.includes("#EXTM3U");
+  } catch {
+    return false;
+  }
+}

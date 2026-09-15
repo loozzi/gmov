@@ -9,12 +9,15 @@
  */
 import { execFile } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import {
+  E2E_DIR,
   LAST_USER_FILE,
   loginUser,
+  probeMux,
+  probeUpstream,
   registerUser,
   waitForBackend,
 } from "./helpers/api";
@@ -85,6 +88,17 @@ async function tryLogin(acc: {
 export default async function globalSetup(): Promise<void> {
   await waitForBackend();
   await resetThrottle();
+
+  // External-network probes, ALWAYS written (before any early return below).
+  // Datacenter runners are routinely blocked by the upstream CDN, so
+  // data-dependent specs skip (visibly) instead of failing on something
+  // outside our code. E2E_NET=down forces the skip path locally.
+  const forcedDown = process.env.E2E_NET === "down";
+  const [upstream, mux] = forcedDown
+    ? [false, false]
+    : await Promise.all([probeUpstream(), probeMux()]);
+  await writeFile(join(E2E_DIR, ".probe.json"), JSON.stringify({ upstream, mux }));
+  console.log(`[setup] external nets: upstream=${upstream} mux=${mux}`);
 
   try {
     const saved = JSON.parse(await readFile(LAST_USER_FILE, "utf8"));

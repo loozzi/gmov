@@ -3,6 +3,9 @@ import { readFile } from "node:fs/promises";
 
 import { LAST_USER_FILE, api, authHeaders, loginUser } from "./helpers/api";
 import { loginViaApi } from "./helpers/auth";
+import { skipIfNoUpstream } from "./helpers/net";
+
+skipIfNoUpstream();
 
 async function accessToken(): Promise<string> {
   const account = JSON.parse(await readFile(LAST_USER_FILE, "utf8"));
