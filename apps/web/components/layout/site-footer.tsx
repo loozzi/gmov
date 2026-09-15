@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { Clapperboard } from "lucide-react";
 
+import { useAuth } from "@/components/auth/auth-provider";
+
 export function SiteFooter() {
+  const { isAuthenticated } = useAuth();
   return (
     <footer className="border-t border-border">
       <div className="mx-auto flex max-w-7xl flex-col items-center gap-3 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:justify-between">
@@ -15,12 +20,20 @@ export function SiteFooter() {
           Dữ liệu phim từ nguồn công khai NguonC. Chỉ phục vụ học tập.
         </p>
         <div className="flex gap-4">
-          <Link href="/login" className="hover:text-foreground">
-            Đăng nhập
-          </Link>
-          <Link href="/register" className="hover:text-foreground">
-            Đăng ký
-          </Link>
+          {isAuthenticated ? (
+            <Link href="/me" className="hover:text-foreground">
+              Trang cá nhân
+            </Link>
+          ) : (
+            <>
+              <Link href="/login" className="hover:text-foreground">
+                Đăng nhập
+              </Link>
+              <Link href="/register" className="hover:text-foreground">
+                Đăng ký
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </footer>
