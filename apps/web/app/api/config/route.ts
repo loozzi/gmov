@@ -6,12 +6,10 @@ import { NextResponse } from "next/server";
  * Falls back to the legacy build-time var for compatibility.
  */
 export async function GET() {
-  const apiUrl =
-    process.env.PUBLIC_API_URL ??
-    process.env.NEXT_PUBLIC_API_URL ??
-    "http://localhost:8000";
+  const fromEnv = process.env.PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_URL;
+  const apiUrl = fromEnv ?? "http://localhost:8000";
   return NextResponse.json(
-    { apiUrl },
+    { apiUrl, isDefault: fromEnv === undefined },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

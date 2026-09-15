@@ -12,10 +12,18 @@ export function getApiUrl(): Promise<string> {
   if (!promise) {
     promise = fetch("/api/config", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then(
-        (d) =>
-          (typeof d?.apiUrl === "string" && d.apiUrl.trim()) || FALLBACK,
-      )
+      .then((d) => {
+        const url =
+          (typeof d?.apiUrl === "string" && d.apiUrl.trim()) || FALLBACK;
+        if (d?.isDefault) {
+          console.warn(
+            `[gmov] PUBLIC_API_URL is not set — API calls fall back to ${FALLBACK}. ` +
+              `If your backend runs elsewhere, restart the web server with e.g. ` +
+              `PUBLIC_API_URL=http://localhost:8008`,
+          );
+        }
+        return url;
+      })
       .catch(() => FALLBACK);
   }
   return promise;

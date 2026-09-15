@@ -49,7 +49,7 @@ Mount source trực tiếp: sửa code là api (uvicorn `--reload`) và web (`ne
 tự nạp lại. Truy cập dev thẳng http://localhost:3000 (web) và
 http://localhost:8000/docs (Swagger).
 
-Chạy lẻ từng app (cần Postgres/Redis local):
+Chạy lẻ từng app (cần Postgres/Redis local, API mặc định `:8000`):
 
 ```bash
 # backend
@@ -62,6 +62,12 @@ pnpm install
 pnpm --filter gmov-web dev
 pnpm --filter gmov-web build   # phải pass trước khi commit
 ```
+
+> Backend chạy port khác `:8000`? Báo cho web biết lúc chạy dev (không cần
+> build lại, console cũng sẽ warn nếu quên):
+> `PUBLIC_API_URL=http://localhost:8008 pnpm --filter gmov-web dev`.
+> Lưu ý: request `/api/auth/*` và `/api/config` luôn cùng origin với web
+> (httpOnly cookie bắt buộc same-origin) — đó là thiết kế, không phải bug.
 
 ## CI
 

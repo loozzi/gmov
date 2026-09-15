@@ -203,3 +203,15 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     (`_next/static`, icon, manifest) + fallback `/offline` cho navigation;
     bypass tuyệt đối cross-origin/API/media/Range. Đăng ký SW chỉ ở production.
     OG image vẽ bằng JSX (ImageResponse), không dùng poster phim.
+
+## Fix: frontend dev trỏ nhầm port API
+
+62. **Triệu chứng**: API chạy `:8008`, web dev `:3001`, browser gọi API ở port
+    của web. Điều tra bằng headless Chromium ghi lại mọi request cho thấy sự
+    thật có 2 phần: (a) `/api/auth/*` + `/api/config` cùng origin là ĐÚNG
+    (httpOnly cookie bắt buộc same-origin); (b) data call rơi về fallback
+    `:8000` (chết) vì `PUBLIC_API_URL` chưa từng được set — KHÔNG phải bug
+    code mà là thiếu config, và console im lặng khiến user đoán sai.
+63. **Sửa**: `/api/config` trả thêm `isDefault`, client `console.warn` hướng dẫn
+    cụ thể khi rơi vào fallback + README ghi rõ lệnh dev với port tùy chỉnh.
+    Không đoán port, không magic probe.
