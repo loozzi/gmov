@@ -1,0 +1,10 @@
+{
+  "name": "gmov",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.4.1",
+  "scripts": {
+    "dev:web": "pnpm --filter gmov-web dev",
+    "build:web": "pnpm --filter gmov-web build"
+  }
+}
