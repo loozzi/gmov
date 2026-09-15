@@ -27,6 +27,13 @@ Unique key: `(user_id, movie_slug, episode_slug)` — repeat PUTs upsert.
 
 Unique key: `(user_id, movie_slug)`.
 
+## Watched episodes
+
+| Method | Path | Success |
+|--------|------|---------|
+| GET | `/watched/{movie_slug}` | 200 `{"episode_slugs": [...]}` (≥90% of known duration) |
+| POST | `/watched` `{movie_slug, movie_name, episode_slug, episode_name, ...}` | 200 (explicit marker for players without time access) |
+
 ## Notes
 
 - No separate `watch_history` table: progress rows already record

@@ -92,3 +92,19 @@ Log ambiguous decisions here (Phase 0+). Newest last.
 27. **Search moved `/search` → `/tim-kiem`** per spec (old path 307-redirects).
 28. **`/xem/[slug]/[episode]` links are dead until Phase 6** (player) —
     accepted per phasing; detail/resume/history all point there.
+
+## 2026-09-15 — Phase 6 player
+
+29. **Dual-mode player (iframe primary).** Embed pages contain no extractable
+    m3u8 (5KB JS-player shell), so reverse-engineering direct streams was
+    rejected as fragile. hls.js path stays code-split on `/xem` for when
+    `m3u8_url` appears.
+30. **`notFound()` returns 200 on streamed routes — documented Next.js
+    behavior** (root `loading.tsx` forces streaming; noindex still injected).
+    Verified via isolation route; not a bug, no workaround applied.
+31. **Unload save uses keepalive fetch, not sendBeacon** (beacon can't set
+    `Authorization` headers).
+32. **`.next/cache` chown'd to appuser** in Dockerfile.web (fixed EACCES
+    prerender-cache writes as non-root).
+33. **Watched = progress ≥90% of known duration** (+ explicit POST marker for
+    embed mode stored as a completed 1s/1s row).

@@ -158,3 +158,37 @@ async def test_me_requires_auth(client):
     assert r.status_code == 401
     r = await client.put(f"{ME}/progress", json=_progress())
     assert r.status_code == 401
+
+
+async def test_watched_episodes_flow(client):
+    h = await _auth_headers(client)
+
+    r = await client.get(f"{ME}/watched/mao", headers=h)
+    assert r.status_code == 200
+    assert r.json() == {"episode_slugs": []}
+
+    # 95% watched counts
+    await client.put(
+        f"{ME}/progress", headers=h, json=_progress("mao", "tap-1", 950, 1000)
+    )
+    # 50% does not
+    await client.put(
+        f"{ME}/progress", headers=h, json=_progress("mao", "tap-2", 500, 1000)
+    )
+    r = await client.get(f"{ME}/watched/mao", headers=h)
+    assert r.json() == {"episode_slugs": ["tap-1"]}
+
+    # explicit marker (embed player without time access)
+    r = await client.post(
+        f"{ME}/watched",
+        headers=h,
+        json={
+            "movie_slug": "mao",
+            "movie_name": "Mao",
+            "episode_slug": "tap-3",
+            "episode_name": "Tap 3",
+        },
+    )
+    assert r.status_code == 200
+    r = await client.get(f"{ME}/watched/mao", headers=h)
+    assert sorted(r.json()["episode_slugs"]) == ["tap-1", "tap-3"]

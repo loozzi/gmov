@@ -73,3 +73,16 @@ class PaginatedFavorites(BaseModel):
 
 class FavoriteStatus(BaseModel):
     is_favorite: bool
+
+
+class WatchedAdd(BaseModel):
+    movie_slug: str = Field(min_length=1, max_length=255)
+    movie_name: str = Field(min_length=1, max_length=255)
+    episode_slug: str = Field(min_length=1, max_length=255)
+    episode_name: str = Field(min_length=1, max_length=255)
+    poster_url: str | None = Field(default=None, max_length=2048)
+    server_name: str | None = Field(default=None, max_length=255)
+
+
+class WatchedOut(BaseModel):
+    episode_slugs: list[str]

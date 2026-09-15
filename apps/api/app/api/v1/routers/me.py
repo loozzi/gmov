@@ -15,6 +15,8 @@ from app.schemas.library import (
     PaginatedProgress,
     ProgressOut,
     ProgressUpsert,
+    WatchedAdd,
+    WatchedOut,
 )
 from app.services import favorite_service, progress_service
 
@@ -80,6 +82,38 @@ async def delete_progress(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, bool]:
     await progress_service.delete_for_movie(db, current.id, movie_slug)
+    return {"ok": True}
+
+
+@router.get("/watched/{movie_slug}", response_model=WatchedOut)
+async def get_watched(
+    movie_slug: str,
+    current: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> WatchedOut:
+    return WatchedOut(
+        episode_slugs=await progress_service.watched_episodes(
+            db, current.id, movie_slug
+        )
+    )
+
+
+@router.post("/watched")
+async def mark_watched(
+    data: WatchedAdd,
+    current: User = Depends(rate_limited_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, bool]:
+    await progress_service.mark_watched(
+        db,
+        current.id,
+        data.movie_slug,
+        data.movie_name,
+        data.episode_slug,
+        data.episode_name,
+        data.poster_url,
+        data.server_name,
+    )
     return {"ok": True}
 
 

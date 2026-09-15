@@ -92,8 +92,16 @@ export default function HistoryPage() {
                   </Link>
                   <p className="text-xs text-muted-foreground">
                     {p.episode_name}
-                    {p.server_name ? ` · ${p.server_name}` : ""} · đã xem{" "}
-                    {formatClock(p.position_seconds)}
+                    {p.server_name ? ` · ${p.server_name}` : ""}
+                    {p.duration_seconds && p.duration_seconds > 0 ? (
+                      p.position_seconds >= 0.9 * p.duration_seconds ? (
+                        <> · <span className="text-green-400">Đã xem xong</span></>
+                      ) : (
+                        <> · đã xem {formatClock(p.position_seconds)}</>
+                      )
+                    ) : (
+                      <> · đã xem {formatClock(p.position_seconds)}</>
+                    )}
                   </p>
                   {p.duration_seconds ? (
                     <div className="mt-1.5 h-1 max-w-xs overflow-hidden rounded-full bg-muted">

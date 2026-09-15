@@ -163,3 +163,93 @@ export function useDeleteProgress() {
     },
   });
 }
+
+export interface ProgressUpsert {
+  movie_slug: string;
+  movie_name: string;
+  poster_url: string | null;
+  episode_slug: string;
+  episode_name: string;
+  server_name: string | null;
+  position_seconds: number;
+  duration_seconds: number | null;
+}
+
+export function useUpsertProgress() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ProgressUpsert) =>
+      apiFetch("/api/v1/me/progress", {
+        method: "PUT",
+        body: JSON.stringify(input),
+      }),
+    onSettled: (_d, _e, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["me", "progress", input.movie_slug],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["me", "continue-watching"],
+      });
+    },
+  });
+}
+
+/** Fire-and-forget save for unload; keepalive preserves auth headers. */
+export function sendProgressKeepalive(
+  input: ProgressUpsert,
+  accessToken: string,
+) {
+  const base =
+    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  try {
+    void fetch(`${base}/api/v1/me/progress`, {
+      method: "PUT",
+      keepalive: true,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(input),
+    });
+  } catch {
+    // Unload path: nothing more we can do.
+  }
+}
+
+export function useWatched(movieSlug: string, enabled = true) {
+  return useQuery({
+    queryKey: ["me", "watched", movieSlug],
+    queryFn: () =>
+      apiFetch<{ episode_slugs: string[] }>(
+        `/api/v1/me/watched/${movieSlug}`,
+      ),
+    enabled,
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+export function useMarkWatched(movieSlug: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      movie_name: string;
+      episode_slug: string;
+      episode_name: string;
+      poster_url: string | null;
+      server_name: string | null;
+    }) =>
+      apiFetch("/api/v1/me/watched", {
+        method: "POST",
+        body: JSON.stringify({ movie_slug: movieSlug, ...input }),
+      }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["me", "watched", movieSlug],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["me", "continue-watching"],
+      });
+    },
+  });
+}

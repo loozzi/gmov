@@ -102,3 +102,49 @@ async def delete_for_movie(
         )
     )
     await db.commit()
+
+
+async def watched_episodes(
+    db: AsyncSession, user_id: uuid.UUID, movie_slug: str
+) -> list[str]:
+    """Episode slugs watched >= 90% of known duration."""
+    stmt = select(WatchProgress.episode_slug).where(
+        WatchProgress.user_id == user_id,
+        WatchProgress.movie_slug == movie_slug,
+        WatchProgress.duration_seconds.is_not(None),
+        WatchProgress.duration_seconds > 0,
+        WatchProgress.position_seconds >= 0.9 * WatchProgress.duration_seconds,
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
+async def mark_watched(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    movie_slug: str,
+    movie_name: str,
+    episode_slug: str,
+    episode_name: str,
+    poster_url: str | None = None,
+    server_name: str | None = None,
+) -> WatchProgress:
+    """Explicit watched marker (e.g. embed player without time access).
+
+    Stored as a completed progress row (position == duration).
+    """
+    from app.schemas.library import ProgressUpsert
+
+    return await upsert(
+        db,
+        user_id,
+        ProgressUpsert(
+            movie_slug=movie_slug,
+            movie_name=movie_name,
+            poster_url=poster_url,
+            episode_slug=episode_slug,
+            episode_name=episode_name,
+            server_name=server_name,
+            position_seconds=1,
+            duration_seconds=1,
+        ),
+    )

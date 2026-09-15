@@ -9,7 +9,7 @@ import { ResumeButton } from "@/components/movies/resume-button";
 import { Button } from "@/components/ui/button";
 import { fetchMovieDetail, stripHtml } from "@/lib/server-movies";
 
-export const revalidate = 1800;
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
