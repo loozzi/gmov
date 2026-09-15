@@ -40,7 +40,7 @@ export default defineConfig({
     timeout: 180_000,
     env: {
       BACKEND_URL,
-      NEXT_PUBLIC_API_URL: BACKEND_URL,
+      PUBLIC_API_URL: BACKEND_URL,
     },
   },
 });

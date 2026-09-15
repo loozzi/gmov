@@ -103,13 +103,12 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-3000}:3000"
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      # Public API base, read at RUNTIME by /api/config (restart to change).
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
       BACKEND_URL: ${BACKEND_URL:-http://api:8000}
     depends_on:
       api:

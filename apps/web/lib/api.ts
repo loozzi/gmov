@@ -1,8 +1,7 @@
 "use client";
 
 import { ApiError, parseApiError } from "./errors";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { getApiUrl } from "./runtime-config";
 
 // Access token lives only in memory (never localStorage).
 let accessToken: string | null = null;
@@ -45,8 +44,9 @@ export async function apiFetch<T>(
   path: string,
   { auth = true, headers, ...init }: ApiOptions = {},
 ): Promise<T> {
+  const base = await getApiUrl();
   const request = async (token: string | null): Promise<Response> =>
-    fetch(`${API_URL}${path}`, {
+    fetch(`${base}${path}`, {
       ...init,
       headers: {
         ...(init.body instanceof FormData ? {} : { "Content-Type": "application/json" }),

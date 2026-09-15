@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 
 import { apiFetch } from "@/lib/api";
+import { getApiUrl } from "@/lib/runtime-config";
 
 export interface Progress {
   id: string;
@@ -195,14 +196,13 @@ export function useUpsertProgress() {
 }
 
 /** Fire-and-forget save for unload; keepalive preserves auth headers. */
-export function sendProgressKeepalive(
+export async function sendProgressKeepalive(
   input: ProgressUpsert,
   accessToken: string,
-) {
-  const base =
-    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+): Promise<void> {
   try {
-    void fetch(`${base}/api/v1/me/progress`, {
+    const base = await getApiUrl();
+    await fetch(`${base}/api/v1/me/progress`, {
       method: "PUT",
       keepalive: true,
       headers: {

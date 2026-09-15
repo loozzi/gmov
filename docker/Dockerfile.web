@@ -17,9 +17,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY package.json pnpm-workspace.yaml ./
 COPY apps/web ./apps/web
-# Public API base baked into the client bundle (override per environment).
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+# No NEXT_PUBLIC_* build args: the client resolves the API base at RUNTIME
+# via /api/config (see lib/runtime-config.ts).
 RUN pnpm --filter gmov-web build
 
 # ---- runner: minimal standalone server, non-root ----
