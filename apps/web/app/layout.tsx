@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+import { SiteFooter } from "@/components/layout/site-footer";
+import { SiteHeader } from "@/components/layout/site-header";
+import { Providers } from "@/components/providers";
+
 export const metadata: Metadata = {
-  title: "gmov — Xem phim",
-  description: "Web xem phim gmov (Phase 0 bootstrap).",
+  title: {
+    default: "gmov — Xem phim",
+    template: "%s | gmov",
+  },
+  description: "Web xem phim: duyệt, tìm kiếm và theo dõi phim yêu thích.",
 };
 
 export default function RootLayout({
@@ -12,8 +19,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi">
-      <body>{children}</body>
+    <html lang="vi" className="dark">
+      <body className="flex min-h-screen flex-col antialiased">
+        <Providers>
+          <SiteHeader />
+          <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
+            {children}
+          </main>
+          <SiteFooter />
+        </Providers>
+      </body>
     </html>
   );
 }

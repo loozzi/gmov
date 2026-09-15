@@ -67,3 +67,18 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     latest-per-movie ordering; UUID PKs can't break ties (random order).
 20. **Validation errors are JSON-sanitized** (`jsonable_encoder`): raw
     `exc.errors()` contains non-serializable `ValueError` in `ctx`.
+
+## 2026-09-15 — Phase 4 web shell
+
+21. **Access in memory, refresh in httpOnly cookie** via Next Route Handlers
+    (backend stays the only JWT issuer; rotation preserved). 401 → single
+    mutex-guarded refresh + one retry.
+22. **Dark-first, rose accent** (`#e11d48`) as Tailwind v4 `@theme` vars;
+    shadcn-style hand-rolled primitives (no CLI) to keep the Docker build lean.
+23. **pnpm `allowBuilds: unrs-resolver: true`** committed — pnpm v12 blocks
+    installs otherwise (`ERR_PNPM_IGNORED_BUILDS` broke the Docker build).
+24. **eslint pinned to v9** (v10 breaks `eslint-config-next@15`'s rushstack
+    patch); lint via flat `FlatCompat` config.
+25. **Route handlers use `BACKEND_URL`** (`http://api:8000` in compose) since
+    `localhost` inside the web container is wrong; browser calls still use
+    `NEXT_PUBLIC_API_URL`.
