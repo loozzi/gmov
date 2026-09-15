@@ -25,3 +25,18 @@ Log ambiguous decisions here (Phase 0+). Newest last.
 8. **`episodes[].server_data` observed empty on 2026-09-15.** Episode/stream
    parsing stays TBD until re-probed in the player phase; parser must handle
    empty lists. No stream field names invented.
+
+## 2026-09-15 — Phase 1 auth
+
+9. **Env renamed to spec:** `JWT_SECRET_KEY`/`JWT_EXPIRE_MINUTES` → `JWT_SECRET`,
+   `ACCESS_TOKEN_EXPIRE_MINUTES=30`, `REFRESH_TOKEN_EXPIRE_DAYS=30`, plus
+   `CORS_ORIGINS` (CSV, parsed with `NoDecode`). Compose + `.env.example`
+   updated in the same change.
+10. **Login = OAuth2 form** (`username` accepts email or username), per user
+    choice — Swagger Authorize compatible; frontend posts form data.
+11. **Refresh rotation ON**, revocation via **`refresh_tokens` DB table**
+    (not Redis blacklist): durable, testable on sqlite; logout is idempotent.
+12. **bcrypt pinned `>=4.0.1,<4.1`** — last version with `__about__`, required
+    by passlib 1.7.4. Verified hash/verify in tests.
+13. **`/me` lives under `/users`** (`/api/v1/users/me`), auth actions under
+    `/api/v1/auth/*`. `/health` always HTTP 200 with per-component status.

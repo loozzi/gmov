@@ -43,9 +43,11 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-gmov}:${POSTGRES_PASSWORD:-gmov_dev_password}@postgres:5432/${POSTGRES_DB:-gmov}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       NGUONC_BASE_URL: ${NGUONC_BASE_URL:-https://phim.nguonc.com/api}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-insecure-secret}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me-please}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
-      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-10080}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-30}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy

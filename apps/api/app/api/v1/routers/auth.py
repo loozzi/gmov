@@ -1,0 +1,43 @@
+"""Auth router: register, login, refresh, logout."""
+
+from fastapi import APIRouter, Depends, status
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.session import get_db
+from app.schemas.auth import RefreshIn, RegisterIn, TokenPair
+from app.schemas.user import UserOut
+from app.services import auth_service
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+async def register(
+    data: RegisterIn, db: AsyncSession = Depends(get_db)
+) -> UserOut:
+    user = await auth_service.register(db, data)
+    return UserOut.model_validate(user)
+
+
+@router.post("/login", response_model=TokenPair)
+async def login(
+    form: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db),
+) -> TokenPair:
+    return await auth_service.login(db, form.username, form.password)
+
+
+@router.post("/refresh", response_model=TokenPair)
+async def refresh(
+    data: RefreshIn, db: AsyncSession = Depends(get_db)
+) -> TokenPair:
+    return await auth_service.refresh(db, data.refresh_token)
+
+
+@router.post("/logout")
+async def logout(
+    data: RefreshIn, db: AsyncSession = Depends(get_db)
+) -> dict[str, bool]:
+    await auth_service.logout(db, data.refresh_token)
+    return {"ok": True}

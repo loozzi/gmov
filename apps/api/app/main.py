@@ -1,19 +1,65 @@
-"""Phase 0 bootstrap FastAPI app.
+"""gmov API application factory."""
 
-Later phases add: settings (pydantic-settings), async DB engine,
-Redis cache, nguonc upstream client, auth (JWT), routers.
-"""
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
-app = FastAPI(title="gmov API", version="0.1.0")
+from app.api.v1 import api_router
+from app.core.config import settings
+from app.core.exceptions import register_exception_handlers
+from app.db.session import close_connections, engine, get_redis_client
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    yield
+    await close_connections()
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="gmov API", version="0.1.0", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    register_exception_handlers(app)
+    app.include_router(api_router)
+    return app
+
+
+app = create_app()
+
+
+async def _check_database() -> str:
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return "up"
+    except Exception:
+        return "down"
+
+
+async def _check_redis() -> str:
+    try:
+        await get_redis_client().ping()
+        return "up"
+    except Exception:
+        return "down"
 
 
 @app.get("/health", tags=["health"])
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    database = await _check_database()
+    redis_status = await _check_redis()
+    overall = "ok" if database == "up" and redis_status == "up" else "degraded"
+    return {"status": overall, "database": database, "redis": redis_status}
 
 
 @app.get("/api/health", tags=["health"])
 async def api_health() -> dict[str, str]:
-    return {"status": "ok"}
+    return await health()

@@ -23,7 +23,8 @@ WORKDIR /app
 RUN useradd -m appuser && chown appuser:appuser /app
 COPY --from=builder /app/.venv /app/.venv
 COPY apps/api/app ./app
+COPY apps/api/alembic.ini ./alembic.ini
 
 USER appuser
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
