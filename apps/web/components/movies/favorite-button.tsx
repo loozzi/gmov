@@ -52,6 +52,7 @@ export function FavoriteButton({ movieSlug, movieName, posterUrl }: Props) {
   return (
     <Button
       variant="secondary"
+      size="lg"
       onClick={onClick}
       disabled={authLoading || toggle.isPending}
       aria-pressed={isFavorite}
