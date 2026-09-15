@@ -31,3 +31,41 @@ test("search -> results -> openable", async ({ page }) => {
   await firstResult.click();
   await expect(page).toHaveURL(/\/phim\//);
 });
+
+test("search suggestions: arrows + enter + escape (a11y combobox)", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const box = page.getByLabel(/tìm kiếm phim/i).first();
+  await box.fill("mao");
+  const listbox = page.getByRole("listbox", { name: /gợi ý phim/i });
+  await expect(listbox).toBeVisible({ timeout: 20_000 });
+  await expect(box).toHaveAttribute("aria-expanded", "true");
+
+  // ArrowDown highlights options in order.
+  await box.press("ArrowDown");
+  const first = listbox.getByRole("option").first();
+  await expect(first).toHaveAttribute("aria-selected", "true");
+  await expect(box).toHaveAttribute("aria-activedescendant", /option-0$/);
+  await box.press("ArrowDown");
+  await expect(listbox.getByRole("option").nth(1)).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+
+  // Enter opens the highlighted suggestion's detail page.
+  await box.press("Enter");
+  await expect(page).toHaveURL(/\/phim\//, { timeout: 20_000 });
+
+  // Escape closes the dropdown without navigating.
+  await page.goto("/");
+  await page.getByLabel(/tìm kiếm phim/i).first().fill("mao");
+  await expect(page.getByRole("listbox", { name: /gợi ý phim/i })).toBeVisible({
+    timeout: 20_000,
+  });
+  await page.getByLabel(/tìm kiếm phim/i).first().press("Escape");
+  await expect(
+    page.getByRole("listbox", { name: /gợi ý phim/i }),
+  ).toBeHidden();
+  await expect(page).toHaveURL("/");
+});
