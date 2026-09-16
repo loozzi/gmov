@@ -12,9 +12,15 @@ All endpoints require Bearer access token. Base: `/api/v1/me`.
 | DELETE | `/progress/{movie_slug}` | removes all episodes of the movie | 200 `{"ok": true}` |
 
 `ProgressUpsert = {movie_slug, movie_name, poster_url?, episode_slug,
-episode_name, server_name?, position_seconds≥0, duration_seconds>0?}` with
-rule `position_seconds <= duration_seconds` (else 422 `VALIDATION_ERROR`).
+episode_name, server_name?, position_seconds≥0, duration_seconds>0?,
+episode_index≥1?, total_episodes≥1?}` with rules `position_seconds <=
+duration_seconds` and `episode_index <= total_episodes` when both present
+(else 422 `VALIDATION_ERROR`).
 Unique key: `(user_id, movie_slug, episode_slug)` — repeat PUTs upsert.
+
+`episode_index`/`total_episodes` (nullable) are the 1-based position within the
+selected server and that server's episode count. Rows written before these
+columns existed stay `NULL`; the UI falls back to its previous behaviour.
 
 ## Favorites
 

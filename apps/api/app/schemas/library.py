@@ -13,6 +13,8 @@ class ProgressUpsert(BaseModel):
     episode_slug: str = Field(min_length=1, max_length=255)
     episode_name: str = Field(min_length=1, max_length=255)
     server_name: str | None = Field(default=None, max_length=255)
+    episode_index: int | None = Field(default=None, ge=1)
+    total_episodes: int | None = Field(default=None, ge=1)
     position_seconds: int = Field(default=0, ge=0)
     duration_seconds: int | None = Field(default=None, gt=0)
 
@@ -23,6 +25,12 @@ class ProgressUpsert(BaseModel):
             and self.position_seconds > self.duration_seconds
         ):
             raise ValueError("position_seconds must not exceed duration_seconds")
+        if (
+            self.episode_index is not None
+            and self.total_episodes is not None
+            and self.episode_index > self.total_episodes
+        ):
+            raise ValueError("episode_index must not exceed total_episodes")
         return self
 
 
@@ -36,6 +44,8 @@ class ProgressOut(BaseModel):
     episode_slug: str
     episode_name: str
     server_name: str | None
+    episode_index: int | None
+    total_episodes: int | None
     position_seconds: int
     duration_seconds: int | None
     updated_at: datetime
@@ -109,6 +119,18 @@ class WatchedAdd(BaseModel):
     episode_name: str = Field(min_length=1, max_length=255)
     poster_url: str | None = Field(default=None, max_length=2048)
     server_name: str | None = Field(default=None, max_length=255)
+    episode_index: int | None = Field(default=None, ge=1)
+    total_episodes: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def _check_index(self) -> "WatchedAdd":
+        if (
+            self.episode_index is not None
+            and self.total_episodes is not None
+            and self.episode_index > self.total_episodes
+        ):
+            raise ValueError("episode_index must not exceed total_episodes")
+        return self
 
 
 class WatchedOut(BaseModel):

@@ -223,6 +223,71 @@ async def test_watchlist_flow(client):
     assert r.json() == {"is_saved": False}
 
 
+async def test_progress_upsert_stores_episode_position(client):
+    h = await _auth_headers(client)
+    body = {**_progress(), "episode_index": 2, "total_episodes": 12}
+
+    r = await client.put(f"{ME}/progress", headers=h, json=body)
+    assert r.status_code == 200, r.text
+    assert r.json()["episode_index"] == 2
+    assert r.json()["total_episodes"] == 12
+
+    r = await client.get(f"{ME}/progress/mao", headers=h)
+    assert r.json()["episode_index"] == 2
+    assert r.json()["total_episodes"] == 12
+
+
+async def test_progress_rejects_index_over_total(client):
+    h = await _auth_headers(client)
+    body = {**_progress(), "episode_index": 13, "total_episodes": 12}
+
+    r = await client.put(f"{ME}/progress", headers=h, json=body)
+    assert r.status_code == 422
+    assert r.json()["code"] == "VALIDATION_ERROR"
+
+
+async def test_watched_marker_stores_episode_position(client):
+    h = await _auth_headers(client)
+
+    r = await client.post(
+        f"{ME}/watched",
+        headers=h,
+        json={
+            "movie_slug": "mao",
+            "movie_name": "Mao",
+            "episode_slug": "tap-3",
+            "episode_name": "3",
+            "episode_index": 3,
+            "total_episodes": 12,
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    r = await client.get(f"{ME}/progress/mao", headers=h)
+    assert r.json()["episode_slug"] == "tap-3"
+    assert r.json()["episode_index"] == 3
+    assert r.json()["total_episodes"] == 12
+
+
+async def test_watched_marker_rejects_index_over_total(client):
+    h = await _auth_headers(client)
+
+    r = await client.post(
+        f"{ME}/watched",
+        headers=h,
+        json={
+            "movie_slug": "mao",
+            "movie_name": "Mao",
+            "episode_slug": "tap-3",
+            "episode_name": "3",
+            "episode_index": 13,
+            "total_episodes": 12,
+        },
+    )
+    assert r.status_code == 422
+    assert r.json()["code"] == "VALIDATION_ERROR"
+
+
 async def test_progress_upsert_removes_from_watchlist(client):
     h = await _auth_headers(client)
     r = await client.post(

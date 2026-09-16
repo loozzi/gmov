@@ -36,6 +36,8 @@ class WatchProgress(Base):
     episode_slug: Mapped[str] = mapped_column(String(255), nullable=False)
     episode_name: Mapped[str] = mapped_column(String(255), nullable=False)
     server_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    episode_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_episodes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     position_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(

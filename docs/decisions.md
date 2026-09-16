@@ -382,3 +382,11 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     đã tải xong, và reset ref theo từng tập. Backend không đổi
     (`_latest_per_movie_stmt` vốn đúng). Chốt bằng E2E `embed-history.spec.ts`
     qua harness dev-only `/e2e/embed` (không phụ thuộc upstream).
+
+## Tiến độ theo tập — 2026-09-16
+
+84. **Lưu vị trí tập (`episode_index`/`total_episodes`) trên progress**: hai cột
+    nullable trên `watch_progress`, scope theo SERVER đang chọn (không theo flat
+    list nhiều server) để không thổi phồng M. Embed không có playtime nên "xem
+    đến đâu" ở chế độ embed = tập hiện tại; row cũ `NULL` → UI fallback như trước.
+    Không backfill (giá trị điền ở lần ghi kế tiếp).

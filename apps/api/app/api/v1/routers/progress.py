@@ -109,5 +109,7 @@ async def mark_watched(
         data.episode_name,
         data.poster_url,
         data.server_name,
+        data.episode_index,
+        data.total_episodes,
     )
     return {"ok": True}

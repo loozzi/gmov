@@ -135,6 +135,8 @@ async def mark_watched(
     episode_name: str,
     poster_url: str | None = None,
     server_name: str | None = None,
+    episode_index: int | None = None,
+    total_episodes: int | None = None,
 ) -> WatchProgress:
     """Explicit watched marker (e.g. embed player without time access).
 
@@ -152,6 +154,8 @@ async def mark_watched(
             episode_slug=episode_slug,
             episode_name=episode_name,
             server_name=server_name,
+            episode_index=episode_index,
+            total_episodes=total_episodes,
             position_seconds=1,
             duration_seconds=1,
         ),
