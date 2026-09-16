@@ -74,6 +74,18 @@ export function WatchView({ detail, episodeSlug }: Props) {
   const currentEp =
     episodes.find((e) => (e.slug ?? e.name) === episodeSlug) ?? episodes[0] ?? null;
   const currentKey = currentEp ? (currentEp.slug ?? currentEp.name) : "";
+
+  // Series position within the selected server (not the cross-server flat
+  // list): "tập N/M" for the history/rail/detail UI.
+  const seriesPosition = useMemo(() => {
+    const eps = server?.episodes ?? [];
+    const idx = eps.findIndex((e) => (e.slug ?? e.name) === currentKey) + 1;
+    return {
+      episode_index: idx > 0 ? idx : null,
+      total_episodes: eps.length > 0 ? eps.length : null,
+    };
+  }, [server, currentKey]);
+
   const src = currentEp?.m3u8_url ?? null;
   const isHls = src !== null;
 
@@ -100,8 +112,9 @@ export function WatchView({ detail, episodeSlug }: Props) {
       server_name: server?.name ?? null,
       position_seconds: Math.floor(t),
       duration_seconds: d > 0 ? Math.floor(d) : null,
+      ...seriesPosition,
     }),
-    [detail, episodeSlug, currentEp, server, poster],
+    [detail, episodeSlug, currentEp, server, poster, seriesPosition],
   );
 
   // Reset per-episode transient state. Client components persist across
@@ -409,6 +422,7 @@ export function WatchView({ detail, episodeSlug }: Props) {
                   episode_name: currentEp.name,
                   poster_url: poster,
                   server_name: server?.name ?? null,
+                  ...seriesPosition,
                 },
                 {
                   onSuccess: () => notify("Đã đánh dấu tập này là đã xem.", "success"),

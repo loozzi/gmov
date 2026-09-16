@@ -31,6 +31,9 @@ fullscreen, `M` mute. Controls auto-hide after 3s idle.
 - Episode ≥90% duration counts as watched (server derives it;
   `GET /api/v1/me/watched/{movie}`); embed mode has explicit
   `POST /api/v1/me/watched` marker.
+- Every write (HLS heartbeat, unload, embed registration, "Đánh dấu đã xem")
+  also records the episode's 1-based position within the selected server and
+  that server's episode count, powering "tập N/M" in the library UI.
 
 ## Episode flow
 

@@ -16,6 +16,8 @@ export interface Progress {
   episode_slug: string;
   episode_name: string;
   server_name: string | null;
+  episode_index: number | null;
+  total_episodes: number | null;
   position_seconds: number;
   duration_seconds: number | null;
   updated_at: string;
@@ -273,6 +275,8 @@ export interface ProgressUpsert {
   episode_slug: string;
   episode_name: string;
   server_name: string | null;
+  episode_index: number | null;
+  total_episodes: number | null;
   position_seconds: number;
   duration_seconds: number | null;
 }
@@ -338,6 +342,8 @@ export function useMarkWatched(movieSlug: string) {
       episode_name: string;
       poster_url: string | null;
       server_name: string | null;
+      episode_index?: number | null;
+      total_episodes?: number | null;
     }) =>
       apiFetch("/api/v1/me/watched", {
         method: "POST",
