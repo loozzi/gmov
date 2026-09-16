@@ -1,5 +1,8 @@
 """Auth flow tests: register -> login -> /me -> refresh -> logout."""
 
+import uuid
+from pathlib import Path
+
 import pytest
 import pytest_asyncio
 from fakeredis.aioredis import FakeRedis
@@ -8,6 +11,7 @@ from app.core import ratelimit
 
 AUTH = "/api/v1/auth"
 ME = "/api/v1/users/me"
+APP_DIR = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
@@ -277,3 +281,191 @@ async def test_refresh_grace_and_stale_paths(sqlite_factory):
         foreign, _ = security.create_refresh_token(user_id)
         with pytest.raises(AppException):
             await auth_service.refresh(db, foreign)
+
+
+async def test_refresh_reuse_after_grace_revokes_whole_family(sqlite_factory):
+    """Theft detected: the stale token AND every sibling in its family die."""
+    import uuid as uuid_mod
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from app.core import security
+    from app.core.exceptions import AppException
+    from app.db.models.refresh_token import RefreshToken
+    from app.schemas.auth import RegisterIn
+    from app.services import auth_service, user_service
+
+    async with sqlite_factory() as db:
+        user = await user_service.create(
+            db,
+            RegisterIn(
+                email="reuse@gmov.dev",
+                username="reuseuser",
+                password="password123",
+            ),
+        )
+        user_id = user.id
+        family_id = uuid_mod.uuid4()
+        now = datetime.now(UTC)
+
+        async def _row(revoked_offset=None):
+            token, jti = security.create_refresh_token(user_id)
+            db.add(
+                RefreshToken(
+                    user_id=user_id,
+                    jti=jti,
+                    family_id=family_id,
+                    expires_at=now + timedelta(days=30),
+                    revoked_at=(now + revoked_offset if revoked_offset else None),
+                )
+            )
+            await db.commit()
+            return token
+
+        stale = await _row(timedelta(hours=-1))
+        sibling = await _row()
+
+        with pytest.raises(AppException) as exc:
+            await auth_service.refresh(db, stale)
+        assert exc.value.status_code == 401
+        assert exc.value.code == "INVALID_REFRESH_TOKEN"
+
+        with pytest.raises(AppException) as exc:
+            await auth_service.refresh(db, sibling)
+        assert exc.value.status_code == 401
+        assert exc.value.code == "INVALID_REFRESH_TOKEN"
+
+        rows = (
+            await db.execute(
+                select(RefreshToken).where(RefreshToken.family_id == family_id)
+            )
+        ).scalars().all()
+        assert len(rows) == 2
+        assert all(member.revoked_at is not None for member in rows)
+        assert all(member.compromised for member in rows)
+
+
+async def test_refresh_reuse_does_not_affect_other_family(sqlite_factory):
+    import uuid as uuid_mod
+    from datetime import UTC, datetime, timedelta
+
+    from app.core import security
+    from app.core.exceptions import AppException
+    from app.db.models.refresh_token import RefreshToken
+    from app.schemas.auth import RegisterIn
+    from app.services import auth_service, user_service
+
+    async with sqlite_factory() as db:
+        user = await user_service.create(
+            db,
+            RegisterIn(
+                email="families@gmov.dev",
+                username="familyuser",
+                password="password123",
+            ),
+        )
+        user_id = user.id
+        now = datetime.now(UTC)
+
+        async def _row(family_id, revoked_offset=None):
+            token, jti = security.create_refresh_token(user_id)
+            db.add(
+                RefreshToken(
+                    user_id=user_id,
+                    jti=jti,
+                    family_id=family_id,
+                    expires_at=now + timedelta(days=30),
+                    revoked_at=(now + revoked_offset if revoked_offset else None),
+                )
+            )
+            await db.commit()
+            return token
+
+        stolen_family = uuid_mod.uuid4()
+        other_family = uuid_mod.uuid4()
+        stale = await _row(stolen_family, timedelta(hours=-1))
+        await _row(stolen_family)
+        other = await _row(other_family)
+
+        with pytest.raises(AppException):
+            await auth_service.refresh(db, stale)
+
+        pair = await auth_service.refresh(db, other)
+        assert pair.access_token
+
+
+async def test_login_lockout_is_per_username(client, _fake_redis):
+    first = {
+        "email": "lockme@gmov.dev",
+        "username": "lockme",
+        "password": "password123",
+    }
+    second = {
+        "email": "otherlock@gmov.dev",
+        "username": "otherlock",
+        "password": "password123",
+    }
+    await _register(client, first)
+    await _register(client, second)
+    for _ in range(5):
+        r = await _login(client, first["username"], "wrongpassword")
+        assert r.status_code == 401
+    r = await _login(client, first["username"], "wrongpassword")
+    assert r.status_code == 429
+
+    r = await _login(client, second["username"], "wrongpassword")
+    assert r.status_code == 401
+    r = await _login(client, second["username"], second["password"])
+    assert r.status_code == 200, r.text
+
+
+def test_refresh_family_migration_backfills_from_id(tmp_path, monkeypatch):
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine, text
+
+    from app.core.config import settings
+
+    db_path = tmp_path / "family.db"
+    monkeypatch.setattr(settings, "database_url", f"sqlite+aiosqlite:///{db_path}")
+    cfg = Config(str(APP_DIR / "alembic.ini"))
+    cfg.set_main_option("script_location", str(APP_DIR / "app" / "alembic"))
+
+    command.upgrade(cfg, "b7c1d9e2f3a4")
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.begin() as conn:
+            user_id = uuid.uuid4()
+            token_id = uuid.uuid4()
+            conn.execute(
+                text(
+                    "INSERT INTO users (id, email, username, hashed_password,"
+                    " display_name, is_active, role, created_at, updated_at)"
+                    " VALUES (:id, 'mig@gmov.dev', 'miguser', 'x', 'x', 1,"
+                    " 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ),
+                {"id": str(user_id)},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO refresh_tokens (id, user_id, jti, expires_at,"
+                    " created_at) VALUES (:id, :uid, 'jti-family',"
+                    " CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ),
+                {"id": str(token_id), "uid": str(user_id)},
+            )
+    finally:
+        engine.dispose()
+
+    command.upgrade(cfg, "head")
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.begin() as conn:
+            row = conn.execute(
+                text("SELECT id, family_id, compromised FROM refresh_tokens")
+            ).one()
+    finally:
+        engine.dispose()
+    assert row.family_id == row.id
+    assert row.compromised in (0, False)

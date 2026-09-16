@@ -67,8 +67,8 @@ async def check_rate_limit(key: str, limit: int, window_seconds: int) -> None:
         pass
 
 
-def _login_fail_key(ip: str) -> str:
-    return f"ratelimit:login-fail:{ip}"
+def _login_fail_key(ip: str, username: str) -> str:
+    return f"ratelimit:login-fail:{ip}:{username.lower()}"
 
 
 async def _counter(client, key: str) -> tuple[int, int]:
@@ -89,10 +89,10 @@ def _vi_cooldown(ttl: int, what: str) -> str:
     return f"{what} Vui lòng thử lại sau khoảng {minutes} phút."
 
 
-async def check_login_allowed(ip: str) -> None:
+async def check_login_allowed(ip: str, username: str) -> None:
     try:
         client = get_redis_client()
-        fails, ttl = await _counter(client, _login_fail_key(ip))
+        fails, ttl = await _counter(client, _login_fail_key(ip, username))
         if fails >= LOGIN_FAIL_LIMIT:
             raise AppException(
                 _vi_cooldown(ttl, "Đăng nhập sai quá nhiều lần."),
@@ -106,19 +106,21 @@ async def check_login_allowed(ip: str) -> None:
         pass
 
 
-async def record_login_failure(ip: str) -> None:
+async def record_login_failure(ip: str, username: str) -> None:
     try:
         client = get_redis_client()
-        count = await client.incr(_login_fail_key(ip))
+        count = await client.incr(_login_fail_key(ip, username))
         if count == 1:
-            await client.expire(_login_fail_key(ip), LOGIN_FAIL_WINDOW)
+            await client.expire(
+                _login_fail_key(ip, username), LOGIN_FAIL_WINDOW
+            )
     except (RedisError, OSError):
         pass
 
 
-async def clear_login_failures(ip: str) -> None:
+async def clear_login_failures(ip: str, username: str) -> None:
     try:
-        await get_redis_client().delete(_login_fail_key(ip))
+        await get_redis_client().delete(_login_fail_key(ip, username))
     except (RedisError, OSError):
         pass
 

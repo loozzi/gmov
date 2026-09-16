@@ -16,7 +16,9 @@ from app.schemas.auth import RegisterIn, TokenPair
 from app.services import user_service
 
 
-def _build_pair(user_id: uuid.UUID) -> tuple[TokenPair, RefreshToken]:
+def _build_pair(
+    user_id: uuid.UUID, family_id: uuid.UUID
+) -> tuple[TokenPair, RefreshToken]:
     """Create tokens + the (unsaved) refresh row. Caller commits."""
     access = security.create_access_token(user_id)
     refresh, jti = security.create_refresh_token(user_id)
@@ -25,12 +27,17 @@ def _build_pair(user_id: uuid.UUID) -> tuple[TokenPair, RefreshToken]:
     )
     return (
         TokenPair(access_token=access, refresh_token=refresh),
-        RefreshToken(user_id=user_id, jti=jti, expires_at=expires_at),
+        RefreshToken(
+            user_id=user_id,
+            jti=jti,
+            family_id=family_id,
+            expires_at=expires_at,
+        ),
     )
 
 
 async def _issue_pair(db: AsyncSession, user: User) -> TokenPair:
-    pair, row = _build_pair(user.id)
+    pair, row = _build_pair(user.id, uuid.uuid4())
     db.add(row)
     await db.commit()
     return pair
@@ -67,14 +74,25 @@ def _decode_refresh(token: str) -> dict:
 
 # A revoked token presented again within this window is treated as a
 # duplicate delivery (double boot, two tabs racing rotation), NOT theft:
-# re-issue instead of 401. Anything older still fails hard. Genuine theft
-# detection (token-family invalidation) remains future work.
+# re-issue instead of 401. Anything older is theft: every token in the
+# family is compromised and the whole family fails hard from then on.
 REFRESH_GRACE_SECONDS = 30
 
 
 async def _load_row(db: AsyncSession, jti: str) -> RefreshToken | None:
     stmt = select(RefreshToken).where(RefreshToken.jti == jti)
     return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def _revoke_family(
+    db: AsyncSession, family_id: uuid.UUID, now: datetime
+) -> None:
+    stmt = select(RefreshToken).where(RefreshToken.family_id == family_id)
+    for member in (await db.execute(stmt)).scalars().all():
+        member.compromised = True
+        if member.revoked_at is None:
+            member.revoked_at = now
+    await db.commit()
 
 
 def _as_aware(value: datetime) -> datetime:
@@ -98,9 +116,10 @@ async def refresh(db: AsyncSession, token: str) -> TokenPair:
             )
         if row.revoked_at is None:
             row.revoked_at = now  # normal rotation
-        elif (now - _as_aware(row.revoked_at)).total_seconds() > (
-            REFRESH_GRACE_SECONDS
-        ):
+        elif row.compromised or (
+            now - _as_aware(row.revoked_at)
+        ).total_seconds() > REFRESH_GRACE_SECONDS:
+            await _revoke_family(db, row.family_id, now)
             raise AppException(
                 "Invalid refresh token", "INVALID_REFRESH_TOKEN", 401
             )
@@ -111,7 +130,7 @@ async def refresh(db: AsyncSession, token: str) -> TokenPair:
             raise AppException(
                 "Invalid refresh token", "INVALID_REFRESH_TOKEN", 401
             )
-        pair, new_row = _build_pair(user.id)
+        pair, new_row = _build_pair(user.id, row.family_id)
         db.add(new_row)
         await db.commit()
         return pair

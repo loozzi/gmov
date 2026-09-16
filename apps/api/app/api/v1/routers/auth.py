@@ -40,13 +40,13 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ) -> TokenPair:
     ip = ratelimit.client_ip(request)
-    await ratelimit.check_login_allowed(ip)
+    await ratelimit.check_login_allowed(ip, form.username)
     try:
         pair = await auth_service.login(db, form.username, form.password)
     except AppException:
-        await ratelimit.record_login_failure(ip)
+        await ratelimit.record_login_failure(ip, form.username)
         raise
-    await ratelimit.clear_login_failures(ip)
+    await ratelimit.clear_login_failures(ip, form.username)
     return pair
 
 
