@@ -191,7 +191,7 @@ export default async function MovieDetailPage({
                     className="min-w-0"
                   >
                     <Link
-                      href={`/xem/${movie.slug}/${ep.slug ?? ""}`}
+                      href={`/xem/${movie.slug}/${ep.slug ?? ep.name}`}
                       title={ep.name}
                     >
                       <span className="truncate">{ep.name}</span>

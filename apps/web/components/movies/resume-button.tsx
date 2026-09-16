@@ -8,6 +8,12 @@ import { Button } from "@/components/ui/button";
 import { useProgress } from "@/lib/me";
 import type { Episode } from "@/lib/types";
 
+/** Upstream episode names are bare numbers ("1", "2"); read them as "tập 2". */
+function episodeLabel(name: string): string {
+  const trimmed = name.trim();
+  return /^\d+$/.test(trimmed) ? `tập ${trimmed}` : trimmed;
+}
+
 function formatClock(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
@@ -26,12 +32,19 @@ export function ResumeButton({ movieSlug, firstEpisode }: Props) {
   const { isAuthenticated } = useAuth();
   const { data: progress } = useProgress(movieSlug, isAuthenticated);
 
-  if (progress && progress.position_seconds > 10) {
+  // Any history row means the movie is in progress: continue at the episode
+  // that was last recorded. Embed mode stores no playtime (0s/0s registration
+  // or a 1s/1s watched marker), so only show a clock when it is meaningful.
+  if (progress) {
+    const fromTime =
+      progress.position_seconds > 10
+        ? ` từ ${formatClock(progress.position_seconds)}`
+        : "";
     return (
       <Button asChild size="lg">
         <Link href={`/xem/${movieSlug}/${progress.episode_slug}`}>
-          <History /> Xem tiếp {progress.episode_name} từ{" "}
-          {formatClock(progress.position_seconds)}
+          <History /> Xem tiếp {episodeLabel(progress.episode_name)}
+          {fromTime}
         </Link>
       </Button>
     );
