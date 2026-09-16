@@ -6,17 +6,19 @@ Brought forward — none blocks current functionality.
 
 1. ~~No rate limit on `/auth/register`~~ — DONE (Batch 2: 3/h + 10/day/IP,
    honeypot, trusted-proxy IP). Còn lại: CAPTCHA nếu bị abuse có chủ đích.
-2. **No refresh-token reuse detection** — rotation revokes the old token, but a
-   stolen refresh used twice isn't flagged. Consider invalidating the whole
-   token family on reuse.
+2. ~~No refresh-token reuse detection~~ — DONE (Hardening 2026-09-16: mỗi
+   login phiên một `family_id`; token đã revoke bị trình lại sau cửa sổ grace
+   30s → revoke toàn bộ family còn sống + đánh dấu `compromised`, trả 401
+   `INVALID_REFRESH_TOKEN`).
 3. ~~Refresh flow isn't atomic~~ — DONE (Batch 3: single-transaction rotation
    + rollback, proven by signer-outage test).
 4. ~~`expires_at` never pruned~~ — DONE (Batch 3: APScheduler purge every 6h +
    `expires_at` index). Còn lại: theo dõi log purge sau deploy thật.
-5. **Login rate-limit key is IP-only** — shared NATs share a bucket; consider
-   `ip+username` composite key.
-6. **`GET /health` always returns 200** — orchestrators can't distinguish
-   degraded state (intentional; revisit if alerting needs it).
+5. ~~Login rate-limit key is IP-only~~ — DONE (Hardening 2026-09-16: key tổ hợp
+   `ip+username` — `ratelimit:login-fail:{ip}:{username.lower()}` — nên NAT
+   dùng chung không còn chia chung bucket brute-force).
+6. **`GET /health` always returns 200** — GIỮ LẠI CỐ TÌNH: orchestrators không
+   cần phân biệt trạng thái suy giảm; xem lại nếu alerting yêu cầu.
 
 ## Frontend
 

@@ -302,3 +302,33 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     endpoint phục vụ cả khách ẩn danh lẫn moderator: token thiếu/sai → ẩn
     danh (không bao giờ 401), chỉ `moderator`/`admin` thấy `body` của bình
     luận đã ẩn. Tránh nhân đôi route hoặc bắt khách phải đăng nhập.
+
+## Hardening & debt — 2026-09-16
+
+75. **Refresh-token reuse detection theo `family_id` + cờ `compromised`**:
+    mỗi login/register mở một family (`uuid4`), rotation giữ nguyên family.
+    Token đã revoke trình lại **trong grace 30s** vẫn là duplicate delivery
+    (boot/tab đua nhau) nên re-issue; **quá 30s** là theft → `_revoke_family`
+    revoke mọi token còn sống của family và đặt `compromised=true`, trả 401
+    `INVALID_REFRESH_TOKEN`. Cờ `compromised` cần vì member chưa từng được
+    revoke (chưa dùng) vẫn phải chết **và** giữ nguyên trạng thái chết ở mọi
+    lần trình sau — nếu chỉ dựa vào `revoked_at` thì một member khác chưa
+    revoke vẫn qua được, hoặc member đã revoke lại rơi tiếp vào nhánh grace
+    30s. Migration backfill `family_id = id` cho row cũ rồi set NOT NULL +
+    index.
+76. **Login brute-force key đổi sang `ip + username`**
+    (`ratelimit:login-fail:{ip}:{username.lower()}`): bucket IP-only khiến
+    nhiều người sau cùng một NAT chia sẻ hạn mức 5 lần/15 phút (một người gõ
+    sai khoá cả lớp). Tách theo username vẫn chặn được brute-force một tài
+    khoản, đồng thời `check`/`record`/`clear` nhận `(ip, username)`.
+77. **`reported` là field batch trên `GET /comments`** thay vì gọi
+    `GET /me/reports/{id}/status` cho từng bình luận: khi đã đăng nhập,
+    `comment_service.list_paginated` load một query tập `comment_id` mà viewer
+    đã báo cáo cho đúng các id sắp trả về (không N+1), ẩn danh luôn `false`.
+    Endpoint status giữ nguyên để tương thích; frontend bỏ `useReportStatus`
+    và invalidate comments query sau khi báo cáo thành công.
+78. **Tách `routers/reports.py` + `components/movies/comment-item.tsx` +
+    `components/ui/dialog.tsx`**: hai route report rời `me.py` sang router
+    riêng (`prefix="/me"`, path không đổi) cho dễ đọc; `CommentItem`/
+    `ReplyItem`/`CommentBody` rời `comment-section.tsx`; dialog Radix dùng
+    chung được `report-dialog` tái sử dụng. Refactor thuần, không đổi hành vi.

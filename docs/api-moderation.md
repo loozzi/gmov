@@ -28,7 +28,7 @@ stderr và thoát code 1. Thành công in `user '<username>' role set to '<role>
 | Method | Path | Auth | Body / Params | Success |
 |--------|------|------|---------------|---------|
 | POST | `/me/reports` | Bearer access (rate-limited 10 req/min/user) | `{comment_id, reason, note?}` | 201 `{id, status}` mới / 200 row cũ |
-| GET | `/me/reports/{comment_id}/status` | Bearer access | — | 200 `{"reported": bool}` |
+| GET | `/me/reports/{comment_id}/status` | Bearer access | — | 200 `{"reported": bool}` (giữ để tương thích; UI nay đọc từ `GET /comments`) |
 
 `reason` ∈ `spam | harassment | spoiler | other`. `note` tùy chọn, tối đa 500
 ký tự. Ràng buộc `UNIQUE(comment_id, reporter_id)` — mỗi người chỉ báo cáo một
@@ -54,6 +54,13 @@ null`:
 - Ẩn danh / user thường: bình luận bị ẩn trả `body: null` (client render
   placeholder "Bình luận đã bị ẩn"), `replies[]` và `reply_count` vẫn giữ.
 - Người xem có role `moderator`/`admin`: `body` được trả đầy đủ kể cả khi ẩn.
+
+`CommentOut`/`ReplyOut` cũng có thêm `reported: bool` — `true` nếu người xem
+đã báo cáo bình luận đó. Khi đã đăng nhập, server batch-load báo cáo của người
+xem cho **toàn bộ** comment id trả về bằng một query (không N+1); ẩn danh luôn
+nhận `false`. Field này thay cho việc client gọi
+`GET /me/reports/{comment_id}/status` từng bình luận (endpoint status vẫn giữ
+để tương thích ngược).
 
 ## Admin (prefix `/admin`)
 
