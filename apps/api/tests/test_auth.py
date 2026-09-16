@@ -234,6 +234,7 @@ async def sqlite_factory(tmp_path):
 
 async def test_refresh_grace_and_stale_paths(sqlite_factory):
     """Recently-revoked -> re-issue; long-revoked/unknown -> hard 401."""
+    import uuid
     from datetime import UTC, datetime, timedelta
 
     from app.core import security
@@ -261,6 +262,7 @@ async def test_refresh_grace_and_stale_paths(sqlite_factory):
                 RefreshToken(
                     user_id=user_id,
                     jti=jti,
+                    family_id=uuid.uuid4(),
                     expires_at=now + timedelta(days=30),
                     revoked_at=(now + offset_revoked if offset_revoked else None),
                 )

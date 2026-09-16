@@ -19,7 +19,7 @@ class RefreshToken(Base):
         Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
     family_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, index=True, nullable=False, default=uuid.uuid4
+        Uuid, index=True, nullable=False
     )
     jti: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     expires_at: Mapped[datetime] = mapped_column(

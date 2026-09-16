@@ -104,8 +104,10 @@ def _as_aware(value: datetime) -> datetime:
 
 async def refresh(db: AsyncSession, token: str) -> TokenPair:
     """Rotate refresh tokens atomically: revoke-old + issue-new share ONE
-    transaction. Any failure rolls everything back, so the old token stays
-    usable and the user is never logged out by a half-finished rotation."""
+    transaction, so an earlier failure leaves the old token usable and the
+    user is never logged out by a half-finished rotation. The theft branch
+    is the deliberate exception: it commits the family revocation before
+    raising so that write is durable."""
     payload = _decode_refresh(token)
     try:
         row = await _load_row(db, str(payload["jti"]))

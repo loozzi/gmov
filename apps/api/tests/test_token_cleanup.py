@@ -1,5 +1,6 @@
 """Purge job tests: expired + long-revoked rows go, the rest stay."""
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest_asyncio
@@ -43,7 +44,11 @@ async def test_purge_deletes_only_stale_rows(factory):
         for jti, exp, rev, _ in cases:
             db.add(
                 RefreshToken(
-                    user_id=user.id, jti=jti, expires_at=exp, revoked_at=rev
+                    user_id=user.id,
+                    jti=jti,
+                    family_id=uuid.uuid4(),
+                    expires_at=exp,
+                    revoked_at=rev,
                 )
             )
         await db.commit()
