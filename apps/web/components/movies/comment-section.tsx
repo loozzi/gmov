@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { CommentActionsBar } from "@/components/movies/comment-actions";
@@ -97,6 +97,7 @@ function ReplyItem({
           isHidden={isHidden}
           isOwner={isOwner}
           canReport={canReport}
+          reported={reply.reported}
           deletePending={del.isPending}
           onDelete={handleDelete}
           deleteLabel="Xóa trả lời"
@@ -172,6 +173,7 @@ function CommentItem({
           isHidden={isHidden}
           isOwner={isOwner}
           canReport={canReport}
+          reported={comment.reported}
           deletePending={del.isPending}
           onDelete={handleDelete}
           deleteLabel="Xóa bình luận"
@@ -249,7 +251,10 @@ export function CommentSection({ movieSlug }: Props) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const toast = useToast();
   const [page, setPage] = useState(1);
-  const { data, isLoading, isError, error } = useComments(movieSlug, page);
+  const { data, isLoading, isFetching, isError, error } = useComments(
+    movieSlug,
+    page,
+  );
   const addComment = useAddComment(movieSlug);
   const [body, setBody] = useState("");
 
@@ -328,7 +333,12 @@ export function CommentSection({ movieSlug }: Props) {
         </p>
       ) : (
         <>
-          <div className="space-y-3">
+          <div
+            className={
+              isFetching ? "space-y-3 opacity-60 transition-opacity" : "space-y-3"
+            }
+            aria-busy={isFetching}
+          >
             {data.items.map((c) => (
               <CommentItem key={c.id} movieSlug={movieSlug} comment={c} />
             ))}
@@ -338,19 +348,22 @@ export function CommentSection({ movieSlug }: Props) {
               type="button"
               variant="secondary"
               size="sm"
-              disabled={page <= 1}
+              disabled={page <= 1 || isFetching}
               onClick={() => setPage(page - 1)}
             >
               <ChevronLeft /> Trước
             </Button>
-            <span className="text-sm text-muted-foreground">
+            <span className="flex items-center gap-2 text-sm text-muted-foreground">
+              {isFetching && <Loader2 className="size-4 animate-spin" />}
               Trang {data.page} / {totalPages}
             </span>
             <Button
               type="button"
               variant="secondary"
               size="sm"
-              disabled={data.page * data.per_page >= data.total_items}
+              disabled={
+                data.page * data.per_page >= data.total_items || isFetching
+              }
               onClick={() => setPage(page + 1)}
             >
               Sau <ChevronRight />

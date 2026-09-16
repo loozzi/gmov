@@ -5,20 +5,25 @@ import { useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ReportDialog } from "@/components/movies/report-dialog";
 import { useToast } from "@/components/ui/toaster";
+import { toVietnameseMessage } from "@/lib/errors";
 import {
   useHideComment,
   useReportComment,
-  useReportStatus,
   useUnhideComment,
 } from "@/lib/moderation";
 
-export function ReportAction({ commentId }: { commentId: string }) {
+export function ReportAction({
+  commentId,
+  reported,
+}: {
+  commentId: string;
+  reported: boolean;
+}) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const { data } = useReportStatus(commentId);
   const report = useReportComment();
 
-  if (data?.reported) {
+  if (reported) {
     return (
       <button
         type="button"
@@ -51,8 +56,8 @@ export function ReportAction({ commentId }: { commentId: string }) {
                 setOpen(false);
                 toast("Đã gửi báo cáo.", "success");
               },
-              onError: () =>
-                toast("Không thể gửi báo cáo. Thử lại nhé.", "error"),
+              onError: (error) =>
+                toast(toVietnameseMessage(error), "error"),
             },
           )
         }
@@ -79,7 +84,7 @@ export function ModerationActions({
     const options = {
       onSuccess: () =>
         toast(isHidden ? "Đã bỏ ẩn bình luận." : "Đã ẩn bình luận.", "success"),
-      onError: () => toast("Thao tác thất bại. Thử lại nhé.", "error"),
+      onError: (error: unknown) => toast(toVietnameseMessage(error), "error"),
     };
     if (isHidden) unhide.mutate(commentId, options);
     else hide.mutate(commentId, options);
@@ -103,6 +108,7 @@ export function CommentActionsBar({
   isHidden,
   isOwner,
   canReport,
+  reported,
   deletePending,
   onDelete,
   deleteLabel,
@@ -112,6 +118,7 @@ export function CommentActionsBar({
   isHidden: boolean;
   isOwner: boolean;
   canReport: boolean;
+  reported: boolean;
   deletePending: boolean;
   onDelete: () => void;
   deleteLabel: string;
@@ -131,7 +138,7 @@ export function CommentActionsBar({
           isHidden={isHidden}
         />
       )}
-      {canReport && <ReportAction commentId={commentId} />}
+      {canReport && <ReportAction commentId={commentId} reported={reported} />}
       {isOwner && (
         <button
           type="button"

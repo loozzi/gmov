@@ -33,6 +33,7 @@ export interface CommentReply {
   user: CommentUser;
   body: string | null;
   is_hidden: boolean;
+  reported: boolean;
   created_at: string;
 }
 
@@ -42,6 +43,7 @@ export interface MovieComment {
   user: CommentUser;
   body: string | null;
   is_hidden: boolean;
+  reported: boolean;
   created_at: string;
   replies: CommentReply[];
   reply_count: number;

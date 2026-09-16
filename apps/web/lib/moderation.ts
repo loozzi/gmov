@@ -47,17 +47,6 @@ export interface PaginatedReports {
   open_total: number;
 }
 
-export function useReportStatus(commentId: string, enabled = true) {
-  return useQuery({
-    queryKey: ["reviews", "report-status", commentId],
-    queryFn: () =>
-      apiFetch<{ reported: boolean }>(`/api/v1/me/reports/${commentId}/status`),
-    enabled,
-    retry: false,
-    staleTime: 30_000,
-  });
-}
-
 export interface ReportCommentInput {
   commentId: string;
   reason: ReportReason;
@@ -76,9 +65,9 @@ export function useReportComment() {
           ...(note ? { note } : {}),
         }),
       }),
-    onSuccess: (_data, input) => {
+    onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ["reviews", "report-status", input.commentId],
+        queryKey: ["reviews", "comments"],
       });
     },
   });

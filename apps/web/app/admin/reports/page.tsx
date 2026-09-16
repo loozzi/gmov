@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -59,7 +59,7 @@ function ReportRow({ item }: { item: ReportItem }) {
           isHidden ? "Đã bỏ ẩn bình luận." : "Đã ẩn bình luận.",
           "success",
         ),
-      onError: () => toast("Thao tác thất bại. Thử lại nhé.", "error"),
+      onError: (error: unknown) => toast(toVietnameseMessage(error), "error"),
     };
     if (isHidden) unhide.mutate(item.comment.id, options);
     else hide.mutate(item.comment.id, options);
@@ -68,7 +68,7 @@ function ReportRow({ item }: { item: ReportItem }) {
   const handleDismiss = () => {
     dismiss.mutate(item.id, {
       onSuccess: () => toast("Đã bỏ qua báo cáo.", "success"),
-      onError: () => toast("Thao tác thất bại. Thử lại nhé.", "error"),
+      onError: (error: unknown) => toast(toVietnameseMessage(error), "error"),
     });
   };
 
@@ -143,7 +143,10 @@ function ReportRow({ item }: { item: ReportItem }) {
 export default function AdminReportsPage() {
   const [status, setStatus] = useState<ReportsFilter>("open");
   const [page, setPage] = useState(1);
-  const { data, isLoading, isError, error } = useReports(status, page);
+  const { data, isLoading, isFetching, isError, error } = useReports(
+    status,
+    page,
+  );
 
   const switchTab = (value: ReportsFilter) => {
     setStatus(value);
@@ -175,7 +178,8 @@ export default function AdminReportsPage() {
           ))}
         </div>
         {data && (
-          <p className="text-sm text-muted-foreground">
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            {isFetching && <Loader2 className="size-4 animate-spin" />}
             {data.open_total} báo cáo đang mở
           </p>
         )}
@@ -197,7 +201,12 @@ export default function AdminReportsPage() {
         </p>
       ) : (
         <>
-          <div className="space-y-3">
+          <div
+            className={
+              isFetching ? "space-y-3 opacity-60 transition-opacity" : "space-y-3"
+            }
+            aria-busy={isFetching}
+          >
             {data.items.map((item) => (
               <ReportRow key={item.id} item={item} />
             ))}
@@ -207,7 +216,7 @@ export default function AdminReportsPage() {
               type="button"
               variant="secondary"
               size="sm"
-              disabled={page <= 1}
+              disabled={page <= 1 || isFetching}
               onClick={() => setPage(page - 1)}
             >
               <ChevronLeft /> Trước
@@ -219,7 +228,9 @@ export default function AdminReportsPage() {
               type="button"
               variant="secondary"
               size="sm"
-              disabled={data.page * data.per_page >= data.total_items}
+              disabled={
+                data.page * data.per_page >= data.total_items || isFetching
+              }
               onClick={() => setPage(page + 1)}
             >
               Sau <ChevronRight />
