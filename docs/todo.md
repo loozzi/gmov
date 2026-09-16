@@ -22,9 +22,9 @@ Brought forward — none blocks current functionality.
 
 ## Frontend
 
-7. ~~No web E2E tests~~ — DONE (Batch 4: Playwright, 8 specs auth/browse/
-    library/player-resume + CI job + trace upload). Còn lại: mở rộng khi có
-    tính năng mới.
+7. ~~No web E2E tests~~ — DONE (Batch 4: Playwright + CI job + trace upload).
+   Đã mở rộng: `moderation.spec` (đăng → báo cáo qua UI → ẩn → placeholder →
+   bỏ ẩn → dọn dẹp, 2026-09-16). Còn lại: mở rộng tiếp khi có tính năng mới.
 8. ~~No `sitemap.xml` / `robots.txt`~~ — DONE (Batch 5: `app/sitemap.ts`
     ~1000 URL từ upstream latest, revalidate 6h + `app/robots.ts`. Verify live:
     1004 URL).
@@ -67,3 +67,22 @@ Brought forward — none blocks current functionality.
     báo cáo mới; moderator phải tự vào `/admin/reports`.
 21. **Chưa có auto-moderation theo từ khoá** — chỉ ẩn theo ngưỡng số người
     báo cáo, không lọc nội dung tự động.
+
+## Nợ phát sinh từ hardening + kiểm duyệt (2026-09-16)
+
+22. **Refresh reuse: grace-path lọt family revocation** — dưới READ COMMITTED
+    (Postgres), một rotation hợp lệ trên member sống KHÁC có thể INSERT token
+    mới sau khi theft branch đã khóa family (family lock không predicate-lock
+    row mới). Đóng hẳn cần `SELECT ... FOR UPDATE` kèm predicate hoặc
+    `pg_advisory_xact_lock(hash(family_id))`. Không test được trên SQLite.
+23. **Access token sống ≤30 phút sau khi family bị compromise** — bản chất JWT
+    stateless (`ACCESS_TOKEN_EXPIRE_MINUTES`), chấp nhận cho v1. Thu hồi tức
+    thì cần denylist/versioned token.
+24. **Migration backfill `refresh_tokens.family_id`** — `UPDATE ... SET
+    family_id = id` quét toàn bảng dưới ACCESS EXCLUSIVE; ổn ở scale hiện tại,
+    batch nếu bảng lớn.
+25. **`Comment.is_hidden` dùng `server_default="false"`** — SQLite đọc
+    `bool('false') = True` (latent, chỉ ảnh hưởng test; Postgres đúng). Nếu
+    chạm tới, đổi sang `sa.false()` như `RefreshToken.compromised`.
+26. **E2E fixture bypass throttle** — `global-setup` xóa key `ratelimit:*` thay
+    vì nâng cap; chỉ trong test env, chấp nhận.
