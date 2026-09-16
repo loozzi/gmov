@@ -24,9 +24,10 @@ pnpm --filter gmov-web exec playwright show-report
   `moderation.spec` tự đăng ký thêm 1 reporter (xem mục spec kiểm duyệt).
 - `e2e/global-teardown.ts`: xóa progress + favorites + watchlist của account test (user row
   ở lại vì chưa có API xóa account).
-- Mỗi spec tự login qua `loginViaApi()` (POST `/api/auth/login` trên context
-  riêng). KHÔNG dùng storageState chung: refresh rotation đốt cookie ngay lần
-  dùng đầu tiên nên file cookie tĩnh chỉ đúng cho đúng 1 test.
+- Mỗi spec tự login trên context riêng. Hầu hết dùng `loginViaApi()` (POST
+  `/api/auth/login`); riêng `moderation.spec` login qua UI (`loginViaUi`) ở cả
+  hai context. KHÔNG dùng storageState chung: refresh rotation đốt cookie ngay
+  lần dùng đầu tiên nên file cookie tĩnh chỉ đúng cho đúng 1 test.
 - `app/e2e/player`: trang harness CHỈ tồn tại ở dev (`notFound()` khi
   production), dựng MovieDetail giả với m3u8 mẫu công khai để test đường HLS
   resume — vì episode upstream thật chỉ có embed (Batch 1 verdict C).
@@ -49,7 +50,7 @@ Phủ trọn một vòng report → hide → placeholder → unhide → cleanup 
 thật, dùng **hai** browser context độc lập (moderator + reporter) thay vì
 storageState chung:
 
-1. `setModerator` promote account nền của run lên `moderator` bằng CLI
+1. `setRole` promote account nền của run lên `moderator` bằng CLI
    (`docker compose exec api python -m app.cli set-role <username> moderator`,
    chạy từ repo root). Không gọi được docker/CLI → `test.skip` kèm lý do.
 2. Đăng ký **thêm MỘT account reporter** mới (ngoài account nền) để báo cáo;
@@ -64,7 +65,8 @@ storageState chung:
 6. Moderator chuyển filter "Đã xử lý" (report đã `resolved`), bấm "Bỏ ẩn";
    reporter F5 → bình luận trở lại.
 7. Cleanup: moderator xóa bình luận của chính mình (`Xóa bình luận`, accept
-   `dialog` confirm của trình duyệt) — test để lại data sạch ngoài row user.
+   `dialog` confirm của trình duyệt) và hạ account nền về `user` — test để lại
+   data sạch ngoài row user.
 
 Spec gọi `skipIfNoUpstream()` như các spec cần data khác, timeout 150s, và tái
 dùng `commentCard()` (locator `div.rounded-xl`) để bám đúng card theo text.
@@ -82,13 +84,13 @@ PLAYWRIGHT_BACKEND_URL=http://localhost:8008 pnpm --filter gmov-web exec playwri
 ## Fail-open khi mất mạng ngoài (không phải skip mù)
 
 Upstream đứng sau Cloudflare và chặn IP datacenter (xác minh: `server:
-cloudflare` + CI fail đúng 6 specs cần data, 3 specs auth thuần nội bộ vẫn
+cloudflare` + CI fail đúng 7 specs cần data, 3 specs auth thuần nội bộ vẫn
 pass). `global-setup` probe 2 thứ và ghi `e2e/.probe.json`:
 
 - `upstream`: backend trả `latest` có items (fresh CI redis không có stale
   cache nên đây chính là "runner có tới được nguồn không").
 - `mux`: sample HLS stream trả playlist `#EXTM3U` thật.
 
-`browse`/`library` skip khi `!upstream`, `player` skip khi `!mux` — skip HIỆN
-rõ trong report với lý do, không phải pass giả. Auth specs KHÔNG bao giờ skip
-(chỉ đụng code của ta). Test skip path local: `E2E_NET=down`.
+`browse`/`library`/`moderation` skip khi `!upstream`, `player` skip khi `!mux`
+— skip HIỆN rõ trong report với lý do, không phải pass giả. Auth specs KHÔNG
+bao giờ skip (chỉ đụng code của ta). Test skip path local: `E2E_NET=down`.

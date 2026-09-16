@@ -343,15 +343,17 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     theo miền nghiệp vụ — `progress` (playback/heartbeat/continue-watching/
     watched), `collections` (favorites + watchlist, cùng shape add/list/
     status/delete), `reviews` (ratings + comments). Router cũ 312 dòng bị xóa;
-    `__init__.py` include 4 router `/me` cạnh nhau. Refactor thuần, test parity
-    xác nhận không mất route.
+    `__init__.py` include 4 router `/me` cạnh nhau. Refactor thuần; đường dẫn
+    được các HTTP test sẵn có bao phủ (không có test parity riêng).
 
-80. **`_revoke_family` order `SELECT ... FOR UPDATE` theo `RefreshToken.id`**:
-    refresh-token reuse detection revoke cả family trong một transaction, nên
-    hai request đồng thời (cùng family) có thể khóa các row theo thứ tự ngược
-    nhau → deadlock Postgres. Thêm `.order_by(RefreshToken.id)` trước
-    `.with_for_update()` ép mọi giao dịch lấy lock cùng thứ tự; migration/
-    constraint parity đã có test chốt.
+80. **Refresh khóa cả family TRƯỚC khi đánh giá**: lookup `jti` không khóa chỉ
+    để lấy `family_id`, rồi khóa cả family bằng một `SELECT ... WHERE
+    family_id ORDER BY RefreshToken.id FOR UPDATE` (`populate_existing`) và
+    đánh giá `revoked_at`/grace/`compromised` trên chính set đã khóa đó. Tránh
+    hẳn thứ tự hai lock (khóa một row theo `jti` rồi mới khóa family) vốn để
+    hai request đồng thời cùng family khóa ngược thứ tự → deadlock Postgres.
+    Không dùng advisory lock (test chạy SQLite); migration/constraint parity
+    đã có test chốt.
 
 81. **Optimistic "Đã báo cáo" giữ dialog mounted**: trigger và `ReportDialog`
     render cùng nhau (không early-return thay cả nút) nên `isPending` vẫn hiện
