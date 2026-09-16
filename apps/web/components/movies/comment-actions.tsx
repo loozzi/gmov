@@ -13,17 +13,19 @@ import {
 } from "@/lib/moderation";
 
 export function ReportAction({
+  movieSlug,
   commentId,
   reported,
 }: {
+  movieSlug: string;
   commentId: string;
   reported: boolean;
 }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const report = useReportComment();
+  const report = useReportComment(movieSlug);
 
-  if (reported) {
+  if (reported || report.isPending || report.isSuccess) {
     return (
       <button
         type="button"
@@ -56,7 +58,7 @@ export function ReportAction({
                 setOpen(false);
                 toast("Đã gửi báo cáo.", "success");
               },
-              onError: (error) =>
+              onError: (error: unknown) =>
                 toast(toVietnameseMessage(error), "error"),
             },
           )
@@ -138,7 +140,13 @@ export function CommentActionsBar({
           isHidden={isHidden}
         />
       )}
-      {canReport && <ReportAction commentId={commentId} reported={reported} />}
+      {canReport && (
+        <ReportAction
+          movieSlug={movieSlug}
+          commentId={commentId}
+          reported={reported}
+        />
+      )}
       {isOwner && (
         <button
           type="button"

@@ -53,7 +53,7 @@ export interface ReportCommentInput {
   note?: string | null;
 }
 
-export function useReportComment() {
+export function useReportComment(movieSlug: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ commentId, reason, note }: ReportCommentInput) =>
@@ -67,7 +67,7 @@ export function useReportComment() {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ["reviews", "comments"],
+        queryKey: ["reviews", "comments", movieSlug],
       });
     },
   });

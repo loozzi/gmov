@@ -143,7 +143,7 @@ function ReportRow({ item }: { item: ReportItem }) {
 export default function AdminReportsPage() {
   const [status, setStatus] = useState<ReportsFilter>("open");
   const [page, setPage] = useState(1);
-  const { data, isLoading, isFetching, isError, error } = useReports(
+  const { data, isLoading, isPlaceholderData, isError, error } = useReports(
     status,
     page,
   );
@@ -179,7 +179,9 @@ export default function AdminReportsPage() {
         </div>
         {data && (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            {isFetching && <Loader2 className="size-4 animate-spin" />}
+            {isPlaceholderData && (
+              <Loader2 aria-hidden className="size-4 animate-spin" />
+            )}
             {data.open_total} báo cáo đang mở
           </p>
         )}
@@ -203,9 +205,11 @@ export default function AdminReportsPage() {
         <>
           <div
             className={
-              isFetching ? "space-y-3 opacity-60 transition-opacity" : "space-y-3"
+              isPlaceholderData
+                ? "space-y-3 opacity-60 transition-opacity"
+                : "space-y-3"
             }
-            aria-busy={isFetching}
+            aria-busy={isPlaceholderData}
           >
             {data.items.map((item) => (
               <ReportRow key={item.id} item={item} />
@@ -216,7 +220,7 @@ export default function AdminReportsPage() {
               type="button"
               variant="secondary"
               size="sm"
-              disabled={page <= 1 || isFetching}
+              disabled={page <= 1 || isPlaceholderData}
               onClick={() => setPage(page - 1)}
             >
               <ChevronLeft /> Trước
@@ -229,7 +233,8 @@ export default function AdminReportsPage() {
               variant="secondary"
               size="sm"
               disabled={
-                data.page * data.per_page >= data.total_items || isFetching
+                data.page * data.per_page >= data.total_items ||
+                isPlaceholderData
               }
               onClick={() => setPage(page + 1)}
             >

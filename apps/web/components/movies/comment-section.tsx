@@ -20,7 +20,7 @@ export function CommentSection({ movieSlug }: Props) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const toast = useToast();
   const [page, setPage] = useState(1);
-  const { data, isLoading, isFetching, isError, error } = useComments(
+  const { data, isLoading, isPlaceholderData, isError, error } = useComments(
     movieSlug,
     page,
   );
@@ -104,9 +104,11 @@ export function CommentSection({ movieSlug }: Props) {
         <>
           <div
             className={
-              isFetching ? "space-y-3 opacity-60 transition-opacity" : "space-y-3"
+              isPlaceholderData
+                ? "space-y-3 opacity-60 transition-opacity"
+                : "space-y-3"
             }
-            aria-busy={isFetching}
+            aria-busy={isPlaceholderData}
           >
             {data.items.map((c) => (
               <CommentItem key={c.id} movieSlug={movieSlug} comment={c} />
@@ -117,13 +119,15 @@ export function CommentSection({ movieSlug }: Props) {
               type="button"
               variant="secondary"
               size="sm"
-              disabled={page <= 1 || isFetching}
+              disabled={page <= 1 || isPlaceholderData}
               onClick={() => setPage(page - 1)}
             >
               <ChevronLeft /> Trước
             </Button>
             <span className="flex items-center gap-2 text-sm text-muted-foreground">
-              {isFetching && <Loader2 className="size-4 animate-spin" />}
+              {isPlaceholderData && (
+                <Loader2 aria-hidden className="size-4 animate-spin" />
+              )}
               Trang {data.page} / {totalPages}
             </span>
             <Button
@@ -131,7 +135,8 @@ export function CommentSection({ movieSlug }: Props) {
               variant="secondary"
               size="sm"
               disabled={
-                data.page * data.per_page >= data.total_items || isFetching
+                data.page * data.per_page >= data.total_items ||
+                isPlaceholderData
               }
               onClick={() => setPage(page + 1)}
             >
