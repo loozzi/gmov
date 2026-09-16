@@ -6,6 +6,12 @@ Streaming web lấy dữ liệu từ API công khai NguonC (https://phim.nguonc.
 duyệt/tìm kiếm/lọc phim, xem qua trình phát nhúng, tài khoản thường, "Xem tiếp",
 yêu thích, lịch sử xem.
 
+## Demo
+
+| Trang chủ | Chi tiết phim |
+|---|---|
+| ![Trang chủ gmov](docs/demo/home.png) | ![Chi tiết phim gmov](docs/demo/detail.png) |
+
 ## Stack
 
 - `apps/api`: FastAPI (Python 3.12, SQLAlchemy 2.0 async, PostgreSQL 16, Redis 7)
