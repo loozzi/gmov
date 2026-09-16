@@ -1,5 +1,6 @@
 """Data-layer tests for comment moderation: models, migration, schemas, CLI."""
 
+import importlib.util
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -8,7 +9,14 @@ from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 from pydantic import ValidationError
-from sqlalchemy import create_engine, inspect, select, text
+from sqlalchemy import (
+    CheckConstraint,
+    UniqueConstraint,
+    create_engine,
+    inspect,
+    select,
+    text,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
@@ -26,7 +34,21 @@ from app.schemas.library import CommentOut, CommentUser
 from app.schemas.moderation import ReportIn
 
 APP_DIR = Path(__file__).resolve().parents[1]
-PREVIOUS_HEAD = "a1b2c3d4e5f6"
+
+_MODERATION_MIGRATION = (
+    APP_DIR
+    / "app"
+    / "alembic"
+    / "versions"
+    / "b7c1d9e2f3a4_comment_moderation.py"
+)
+_spec = importlib.util.spec_from_file_location(
+    "comment_moderation_migration", _MODERATION_MIGRATION
+)
+assert _spec is not None and _spec.loader is not None
+_migration = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_migration)
+PREVIOUS_HEAD = _migration.down_revision
 
 
 @pytest_asyncio.fixture
@@ -121,10 +143,33 @@ async def test_comment_report_unique_per_reporter(db_env):
             await db.commit()
 
 
-def test_hide_threshold_default_and_validation():
-    assert settings.comment_report_hide_threshold == 3
+def test_hide_threshold_default_and_validation(monkeypatch):
+    monkeypatch.delenv("COMMENT_REPORT_HIDE_THRESHOLD", raising=False)
+    assert Settings().comment_report_hide_threshold == 3
     with pytest.raises(ValidationError):
         Settings(comment_report_hide_threshold=0)
+
+
+def test_model_constraint_metadata_matches_migration():
+    user_checks = {
+        c.name
+        for c in User.__table__.constraints
+        if isinstance(c, CheckConstraint)
+    }
+    assert "ck_users_role" in user_checks
+    role_check = next(
+        c
+        for c in User.__table__.constraints
+        if isinstance(c, CheckConstraint) and c.name == "ck_users_role"
+    )
+    assert str(role_check.sqltext) == "role IN ('user','moderator','admin')"
+
+    report_uniques = {
+        c.name
+        for c in CommentReport.__table__.constraints
+        if isinstance(c, UniqueConstraint)
+    }
+    assert "uq_comment_reports_comment_reporter" in report_uniques
 
 
 def test_report_in_validates_reason_and_note_length():
@@ -278,9 +323,19 @@ async def test_cli_unknown_user_returns_nonzero(db_env, monkeypatch):
     assert code == 1
 
 
-async def test_cli_invalid_role_rejected_by_argparse():
+async def test_cli_invalid_role_rejected_by_argparse(monkeypatch):
     from app import cli
+
+    disposed = False
+
+    class FakeEngine:
+        async def dispose(self) -> None:
+            nonlocal disposed
+            disposed = True
+
+    monkeypatch.setattr(cli, "engine", FakeEngine())
 
     with pytest.raises(SystemExit) as exc:
         await cli.main(["set-role", "alice", "wizard"])
     assert exc.value.code == 2
+    assert disposed is True

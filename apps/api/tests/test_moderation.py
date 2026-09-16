@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core import ratelimit
@@ -216,6 +216,11 @@ async def test_auto_hide_threshold_distinct_reporters(client_env):
     assert (await _report(env, r3, cid)).status_code == 201
     assert (await list_item()).json()["items"][0]["is_hidden"] is True
 
+    async with env.factory() as db:
+        comment = await db.get(Comment, uuid.UUID(cid))
+    assert comment is not None
+    assert comment.is_hidden is True
+
 
 async def test_report_status_endpoint(client_env):
     env = client_env
@@ -327,21 +332,36 @@ async def test_admin_reports_filter_and_shape(client_env):
 
     c1 = await _comment(env, author, body="first")
     c2 = await _comment(env, author, body="second", slug="other")
-    await _report(env, reporter, c1, reason="spam")
-    r = await _report(env, reporter, c2, reason="harassment")
-    report_id = r.json()["id"]
+    report1_id = (await _report(env, reporter, c1, reason="spam")).json()["id"]
+    report2_id = (
+        await _report(env, reporter, c2, reason="harassment")
+    ).json()["id"]
 
     r = await env.client.get(f"{ADMIN}/reports", headers=moderator)
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["total_items"] == 2
     assert body["open_total"] == 2
-    item = body["items"][0]
-    assert item["reporter"]["username"] == "reporter"
-    assert item["comment"]["movie_slug"] in {"mao", "other"}
-    assert item["status"] in {"open", "dismissed"}
+    items = {item["id"]: item for item in body["items"]}
 
-    await env.client.post(f"{ADMIN}/reports/{report_id}/dismiss", headers=moderator)
+    first = items[report1_id]
+    assert first["reason"] == "spam"
+    assert first["note"] is None
+    assert first["status"] == "open"
+    assert first["reporter"]["username"] == "reporter"
+    assert first["comment"]["movie_slug"] == "mao"
+    assert first["comment"]["body"] == "first"
+    assert first["comment"]["is_hidden"] is False
+
+    second = items[report2_id]
+    assert second["reason"] == "harassment"
+    assert second["status"] == "open"
+    assert second["comment"]["movie_slug"] == "other"
+    assert second["comment"]["body"] == "second"
+
+    await env.client.post(
+        f"{ADMIN}/reports/{report2_id}/dismiss", headers=moderator
+    )
     body = (await env.client.get(f"{ADMIN}/reports", headers=moderator)).json()
     assert body["total_items"] == 2
     assert body["open_total"] == 1
@@ -353,6 +373,8 @@ async def test_admin_reports_filter_and_shape(client_env):
     ).json()
     assert body["total_items"] == 1
     assert body["open_total"] == 1
+    assert body["items"][0]["id"] == report1_id
+    assert body["items"][0]["status"] == "open"
 
     r = await env.client.get(
         f"{ADMIN}/reports?status=bogus", headers=moderator
@@ -480,19 +502,104 @@ async def test_report_invalid_reason_422(client_env):
     assert r.json()["code"] == "VALIDATION_ERROR"
 
 
-async def test_report_service_marks_hidden_at_threshold(client_env):
+async def test_auto_hidden_comment_reports_stay_open(client_env):
     env = client_env
     author = await _register_login(env, "author@gmov.dev", "author")
     r1 = await _register_login(env, "r1@gmov.dev", "reporter1")
     r2 = await _register_login(env, "r2@gmov.dev", "reporter2")
     r3 = await _register_login(env, "r3@gmov.dev", "reporter3")
+    moderator = await _register_login(env, "mod@gmov.dev", "moderator")
+    await _promote(env, "moderator", UserRole.MODERATOR)
     cid = await _comment(env, author)
     await _report(env, r1, cid)
     await _report(env, r2, cid)
     await _report(env, r3, cid)
 
     async with env.factory() as db:
-        count = (
-            await db.execute(select(func.count()).select_from(CommentReport))
-        ).scalar_one()
-    assert count == 3
+        comment = await db.get(Comment, uuid.UUID(cid))
+    assert comment is not None
+    assert comment.is_hidden is True
+
+    rows = await _report_rows(env, cid)
+    assert len(rows) == 3
+    assert all(row.status == ReportStatus.OPEN for row in rows)
+
+    body = (
+        await env.client.get(f"{ADMIN}/reports?status=open", headers=moderator)
+    ).json()
+    assert body["total_items"] == 3
+    assert body["open_total"] == 3
+
+
+async def test_dismiss_resolved_report_is_noop(client_env):
+    env = client_env
+    author = await _register_login(env, "author@gmov.dev", "author")
+    r1 = await _register_login(env, "r1@gmov.dev", "reporter1")
+    moderator = await _register_login(env, "mod@gmov.dev", "moderator")
+    await _promote(env, "moderator", UserRole.MODERATOR)
+    cid = await _comment(env, author)
+    report_id = (await _report(env, r1, cid)).json()["id"]
+
+    r = await env.client.post(f"{ADMIN}/comments/{cid}/hide", headers=moderator)
+    assert r.status_code == 200, r.text
+
+    async with env.factory() as db:
+        row = await db.get(CommentReport, uuid.UUID(report_id))
+        assert row.status == ReportStatus.RESOLVED
+        resolved_at = row.resolved_at
+        resolved_by = row.resolved_by
+
+    r = await env.client.post(
+        f"{ADMIN}/reports/{report_id}/dismiss", headers=moderator
+    )
+    assert r.status_code == 200, r.text
+    assert r.json() == {"ok": True}
+
+    async with env.factory() as db:
+        row = await db.get(CommentReport, uuid.UUID(report_id))
+        assert row.status == ReportStatus.RESOLVED
+        assert row.resolved_at == resolved_at
+        assert row.resolved_by == resolved_by
+
+
+async def test_comments_reported_flag_for_viewer(client_env):
+    env = client_env
+    author = await _register_login(env, "author@gmov.dev", "author")
+    reporter = await _register_login(env, "rep@gmov.dev", "reporter")
+    bystander = await _register_login(env, "by@gmov.dev", "bystander")
+
+    c1 = await _comment(env, author, body="first")
+    reply = (
+        await env.client.post(
+            f"{ME}/comments",
+            headers=author,
+            json={"movie_slug": "mao", "body": "a reply", "parent_id": c1},
+        )
+    ).json()["id"]
+    await _comment(env, author, body="second", slug="other")
+
+    await _report(env, reporter, c1)
+    await _report(env, reporter, reply)
+
+    def fetch(headers=None, slug="mao"):
+        return env.client.get(
+            "/api/v1/comments", params={"movie_slug": slug}, headers=headers
+        )
+
+    items = (await fetch(reporter)).json()["items"]
+    assert len(items) == 1
+    assert items[0]["id"] == c1
+    assert items[0]["reported"] is True
+    assert items[0]["replies"][0]["id"] == reply
+    assert items[0]["replies"][0]["reported"] is True
+
+    other = (await fetch(reporter, slug="other")).json()["items"][0]
+    assert other["reported"] is False
+
+    bystander_items = (await fetch(bystander)).json()["items"]
+    assert bystander_items[0]["reported"] is False
+    assert bystander_items[0]["replies"][0]["reported"] is False
+
+    anon_items = (await fetch()).json()["items"]
+    assert anon_items[0]["reported"] is False
+    assert anon_items[0]["replies"][0]["reported"] is False

@@ -36,8 +36,8 @@ async def _set_role(username: str, role: UserRole) -> int:
 
 
 async def main(argv: Sequence[str] | None = None) -> int:
-    args = _build_parser().parse_args(argv)
     try:
+        args = _build_parser().parse_args(argv)
         return await _set_role(args.username, UserRole(args.role))
     finally:
         await engine.dispose()

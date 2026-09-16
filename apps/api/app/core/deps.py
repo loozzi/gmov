@@ -20,10 +20,7 @@ oauth2_optional = OAuth2PasswordBearer(
 )
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db),
-) -> User:
+async def _resolve_user(db: AsyncSession, token: str) -> User:
     try:
         payload = security.decode_token(token)
     except jwt.ExpiredSignatureError:
@@ -42,6 +39,13 @@ async def get_current_user(
     return user
 
 
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    return await _resolve_user(db, token)
+
+
 async def get_optional_user(
     token: str | None = Depends(oauth2_optional),
     db: AsyncSession = Depends(get_db),
@@ -55,19 +59,9 @@ async def get_optional_user(
     if not token:
         return None
     try:
-        payload = security.decode_token(token)
-    except jwt.PyJWTError:
+        return await _resolve_user(db, token)
+    except AppException:
         return None
-    if payload.get("type") != security.ACCESS_TOKEN_TYPE:
-        return None
-    try:
-        user_id = uuid.UUID(str(payload.get("sub")))
-    except (ValueError, TypeError):
-        return None
-    user = await user_service.get_by_id(db, user_id)
-    if user is None or not user.is_active:
-        return None
-    return user
 
 
 def require_role(*roles: UserRole) -> Callable[..., Awaitable[User]]:

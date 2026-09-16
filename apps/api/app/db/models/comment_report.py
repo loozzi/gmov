@@ -25,7 +25,13 @@ class ReportStatus(str, enum.Enum):
 
 class CommentReport(Base, TimestampMixin):
     __tablename__ = "comment_reports"
-    __table_args__ = (UniqueConstraint("comment_id", "reporter_id"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "comment_id",
+            "reporter_id",
+            name="uq_comment_reports_comment_reporter",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     comment_id: Mapped[uuid.UUID] = mapped_column(

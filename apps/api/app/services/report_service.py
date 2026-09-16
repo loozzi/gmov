@@ -38,6 +38,13 @@ async def create(
 ) -> tuple[CommentReport, bool]:
     try:
         comment = await _get_comment(db, data.comment_id)
+        comment = (
+            await db.execute(
+                select(Comment)
+                .where(Comment.id == data.comment_id)
+                .with_for_update()
+            )
+        ).scalar_one()
         if comment.user_id == user_id:
             raise AppException(
                 "Cannot report your own comment", "CANNOT_REPORT_OWN", 422
@@ -202,23 +209,31 @@ async def hide_comment(
 async def unhide_comment(
     db: AsyncSession, actor: User, comment_id: uuid.UUID
 ) -> None:
-    comment = await _get_comment(db, comment_id)
-    comment.is_hidden = False
-    await db.commit()
+    try:
+        comment = await _get_comment(db, comment_id)
+        comment.is_hidden = False
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
 
 async def dismiss(
     db: AsyncSession, actor: User, report_id: uuid.UUID
 ) -> None:
-    report = (
-        await db.execute(
-            select(CommentReport).where(CommentReport.id == report_id)
-        )
-    ).scalar_one_or_none()
-    if report is None:
-        raise AppException("Report not found", "REPORT_NOT_FOUND", 404)
-    if report.status == ReportStatus.OPEN:
-        report.status = ReportStatus.DISMISSED
-        report.resolved_by = actor.id
-        report.resolved_at = datetime.now(UTC)
-    await db.commit()
+    try:
+        report = (
+            await db.execute(
+                select(CommentReport).where(CommentReport.id == report_id)
+            )
+        ).scalar_one_or_none()
+        if report is None:
+            raise AppException("Report not found", "REPORT_NOT_FOUND", 404)
+        if report.status == ReportStatus.OPEN:
+            report.status = ReportStatus.DISMISSED
+            report.resolved_by = actor.id
+            report.resolved_at = datetime.now(UTC)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise

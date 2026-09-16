@@ -146,6 +146,7 @@ class ReplyOut(BaseModel):
     user: CommentUser
     body: str | None
     is_hidden: bool = False
+    reported: bool = False
     created_at: datetime
 
 
@@ -155,6 +156,7 @@ class CommentOut(BaseModel):
     user: CommentUser
     body: str | None
     is_hidden: bool = False
+    reported: bool = False
     created_at: datetime
     replies: list[ReplyOut] = Field(default_factory=list)
     reply_count: int = 0
