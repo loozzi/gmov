@@ -24,27 +24,21 @@ export function ReportAction({
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const report = useReportComment(movieSlug);
-
-  if (reported || report.isPending || report.isSuccess) {
-    return (
-      <button
-        type="button"
-        disabled
-        className="cursor-not-allowed text-xs text-muted-foreground"
-      >
-        Đã báo cáo
-      </button>
-    );
-  }
+  const isReported = reported || report.isPending || report.isSuccess;
 
   return (
     <>
       <button
         type="button"
+        disabled={isReported}
         onClick={() => setOpen(true)}
-        className="cursor-pointer text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        className={
+          isReported
+            ? "cursor-not-allowed text-xs text-muted-foreground"
+            : "cursor-pointer text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        }
       >
-        Báo cáo
+        {isReported ? "Đã báo cáo" : "Báo cáo"}
       </button>
       <ReportDialog
         open={open}
