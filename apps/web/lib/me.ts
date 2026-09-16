@@ -296,6 +296,12 @@ export function useUpsertProgress() {
       void queryClient.invalidateQueries({
         queryKey: ["me", "continue-watching"],
       });
+      // Starting to watch drops the movie from the watchlist server-side
+      // (progress upsert), so refresh both the list and the toggle status.
+      void queryClient.invalidateQueries({ queryKey: ["me", "watchlist"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["me", "watchlist-status", input.movie_slug],
+      });
     },
   });
 }
@@ -355,6 +361,12 @@ export function useMarkWatched(movieSlug: string) {
       });
       void queryClient.invalidateQueries({
         queryKey: ["me", "continue-watching"],
+      });
+      // The explicit marker also writes progress, which drops the movie from
+      // the watchlist server-side.
+      void queryClient.invalidateQueries({ queryKey: ["me", "watchlist"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["me", "watchlist-status", movieSlug],
       });
     },
   });

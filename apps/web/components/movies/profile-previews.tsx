@@ -58,10 +58,10 @@ export function ProfilePreviews() {
   return (
     <div className="space-y-6">
       <MovieRail
-        title="Phim yêu thích"
-        href="/me/favorites"
-        movies={favoriteCards}
-        emptyHint="Bạn chưa lưu phim yêu thích nào."
+        title="Lịch sử xem"
+        href="/me/history"
+        movies={historyCards}
+        emptyHint="Bạn chưa xem phim nào."
       />
       <MovieRail
         title="Muốn xem"
@@ -70,10 +70,10 @@ export function ProfilePreviews() {
         emptyHint="Danh sách muốn xem đang trống."
       />
       <MovieRail
-        title="Lịch sử xem"
-        href="/me/history"
-        movies={historyCards}
-        emptyHint="Bạn chưa xem phim nào."
+        title="Phim yêu thích"
+        href="/me/favorites"
+        movies={favoriteCards}
+        emptyHint="Bạn chưa lưu phim yêu thích nào."
       />
     </div>
   );
