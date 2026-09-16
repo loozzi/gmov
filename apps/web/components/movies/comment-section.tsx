@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
+import { CommentActionsBar } from "@/components/movies/comment-actions";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
@@ -39,6 +40,23 @@ function Avatar({ name }: { name: string }) {
   );
 }
 
+function CommentBody({
+  body,
+  isHidden,
+  isModerator,
+}: {
+  body: string | null;
+  isHidden: boolean;
+  isModerator: boolean;
+}) {
+  if (body === null || (isHidden && !isModerator)) {
+    return (
+      <p className="text-sm text-muted-foreground italic">Bình luận đã bị ẩn</p>
+    );
+  }
+  return <p className="text-sm whitespace-pre-wrap">{body}</p>;
+}
+
 function ReplyItem({
   movieSlug,
   reply,
@@ -46,10 +64,12 @@ function ReplyItem({
   movieSlug: string;
   reply: CommentReply;
 }) {
-  const { user } = useAuth();
+  const { user, isAuthenticated, isModerator } = useAuth();
   const toast = useToast();
   const del = useDeleteComment(movieSlug);
   const isOwner = user?.username === reply.user.username;
+  const isHidden = reply.is_hidden;
+  const canReport = isAuthenticated && !isOwner && !isHidden;
 
   const handleDelete = () => {
     if (!window.confirm("Xóa trả lời này?")) return;
@@ -71,19 +91,22 @@ function ReplyItem({
             {formatDate(reply.created_at)}
           </p>
         </div>
-        {isOwner && (
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={del.isPending}
-            aria-label="Xóa trả lời"
-            className="ml-auto cursor-pointer text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
-          >
-            Xóa
-          </button>
-        )}
+        <CommentActionsBar
+          movieSlug={movieSlug}
+          commentId={reply.id}
+          isHidden={isHidden}
+          isOwner={isOwner}
+          canReport={canReport}
+          deletePending={del.isPending}
+          onDelete={handleDelete}
+          deleteLabel="Xóa trả lời"
+        />
       </div>
-      <p className="text-sm whitespace-pre-wrap">{reply.body}</p>
+      <CommentBody
+        body={reply.body}
+        isHidden={isHidden}
+        isModerator={isModerator}
+      />
     </div>
   );
 }
@@ -95,7 +118,7 @@ function CommentItem({
   movieSlug: string;
   comment: MovieComment;
 }) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isModerator } = useAuth();
   const toast = useToast();
   const addReply = useAddComment(movieSlug);
   const del = useDeleteComment(movieSlug);
@@ -103,6 +126,8 @@ function CommentItem({
   const [replyBody, setReplyBody] = useState("");
 
   const isOwner = user?.username === comment.user.username;
+  const isHidden = comment.is_hidden;
+  const canReport = isAuthenticated && !isOwner && !isHidden;
 
   const handleDelete = () => {
     if (!window.confirm("Xóa bình luận này?")) return;
@@ -141,19 +166,22 @@ function CommentItem({
             {formatDate(comment.created_at)}
           </p>
         </div>
-        {isOwner && (
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={del.isPending}
-            aria-label="Xóa bình luận"
-            className="ml-auto cursor-pointer text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
-          >
-            Xóa
-          </button>
-        )}
+        <CommentActionsBar
+          movieSlug={movieSlug}
+          commentId={comment.id}
+          isHidden={isHidden}
+          isOwner={isOwner}
+          canReport={canReport}
+          deletePending={del.isPending}
+          onDelete={handleDelete}
+          deleteLabel="Xóa bình luận"
+        />
       </div>
-      <p className="text-sm whitespace-pre-wrap">{comment.body}</p>
+      <CommentBody
+        body={comment.body}
+        isHidden={isHidden}
+        isModerator={isModerator}
+      />
       <div>
         <button
           type="button"

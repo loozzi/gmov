@@ -43,6 +43,8 @@ export interface PaginatedMovies {
   per_page: number;
 }
 
+export type UserRole = "user" | "moderator" | "admin";
+
 export interface User {
   id: string;
   email: string;
@@ -50,6 +52,7 @@ export interface User {
   display_name: string;
   avatar_url: string | null;
   is_active: boolean;
+  role: UserRole;
   created_at: string;
 }
 

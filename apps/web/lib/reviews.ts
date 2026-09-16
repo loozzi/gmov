@@ -30,7 +30,8 @@ export interface CommentUser {
 export interface CommentReply {
   id: string;
   user: CommentUser;
-  body: string;
+  body: string | null;
+  is_hidden: boolean;
   created_at: string;
 }
 
@@ -38,7 +39,8 @@ export interface MovieComment {
   id: string;
   movie_slug: string;
   user: CommentUser;
-  body: string;
+  body: string | null;
+  is_hidden: boolean;
   created_at: string;
   replies: CommentReply[];
   reply_count: number;
@@ -138,7 +140,7 @@ export function useComments(movieSlug: string, page = 1) {
     queryFn: () =>
       apiFetch<PaginatedComments>(
         `/api/v1/comments?movie_slug=${encodeURIComponent(movieSlug)}&page=${page}&per_page=20`,
-        { auth: false },
+        { auth: true },
       ),
     placeholderData: keepPreviousData,
   });

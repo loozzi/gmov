@@ -9,6 +9,7 @@ import {
   LogIn,
   LogOut,
   Menu,
+  ShieldCheck,
   User,
   UserPlus,
 } from "lucide-react";
@@ -70,7 +71,7 @@ function MenuDropdown({
 }
 
 function AccountMenu() {
-  const { user, isLoading, isAuthenticated, logout } = useAuth();
+  const { user, isLoading, isAuthenticated, isModerator, logout } = useAuth();
 
   if (isLoading) {
     return <div className="size-9 animate-pulse rounded-full bg-muted" />;
@@ -121,6 +122,13 @@ function AccountMenu() {
             <Bookmark /> Muốn xem
           </Link>
         </DropdownMenuItem>
+        {isModerator && (
+          <DropdownMenuItem asChild>
+            <Link href="/admin/reports">
+              <ShieldCheck /> Quản trị
+            </Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => {
