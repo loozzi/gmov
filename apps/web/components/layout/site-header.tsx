@@ -82,7 +82,7 @@ function MenuDropdown({
       ? "grid w-[30rem] grid-cols-3 gap-x-1 p-1.5"
       : "max-h-80 w-52 overflow-y-auto";
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
       <DropdownMenuTrigger asChild>
         <button
           className="flex cursor-pointer items-center gap-1 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
