@@ -80,14 +80,24 @@ REFRESH_GRACE_SECONDS = 30
 
 
 async def _load_row(db: AsyncSession, jti: str) -> RefreshToken | None:
-    stmt = select(RefreshToken).where(RefreshToken.jti == jti)
+    stmt = (
+        select(RefreshToken)
+        .where(RefreshToken.jti == jti)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
 async def _revoke_family(
     db: AsyncSession, family_id: uuid.UUID, now: datetime
 ) -> None:
-    stmt = select(RefreshToken).where(RefreshToken.family_id == family_id)
+    stmt = (
+        select(RefreshToken)
+        .where(RefreshToken.family_id == family_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     for member in (await db.execute(stmt)).scalars().all():
         member.compromised = True
         if member.revoked_at is None:

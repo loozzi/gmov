@@ -62,7 +62,9 @@ async def create(
                 .where(Comment.id == data.comment_id)
                 .with_for_update()
             )
-        ).scalar_one()
+        ).scalar_one_or_none()
+        if comment is None:
+            raise AppException("Comment not found", "COMMENT_NOT_FOUND", 404)
 
         row = CommentReport(
             comment_id=data.comment_id,

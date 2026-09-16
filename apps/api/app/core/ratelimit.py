@@ -1,5 +1,6 @@
 """Redis fixed-window rate limiting (fail-open if Redis is down)."""
 
+import hashlib
 import ipaddress
 
 from fastapi import Request
@@ -10,6 +11,7 @@ from app.core.exceptions import AppException
 from app.db.session import get_redis_client
 
 LOGIN_FAIL_LIMIT = 5
+LOGIN_FAIL_IP_LIMIT = 20
 LOGIN_FAIL_WINDOW = 900  # 15 minutes
 
 REGISTER_HOUR_LIMIT = 3
@@ -67,8 +69,16 @@ async def check_rate_limit(key: str, limit: int, window_seconds: int) -> None:
         pass
 
 
+def _username_digest(username: str) -> str:
+    return hashlib.sha256(username.strip().lower().encode()).hexdigest()[:16]
+
+
 def _login_fail_key(ip: str, username: str) -> str:
-    return f"ratelimit:login-fail:{ip}:{username.lower()}"
+    return f"ratelimit:login-fail:{ip}:{_username_digest(username)}"
+
+
+def _login_fail_ip_key(ip: str) -> str:
+    return f"ratelimit:login-fail:ip:{ip}"
 
 
 async def _counter(client, key: str) -> tuple[int, int]:
@@ -100,6 +110,14 @@ async def check_login_allowed(ip: str, username: str) -> None:
                 429,
                 headers=_retry_after(ttl),
             )
+        ip_fails, ip_ttl = await _counter(client, _login_fail_ip_key(ip))
+        if ip_fails >= LOGIN_FAIL_IP_LIMIT:
+            raise AppException(
+                _vi_cooldown(ip_ttl, "Đăng nhập sai quá nhiều lần."),
+                "RATE_LIMITED",
+                429,
+                headers=_retry_after(ip_ttl),
+            )
     except AppException:
         raise
     except (RedisError, OSError, ValueError):
@@ -109,11 +127,10 @@ async def check_login_allowed(ip: str, username: str) -> None:
 async def record_login_failure(ip: str, username: str) -> None:
     try:
         client = get_redis_client()
-        count = await client.incr(_login_fail_key(ip, username))
-        if count == 1:
-            await client.expire(
-                _login_fail_key(ip, username), LOGIN_FAIL_WINDOW
-            )
+        for key in (_login_fail_key(ip, username), _login_fail_ip_key(ip)):
+            count = await client.incr(key)
+            if count == 1:
+                await client.expire(key, LOGIN_FAIL_WINDOW)
     except (RedisError, OSError):
         pass
 

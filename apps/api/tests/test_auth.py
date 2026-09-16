@@ -397,6 +397,26 @@ async def test_refresh_reuse_does_not_affect_other_family(sqlite_factory):
         assert pair.access_token
 
 
+async def test_login_failures_composite_per_username_capped_per_ip(_fake_redis):
+    from app.core.exceptions import AppException
+
+    ip = "203.0.113.9"
+    for _ in range(ratelimit.LOGIN_FAIL_LIMIT):
+        await ratelimit.record_login_failure(ip, "victim")
+    with pytest.raises(AppException):
+        await ratelimit.check_login_allowed(ip, "victim")
+
+    # A different username has its own composite bucket ...
+    await ratelimit.check_login_allowed(ip, "otheruser")
+
+    # ... but the shared per-IP bucket still caps total failures.
+    for i in range(ratelimit.LOGIN_FAIL_IP_LIMIT):
+        await ratelimit.record_login_failure(ip, f"flood{i}")
+    with pytest.raises(AppException) as exc:
+        await ratelimit.check_login_allowed(ip, "freshuser")
+    assert exc.value.status_code == 429
+
+
 async def test_login_lockout_is_per_username(client, _fake_redis):
     first = {
         "email": "lockme@gmov.dev",
