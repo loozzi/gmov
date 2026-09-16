@@ -4,7 +4,6 @@ import Link from "next/link";
 import { Play } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useContinueWatching } from "@/lib/me";
 
@@ -32,12 +31,12 @@ export function ContinueWatchingRail() {
   }
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">Xem tiếp</h2>
+    <section className="group/rail space-y-2">
+      <div className="flex items-baseline gap-2">
+        <h2 className="text-lg font-semibold sm:text-xl">Xem tiếp</h2>
         <Link
           href="/me/history"
-          className="text-sm text-muted-foreground hover:text-brand"
+          className="flex items-center gap-0.5 text-xs font-medium text-muted-foreground opacity-100 transition-all duration-200 group-hover/rail:translate-x-1 hover:text-brand sm:opacity-0 sm:group-hover/rail:opacity-100"
         >
           Lịch sử xem
         </Link>
@@ -56,8 +55,16 @@ export function ContinueWatchingRail() {
             <Link
               key={p.id}
               href={`/xem/${p.movie_slug}/${p.episode_slug}`}
-              className="group w-64 shrink-0 overflow-hidden rounded-xl border border-border bg-card hover:border-brand"
+              className="group w-64 shrink-0 overflow-hidden rounded-lg bg-card transition-all duration-200 hover:z-10 hover:scale-[1.03] hover:shadow-2xl sm:w-72"
             >
+              <div className="relative flex aspect-video items-center justify-center bg-gradient-to-br from-muted via-card to-muted">
+                <span className="flex size-12 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                  <Play className="size-5 fill-white" />
+                </span>
+                <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                  {p.episode_name}
+                </span>
+              </div>
               <div className="space-y-1 p-3">
                 <p className="truncate text-sm font-semibold group-hover:text-brand">
                   {p.movie_name}
@@ -72,9 +79,6 @@ export function ContinueWatchingRail() {
                     style={{ width: `${ratio}%` }}
                   />
                 </div>
-                <Button size="sm" variant="secondary" className="mt-2 w-full">
-                  <Play /> Xem tiếp
-                </Button>
               </div>
             </Link>
           );

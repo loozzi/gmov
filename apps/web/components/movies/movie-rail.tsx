@@ -13,15 +13,15 @@ interface Props {
 export function MovieRail({ title, href, movies }: Props) {
   if (movies.length === 0) return null;
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">{title}</h2>
+    <section className="group/rail space-y-2">
+      <div className="flex items-baseline gap-2">
+        <h2 className="text-lg font-semibold sm:text-xl">{title}</h2>
         {href && (
           <Link
             href={href}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-brand"
+            className="flex translate-x-0 items-center gap-0.5 text-xs font-medium text-muted-foreground opacity-100 transition-all duration-200 group-hover/rail:translate-x-1 hover:text-brand sm:opacity-0 sm:group-hover/rail:opacity-100"
           >
-            Xem tất cả <ChevronRight className="size-4" />
+            Xem tất cả <ChevronRight className="size-3.5" />
           </Link>
         )}
       </div>

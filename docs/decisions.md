@@ -268,3 +268,18 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     không đổi. Nghi vấn còn lại: assert đọc clock ngay sau toast nên thua
     race với seek, hoặc startedRef latch — cần buổi debug riêng, KHÔNG sửa
     player/test trong PR reviews để tránh scope creep.
+
+## Trang chủ phong cách Netflix (ui-ux-pro-max)
+
+70. **Design system đã verify**: query 1 ("movie streaming vibrant")
+    trả về style sáng không hợp → retry 1 lần theo skill, query 2
+    ("video streaming dark cinematic") cho Hero-Centric + Dark OLED
+    (bg `#000`, card `#0c0c0d`, accent red `#E11D48`, Inter) — khớp
+    Netflix nên áp dụng. Dark token nudge về gần đen thuần; light mode
+    giữ nguyên. Không dùng badge chữ "N" đỏ (nhái brand Netflix) —
+    dùng "G" (gmov). Hero full-bleed bằng negative margin (`-mx-4 -mt-6`)
+    thay vì sửa layout (tránh ảnh hưởng các trang khác); rails overlap
+    hero (`-mt-20`). Auto-rotate tôn trọng `prefers-reduced-motion`.
+    Light mode mặc định theo OS (screenshot headless ra sáng là đúng,
+    không phải bug). Verify: typecheck + build pass, screenshot
+    dark/light đạt.

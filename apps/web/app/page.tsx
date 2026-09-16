@@ -21,18 +21,20 @@ export default async function Home() {
   const heroMovies = (latest?.items ?? []).slice(0, 5);
 
   return (
-    <div className="space-y-8">
+    <div>
       <HeroCarousel movies={heroMovies} />
-      <ContinueWatchingRail />
-      <MovieRail title="Mới cập nhật" movies={(latest?.items ?? []).slice(0, 10)} />
-      <MovieRail title="Phim lẻ" href="/list/phim-le" movies={phimLe?.items ?? []} />
-      <MovieRail title="Phim bộ" href="/list/phim-bo" movies={phimBo?.items ?? []} />
-      <MovieRail
-        title="Hoạt hình"
-        href="/the-loai/hoat-hinh"
-        movies={hoatHinh?.items ?? []}
-      />
-      <MovieRail title="TV Shows" href="/list/tv-shows" movies={tvShows?.items ?? []} />
+      <div className="relative z-10 -mt-20 space-y-8 pb-8 sm:-mt-24">
+        <ContinueWatchingRail />
+        <MovieRail title="Mới cập nhật" movies={(latest?.items ?? []).slice(0, 10)} />
+        <MovieRail title="Phim lẻ" href="/list/phim-le" movies={phimLe?.items ?? []} />
+        <MovieRail title="Phim bộ" href="/list/phim-bo" movies={phimBo?.items ?? []} />
+        <MovieRail
+          title="Hoạt hình"
+          href="/the-loai/hoat-hinh"
+          movies={hoatHinh?.items ?? []}
+        />
+        <MovieRail title="TV Shows" href="/list/tv-shows" movies={tvShows?.items ?? []} />
+      </div>
     </div>
   );
 }

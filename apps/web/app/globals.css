@@ -19,14 +19,14 @@
 }
 
 .dark {
-  --color-background: #0a0a0f;
+  --color-background: #000000;
   --color-foreground: #f4f4f5;
-  --color-card: #131318;
+  --color-card: #0c0c0d;
   --color-card-foreground: #f4f4f5;
-  --color-muted: #1c1c22;
+  --color-muted: #181818;
   --color-muted-foreground: #a1a1aa;
-  --color-border: #26262e;
-  --color-input: #26262e;
+  --color-border: #27272a;
+  --color-input: #27272a;
   --color-brand: #e11d48;
   --color-brand-foreground: #ffffff;
   --color-ring: #e11d48;
@@ -47,11 +47,32 @@ body {
   min-height: 100vh;
 }
 
-/* Subtle scrollbar for horizontal rails */
-.rail-scroll::-webkit-scrollbar {
-  height: 8px;
+/* Horizontal rails: hidden scrollbar (Netflix-style), scroll via drag/wheel/arrows */
+.rail-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
-.rail-scroll::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 8px;
+.rail-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hero billboard crossfade */
+@keyframes hero-fade {
+  from {
+    opacity: 0;
+    transform: scale(1.03);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-hero-fade {
+  animation: hero-fade 600ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-hero-fade {
+    animation: none;
+  }
 }

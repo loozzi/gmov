@@ -18,7 +18,7 @@ export function MovieCard({ movie }: { movie: MovieCardType }) {
   return (
     <Link
       href={`/phim/${movie.slug}`}
-      className="group block overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-brand"
+      className="group block overflow-hidden rounded-lg border border-transparent bg-card transition-all duration-200 hover:z-10 hover:scale-[1.04] hover:border-foreground/20 hover:shadow-2xl dark:hover:border-white/30"
     >
       <div className="relative aspect-[2/3] w-full overflow-hidden bg-muted">
         {src && !failed ? (
