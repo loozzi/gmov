@@ -185,7 +185,12 @@ def test_model_constraint_metadata_matches_migration():
         if isinstance(c, UniqueConstraint)
     }
     assert "uq_comment_reports_comment_reporter" in report_uniques
-    assert "uq_comment_reports_comment_reporter" in _MIGRATION_SOURCE
+    migration_unique = re.search(
+        r"UniqueConstraint\([^)]*"
+        r"name='uq_comment_reports_comment_reporter'\)",
+        _MIGRATION_SOURCE,
+    )
+    assert migration_unique is not None
 
 
 def test_report_in_validates_reason_and_note_length():
