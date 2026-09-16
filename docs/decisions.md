@@ -390,3 +390,31 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     list nhiều server) để không thổi phồng M. Embed không có playtime nên "xem
     đến đâu" ở chế độ embed = tập hiện tại; row cũ `NULL` → UI fallback như trước.
     Không backfill (giá trị điền ở lần ghi kế tiếp).
+
+## Lớp chuyển động (motion) — 2026-09-16
+
+85. **Motion CSS-first, không thêm dependency**: token easing + `@keyframes`
+    khai báo trong `@theme` của `app/globals.css`, dùng qua utility
+    `animate-*`. Không thêm `framer-motion`/`gsap` vì phần lớn chuyển động cần
+    thiết (overlay vào/ra, reveal, shimmer) là khai báo được bằng CSS, repo vốn
+    CSS-first, và như vậy không đổi lockfile/bundle. Chi tiết:
+    `docs/superpowers/specs/2026-09-16-motion-design.md`.
+86. **Reset `prefers-reduced-motion` toàn cục** thay vì override từng animation:
+    đặt `animation-duration`/`transition-duration` về `1ms` + `animation-delay:
+    0` cho mọi phần tử. Mọi animation kết thúc ở trạng thái cuối ổn định nên nội
+    dung luôn hiển thị; giữ được tiền lệ cũ (`hero-fade`) mà không phải nhớ
+    override cho từng cái mới.
+87. **`Reveal` (IntersectionObserver) không bao giờ ẩn nội dung khi thiếu JS**:
+    render mặc định hiển thị, chỉ ẩn SAU mount và chỉ với phần tử nằm dưới màn
+    hình, bỏ qua hoàn toàn khi bật giảm chuyển động. Tránh rủi ro nội dung
+    "mất tích" nếu JS lỗi hoặc observer không chạy.
+88. **`app/template.tsx` cho page transition, chỉ animate `opacity`**: template
+    remount mỗi lần điều hướng (đúng chỗ để chạy entrance). Cố ý không dùng
+    `transform` ở đây vì transform trên ancestor sẽ tạo containing block cho
+    header `sticky` và các portal `fixed`.
+89. **Keyframe dialog mang theo `translate(-50%, -50%)`**: dialog căn giữa bằng
+    utility translate, nên nếu keyframe zoom chỉ set `scale()` sẽ ghi đè mất
+    translate; `dialog-in/out` giữ nguyên cặp translate trong mọi frame.
+90. **`toaster` thêm trạng thái `closing`**: toast giữ mounted thêm ~180ms để
+    chạy `toast-out` rồi mới xoá (kèm `onAnimationEnd` làm lưới an toàn), thay
+    vì biến mất tức thì.
