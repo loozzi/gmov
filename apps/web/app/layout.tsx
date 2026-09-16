@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Roboto } from "next/font/google";
 import "./globals.css";
 
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -15,6 +16,12 @@ export const metadata: Metadata = {
   description: "Web xem phim: duyệt, tìm kiếm và theo dõi phim yêu thích.",
 };
 
+const roboto = Roboto({
+  weight: ["400", "500", "700"],
+  subsets: ["latin", "vietnamese"],
+  display: "swap",
+});
+
 export default function RootLayout({
   children,
 }: {
@@ -27,7 +34,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://phim.nguonc.com" />
         <link rel="dns-prefetch" href="https://phim.nguonc.com" />
       </head>
-      <body className="flex min-h-screen flex-col antialiased">
+      <body className={`${roboto.className} flex min-h-screen flex-col antialiased`}>
         <PwaRegister />
         <Providers>
           <SiteHeader />

@@ -15,7 +15,7 @@
   --color-brand-foreground: #ffffff;
   --color-ring: #e11d48;
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    "Roboto", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 .dark {

@@ -8,9 +8,13 @@ yêu thích, lịch sử xem.
 
 ## Demo
 
-| Trang chủ | Chi tiết phim |
+| Trang chủ (dark) | Chi tiết phim (dark) |
 |---|---|
 | ![Trang chủ gmov](docs/demo/home.png) | ![Chi tiết phim gmov](docs/demo/detail.png) |
+
+| Trang chủ (light) | Chi tiết phim (light) |
+|---|---|
+| ![Trang chủ gmov light](docs/demo/home-light.png) | ![Chi tiết phim gmov light](docs/demo/detail-light.png) |
 
 ## Stack
 
