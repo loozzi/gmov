@@ -54,6 +54,11 @@ http://localhost:8000/docs (Swagger).
 Chạy lẻ từng app (cần Postgres/Redis local, API mặc định `:8000`):
 
 ```bash
+./scripts/dev.sh   # một lệnh chạy cả hai: dựng db/redis (nếu chưa có),
+                   # api :8008 + web :3000; Ctrl-C dừng cả hai (db/redis giữ lại).
+                   # Đổi port: API_PORT=8000 WEB_PORT=3001 ./scripts/dev.sh
+
+```bash
 # backend
 cd apps/api && uv sync && uv run uvicorn app.main:app --reload
 # test backend
