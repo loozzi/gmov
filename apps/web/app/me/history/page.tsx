@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
+import { PosterThumb } from "@/components/movies/poster-thumb";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
@@ -94,6 +95,16 @@ export default function HistoryPage() {
                   key={p.id}
                   className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
                 >
+                  <Link
+                    href={`/phim/${p.movie_slug}`}
+                    className="relative aspect-[2/3] w-12 shrink-0 overflow-hidden rounded-md bg-muted"
+                  >
+                    <PosterThumb
+                      src={p.poster_url}
+                      alt={p.movie_name}
+                      sizes="48px"
+                    />
+                  </Link>
                   <div className="min-w-0 flex-1">
                     <Link
                       href={`/phim/${p.movie_slug}`}

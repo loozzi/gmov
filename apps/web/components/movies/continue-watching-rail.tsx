@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Play } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
+import { PosterThumb } from "@/components/movies/poster-thumb";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useContinueWatching } from "@/lib/me";
 import { progressLabel, progressPercent } from "@/lib/progress";
@@ -65,8 +66,14 @@ export function ContinueWatchingRail() {
               href={`/xem/${p.movie_slug}/${p.episode_slug}`}
               className="group w-64 shrink-0 overflow-hidden rounded-lg bg-card transition-all duration-200 hover:z-10 hover:scale-[1.03] hover:shadow-2xl sm:w-72"
             >
-              <div className="relative flex aspect-video items-center justify-center bg-gradient-to-br from-muted via-card to-muted">
-                <span className="flex size-12 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+              <div className="relative flex aspect-video items-center justify-center overflow-hidden bg-gradient-to-br from-muted via-card to-muted">
+                <PosterThumb
+                  src={p.poster_url}
+                  alt={p.movie_name}
+                  sizes="(max-width: 640px) 256px, 288px"
+                />
+                <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                <span className="relative flex size-12 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                   <Play className="size-5 fill-white" />
                 </span>
                 <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold text-white">
