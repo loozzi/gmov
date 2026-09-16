@@ -247,4 +247,24 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     chứ không phải lúc click). Triển khai theo TDD: test RED trước
     (`test_watchlist_flow`, `test_progress_upsert_removes_from_watchlist`),
     migration thử lên/xuống trên sqlite. E2E `library.spec` + teardown dọn
-    thêm watchlist; full suite 10/10.
+    thêm watchlist;     full suite 10/10.
+
+## Feature: bình luận + đánh giá sao (subagents)
+
+68. **Hai bảng riêng (`ratings` + `comments`), không gộp**: chấm sao không
+    cần viết bình luận và ngược lại; gộp thành `reviews` unique(user, phim)
+    sẽ giết thảo luận. Reply đúng 1 cấp (DB cho phép cây đầy đủ nhưng API
+    từ chối reply-của-reply 422; xóa dùng BFS trong service để đúng cả trên
+    sqlite-test lẫn Postgres cascade). Điểm TB tính live, không cache.
+    Đọc public (tốt cho SEO/khách), viết cần login + rate-limit riêng
+    10/phút. Triển khai bằng 2 subagent song song (backend TDD / frontend)
+    trên contract đóng băng — backend 50 pass, e2e library 4/4.
+69. **KNOWN-FAIL (pre-existing, không phải do feature này)**:
+    `e2e/player.spec.ts` "play 20s → reload → resume" fail 4 lần liên tiếp
+    (`expected ~20s, got 0`, toast "Đã tiếp tục từ" vẫn hiện). Đã chứng minh
+    không phải regression: stash toàn bộ backend-diff → vẫn fail y hệt;
+    probe riêng (seed progress 60s → load harness) seek đúng tới 67s đang
+    phát; stream mẫu nhanh (0.2s); máy rảnh (load ~2/6 cores); browser
+    không đổi. Nghi vấn còn lại: assert đọc clock ngay sau toast nên thua
+    race với seek, hoặc startedRef latch — cần buổi debug riêng, KHÔNG sửa
+    player/test trong PR reviews để tránh scope creep.

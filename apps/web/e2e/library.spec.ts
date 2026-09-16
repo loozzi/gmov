@@ -106,3 +106,47 @@ test("watchlist add survives reload, watching drops it", async ({ page }) => {
     timeout: 20_000,
   });
 });
+
+test("rating + comment flow", async ({ page }) => {
+  await loginViaApi(page);
+  const slug = await firstMovieSlug(page);
+  await page.goto(`/phim/${slug}`);
+  page.on("dialog", (dialog) => void dialog.accept());
+
+  const star4 = page.getByRole("radio", { name: /4 sao/i });
+  await expect(star4).toBeVisible({ timeout: 20_000 });
+  await star4.click();
+  await expect(page.getByText(/đã đánh giá 4 sao/i)).toBeVisible();
+  await expect(page.getByText(/1 lượt đánh giá/i)).toBeVisible({
+    timeout: 20_000,
+  });
+
+  const stamp = Date.now();
+  const commentBody = `E2E binh luan ${stamp}`;
+  const replyBody = `E2E tra loi ${stamp}`;
+  await expect(
+    page.getByPlaceholder(/chia sẻ cảm nhận/i),
+  ).toBeVisible({ timeout: 20_000 });
+  await page.getByPlaceholder(/chia sẻ cảm nhận/i).fill(commentBody);
+  await page.getByRole("button", { name: /gửi bình luận/i }).click();
+  await expect(page.getByText(commentBody)).toBeVisible({ timeout: 20_000 });
+
+  await page.getByRole("button", { name: /^trả lời$/i }).first().click();
+  await expect(
+    page.getByPlaceholder(/viết câu trả lời/i),
+  ).toBeVisible({ timeout: 20_000 });
+  await page.getByPlaceholder(/viết câu trả lời/i).fill(replyBody);
+  await page.getByRole("button", { name: /gửi trả lời/i }).click();
+  await expect(page.getByText(replyBody)).toBeVisible({ timeout: 20_000 });
+
+  // Cleanup: delete reply, comment, then rating.
+  await page.getByRole("button", { name: /xóa trả lời/i }).first().click();
+  await expect(page.getByText(replyBody)).toBeHidden({ timeout: 20_000 });
+  await page.getByRole("button", { name: /xóa bình luận/i }).first().click();
+  await expect(page.getByText(commentBody)).toBeHidden({ timeout: 20_000 });
+
+  await page.getByRole("button", { name: /gỡ đánh giá/i }).click();
+  await expect(page.getByText(/chưa có đánh giá/i)).toBeVisible({
+    timeout: 20_000,
+  });
+});

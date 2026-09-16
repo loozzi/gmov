@@ -1,9 +1,9 @@
-"""Library schemas: watch progress + favorites + watchlist (API boundary)."""
+"""Library schemas: watch progress + favorites + watchlist + ratings + comments."""
 
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ProgressUpsert(BaseModel):
@@ -113,3 +113,66 @@ class WatchedAdd(BaseModel):
 
 class WatchedOut(BaseModel):
     episode_slugs: list[str]
+
+
+class RatingUpsert(BaseModel):
+    movie_slug: str = Field(min_length=1, max_length=255)
+    stars: int = Field(ge=1, le=5)
+
+
+class RatingOut(BaseModel):
+    movie_slug: str
+    stars: int
+
+
+class RatingStatus(BaseModel):
+    stars: int | None
+
+
+class RatingSummary(BaseModel):
+    average: float | None
+    count: int
+
+
+class CommentUser(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    username: str
+    display_name: str
+
+
+class ReplyOut(BaseModel):
+    id: uuid.UUID
+    user: CommentUser
+    body: str
+    created_at: datetime
+
+
+class CommentOut(BaseModel):
+    id: uuid.UUID
+    movie_slug: str
+    user: CommentUser
+    body: str
+    created_at: datetime
+    replies: list[ReplyOut] = Field(default_factory=list)
+    reply_count: int = 0
+
+
+class PaginatedComments(BaseModel):
+    items: list[CommentOut]
+    page: int
+    per_page: int
+    total_items: int
+
+
+class CommentAdd(BaseModel):
+    movie_slug: str = Field(min_length=1, max_length=255)
+    body: str = Field(min_length=1, max_length=2000)
+    parent_id: uuid.UUID | None = None
+
+    @field_validator("body", mode="before")
+    @classmethod
+    def _strip_body(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.strip()
+        return v

@@ -48,6 +48,30 @@ watch".
 | GET | `/watched/{movie_slug}` | 200 `{"episode_slugs": [...]}` (≥90% of known duration) |
 | POST | `/watched` `{movie_slug, movie_name, episode_slug, episode_name, ...}` | 200 (explicit marker for players without time access) |
 
+## Ratings (stars 1–5, one per user per movie)
+
+| Method | Path | Success |
+|--------|------|---------|
+| PUT | `/me/ratings` `{movie_slug, stars}` | 200 `{movie_slug, stars}` (upsert, second PUT wins) |
+| GET | `/me/ratings/{movie_slug}/status` | 200 `{stars: int \| null}` |
+| DELETE | `/me/ratings/{movie_slug}` | 200 `{"ok": true}` (idempotent) |
+| GET | `/movies/{movie_slug}/rating` (public, no auth) | 200 `{average: float \| null (1 decimal), count}` |
+
+Unique key: `(user_id, movie_slug)`. Average computed live (`AVG`/`COUNT`
+with index — no cache table at current volume).
+
+## Comments (one reply level, read-public)
+
+| Method | Path | Success |
+|--------|------|---------|
+| GET | `/comments?movie_slug=&page=&per_page=20` (public, no auth) | 200 paginated top-level (newest first), each with `user`, `replies[]` (oldest first), `reply_count` |
+| POST | `/me/comments` `{movie_slug, body 1–2000, parent_id?}` (rate-limited 10 req/min/user) | 201 created comment |
+| DELETE | `/me/comments/{id}` | 200 `{"ok": true}` (owner only, deletes subtree; others → 404 `COMMENT_NOT_FOUND`) |
+
+Reply rules: parent must exist, belong to the same movie, and be top-level
+(reply-to-reply → 422). Display name read live from `users` (rename applies
+retroactively — accepted for v1).
+
 ## Notes
 
 - No separate `watch_history` table: progress rows already record

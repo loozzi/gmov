@@ -5,7 +5,10 @@ import { notFound } from "next/navigation";
 import { Calendar, Clock, MonitorPlay } from "lucide-react";
 
 import { FavoriteButton } from "@/components/movies/favorite-button";
+import { RatingSummary } from "@/components/movies/rating-summary";
 import { ResumeButton } from "@/components/movies/resume-button";
+import { StarInput } from "@/components/movies/star-input";
+import { CommentSection } from "@/components/movies/comment-section";
 import { WatchlistButton } from "@/components/movies/watchlist-button";
 import { Button } from "@/components/ui/button";
 import { fetchMovieDetail, stripHtml } from "@/lib/server-movies";
@@ -141,6 +144,10 @@ export default async function MovieDetailPage({
                 posterUrl={poster}
               />
             </div>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <RatingSummary movieSlug={movie.slug} />
+              <StarInput movieSlug={movie.slug} />
+            </div>
           </div>
         </div>
       </section>
@@ -195,6 +202,11 @@ export default async function MovieDetailPage({
             )}
           </div>
         ))}
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-xl font-bold">Bình luận</h2>
+        <CommentSection movieSlug={movie.slug} />
       </section>
     </div>
   );
