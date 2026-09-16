@@ -86,3 +86,11 @@ Brought forward — none blocks current functionality.
     chạm tới, đổi sang `sa.false()` như `RefreshToken.compromised`.
 26. **E2E fixture bypass throttle** — `global-setup` xóa key `ratelimit:*` thay
     vì nâng cap; chỉ trong test env, chấp nhận.
+27. **`player.spec` đã fail sẵn trong môi trường này** — test "play 20s →
+    reload → resumes around 20s" đọc `currentTime = 0` sau reload (dù toast
+    "Đã tiếp tục từ" đã hiện, tức progress có lưu). Đã A/B: fail y hệt trên
+    `d57647b` (commit trước lớp motion 2026-09-16) nên KHÔNG liên quan motion.
+    Nghi ngờ thời điểm: toast hiện ngay khi fetch progress xong, còn seek chỉ
+    chạy khi media metadata sẵn sàng (stream mẫu mux), nên test đọc clock quá
+    sớm. Cần một lần điều tra riêng — hoặc cho test chờ `currentTime` cập nhật
+    thay vì đọc một lần.
