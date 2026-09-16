@@ -6,6 +6,7 @@ import { Play } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useContinueWatching } from "@/lib/me";
+import { progressLabel, progressPercent } from "@/lib/progress";
 
 function formatTime(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
@@ -43,10 +44,12 @@ export function ContinueWatchingRail() {
       </div>
       <div className="rail-scroll -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
         {data.items.slice(0, 10).map((p) => {
-          const ratio =
-            p.duration_seconds && p.duration_seconds > 0
-              ? Math.min(100, (p.position_seconds / p.duration_seconds) * 100)
-              : 0;
+          const ratio = progressPercent(
+            p.episode_index,
+            p.total_episodes,
+            p.position_seconds,
+            p.duration_seconds,
+          );
           const remaining =
             p.duration_seconds && p.duration_seconds > p.position_seconds
               ? ` · còn ${formatTime(p.duration_seconds - p.position_seconds)}`
@@ -62,7 +65,7 @@ export function ContinueWatchingRail() {
                   <Play className="size-5 fill-white" />
                 </span>
                 <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold text-white">
-                  {p.episode_name}
+                  {progressLabel(p.episode_index, p.total_episodes, p.episode_name)}
                 </span>
               </div>
               <div className="space-y-1 p-3">
@@ -70,7 +73,7 @@ export function ContinueWatchingRail() {
                   {p.movie_name}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {p.episode_name}
+                  {progressLabel(p.episode_index, p.total_episodes, p.episode_name)}
                   {remaining}
                 </p>
                 <div className="h-1 overflow-hidden rounded-full bg-muted">

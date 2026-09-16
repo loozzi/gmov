@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
 import { toVietnameseMessage } from "@/lib/errors";
 import { useContinueWatching, useDeleteProgress } from "@/lib/me";
+import { progressLabel, progressPercent } from "@/lib/progress";
 
 function formatClock(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
@@ -80,7 +81,15 @@ export default function HistoryPage() {
       ) : (
         <>
           <div className="space-y-3">
-            {data.items.map((p) => (
+            {data.items.map((p) => {
+              const label = progressLabel(
+                p.episode_index,
+                p.total_episodes,
+                p.episode_name,
+              );
+              const hasSeries =
+                p.episode_index != null && p.total_episodes != null;
+              return (
               <div
                 key={p.id}
                 className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
@@ -93,7 +102,7 @@ export default function HistoryPage() {
                     {p.movie_name}
                   </Link>
                   <p className="text-xs text-muted-foreground">
-                    {p.episode_name}
+                    {label}
                     {p.server_name ? ` · ${p.server_name}` : ""}
                     {p.duration_seconds && p.duration_seconds > 0 ? (
                       p.position_seconds >= 0.9 * p.duration_seconds ? (
@@ -105,12 +114,17 @@ export default function HistoryPage() {
                       <> · đã xem {formatClock(p.position_seconds)}</>
                     )}
                   </p>
-                  {p.duration_seconds ? (
+                  {hasSeries || p.duration_seconds ? (
                     <div className="mt-1.5 h-1 max-w-xs overflow-hidden rounded-full bg-muted">
                       <div
                         className="h-full rounded-full bg-brand"
                         style={{
-                          width: `${Math.min(100, (p.position_seconds / p.duration_seconds) * 100)}%`,
+                          width: `${progressPercent(
+                            p.episode_index,
+                            p.total_episodes,
+                            p.position_seconds,
+                            p.duration_seconds,
+                          )}%`,
                         }}
                       />
                     </div>
@@ -134,7 +148,8 @@ export default function HistoryPage() {
                   <Trash2 className="size-4" />
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
           <div className="flex items-center justify-center gap-3 pt-2">
             <Button

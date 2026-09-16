@@ -6,13 +6,8 @@ import { History, Play } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
 import { useProgress } from "@/lib/me";
+import { progressLabel } from "@/lib/progress";
 import type { Episode } from "@/lib/types";
-
-/** Upstream episode names are bare numbers ("1", "2"); read them as "tập 2". */
-function episodeLabel(name: string): string {
-  const trimmed = name.trim();
-  return /^\d+$/.test(trimmed) ? `tập ${trimmed}` : trimmed;
-}
 
 function formatClock(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
@@ -43,7 +38,12 @@ export function ResumeButton({ movieSlug, firstEpisode }: Props) {
     return (
       <Button asChild size="lg">
         <Link href={`/xem/${movieSlug}/${progress.episode_slug}`}>
-          <History /> Xem tiếp {episodeLabel(progress.episode_name)}
+          <History /> Xem tiếp{" "}
+          {progressLabel(
+            progress.episode_index,
+            progress.total_episodes,
+            progress.episode_name,
+          )}
           {fromTime}
         </Link>
       </Button>
