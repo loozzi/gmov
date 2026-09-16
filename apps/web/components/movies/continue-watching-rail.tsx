@@ -38,7 +38,7 @@ export function ContinueWatchingRail() {
         <h2 className="text-lg font-semibold sm:text-xl">Xem tiếp</h2>
         <Link
           href="/me/history"
-          className="flex items-center gap-0.5 text-xs font-medium text-muted-foreground opacity-100 transition-all duration-200 group-hover/rail:translate-x-1 hover:text-brand sm:opacity-0 sm:group-hover/rail:opacity-100"
+          className="text-muted-foreground hover:text-brand flex items-center gap-0.5 text-xs font-medium opacity-100 transition-all duration-200 group-hover/rail:translate-x-1 sm:opacity-0 sm:group-hover/rail:opacity-100"
         >
           Lịch sử xem
         </Link>
@@ -64,9 +64,9 @@ export function ContinueWatchingRail() {
             <Link
               key={p.id}
               href={`/xem/${p.movie_slug}/${p.episode_slug}`}
-              className="group w-64 shrink-0 overflow-hidden rounded-lg bg-card transition-all duration-200 hover:z-10 hover:scale-[1.03] hover:shadow-2xl sm:w-72"
+              className="group bg-card w-64 shrink-0 overflow-hidden rounded-lg transition-all duration-200 hover:z-10 hover:scale-[1.03] hover:shadow-2xl sm:w-72"
             >
-              <div className="relative flex aspect-video items-center justify-center overflow-hidden bg-gradient-to-br from-muted via-card to-muted">
+              <div className="from-muted via-card to-muted relative flex aspect-video items-center justify-center overflow-hidden bg-gradient-to-br">
                 <PosterThumb
                   src={p.poster_url}
                   alt={p.movie_name}
@@ -81,16 +81,16 @@ export function ContinueWatchingRail() {
                 </span>
               </div>
               <div className="space-y-1 p-3">
-                <p className="truncate text-sm font-semibold group-hover:text-brand">
+                <p className="group-hover:text-brand truncate text-sm font-semibold">
                   {p.movie_name}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                   {label}
                   {remaining}
                 </p>
-                <div className="h-1 overflow-hidden rounded-full bg-muted">
+                <div className="bg-muted h-1 overflow-hidden rounded-full">
                   <div
-                    className="h-full rounded-full bg-brand"
+                    className="animate-progress bg-brand h-full origin-left rounded-full"
                     style={{ width: `${ratio}%` }}
                   />
                 </div>

@@ -22,6 +22,7 @@ export function StarInput({ movieSlug }: Props) {
   const rate = useRate(movieSlug);
   const remove = useRemoveRating(movieSlug);
   const [hover, setHover] = useState<number | null>(null);
+  const [popStar, setPopStar] = useState<number | null>(null);
 
   const current = data?.stars ?? 0;
   const display = hover ?? current;
@@ -33,7 +34,10 @@ export function StarInput({ movieSlug }: Props) {
       return;
     }
     rate.mutate(stars, {
-      onSuccess: () => toast(`Đã đánh giá ${stars} sao.`, "success"),
+      onSuccess: () => {
+        setPopStar(stars);
+        toast(`Đã đánh giá ${stars} sao.`, "success");
+      },
       onError: (e) => {
         if (e instanceof ApiError && e.status === 401) {
           router.push(`/login?next=/phim/${movieSlug}`);
@@ -78,14 +82,16 @@ export function StarInput({ movieSlug }: Props) {
             onFocus={() => setHover(n)}
             onBlur={() => setHover(null)}
             disabled={authLoading || pending}
-            className="cursor-pointer rounded p-0.5 disabled:opacity-50"
+            className="ease-back cursor-pointer rounded p-0.5 transition-transform duration-150 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
           >
             <Star
+              onAnimationEnd={() => setPopStar(null)}
               className={cn(
-                "size-5",
+                "size-5 transition-colors duration-150",
                 n <= display
                   ? "fill-brand text-brand"
                   : "text-muted-foreground",
+                popStar === n && "animate-pop",
               )}
             />
           </button>
@@ -97,7 +103,7 @@ export function StarInput({ movieSlug }: Props) {
           onClick={handleRemove}
           disabled={authLoading || pending}
           aria-label="Gỡ đánh giá"
-          className="cursor-pointer text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
+          className="text-muted-foreground hover:text-foreground cursor-pointer text-xs underline-offset-4 hover:underline disabled:opacity-50"
         >
           Gỡ
         </button>

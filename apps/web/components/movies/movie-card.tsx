@@ -18,9 +18,9 @@ export function MovieCard({ movie }: { movie: MovieCardType }) {
   return (
     <Link
       href={`/phim/${movie.slug}`}
-      className="group block overflow-hidden rounded-lg border border-transparent bg-card transition-all duration-200 hover:z-10 hover:scale-[1.04] hover:border-foreground/20 hover:shadow-2xl dark:hover:border-white/30"
+      className="group bg-card hover:border-foreground/20 block overflow-hidden rounded-lg border border-transparent transition-all duration-200 hover:z-10 hover:scale-[1.04] hover:shadow-2xl dark:hover:border-white/30"
     >
-      <div className="relative aspect-[2/3] w-full overflow-hidden bg-muted">
+      <div className="bg-muted relative aspect-[2/3] w-full overflow-hidden">
         {src && !failed ? (
           <Image
             src={src}
@@ -29,12 +29,12 @@ export function MovieCard({ movie }: { movie: MovieCardType }) {
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
             placeholder="blur"
             blurDataURL={BLUR_PLACEHOLDER}
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
+            className="animate-fade-in object-cover transition-transform duration-300 group-hover:scale-105"
             loading="lazy"
             onError={() => setFailed(true)}
           />
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-muted-foreground">
+          <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
             <Clapperboard className="size-8" />
             <span className="line-clamp-2 text-xs">{movie.name}</span>
           </div>
@@ -45,17 +45,17 @@ export function MovieCard({ movie }: { movie: MovieCardType }) {
           </span>
         )}
         {movie.current_episode && (
-          <span className="absolute bottom-2 left-2 rounded-md bg-brand px-1.5 py-0.5 text-[11px] font-semibold text-brand-foreground">
+          <span className="bg-brand text-brand-foreground absolute bottom-2 left-2 rounded-md px-1.5 py-0.5 text-[11px] font-semibold">
             {movie.current_episode}
           </span>
         )}
       </div>
       <div className="space-y-0.5 p-2.5">
-        <p className="truncate text-sm font-semibold group-hover:text-brand">
+        <p className="group-hover:text-brand truncate text-sm font-semibold">
           {movie.name}
         </p>
         {movie.original_name && (
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="text-muted-foreground truncate text-xs">
             {movie.original_name}
           </p>
         )}

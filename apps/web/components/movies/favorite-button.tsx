@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Heart } from "lucide-react";
 
@@ -22,6 +23,7 @@ export function FavoriteButton({ movieSlug, movieName, posterUrl }: Props) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { data } = useFavoriteStatus(movieSlug, isAuthenticated);
   const toggle = useToggleFavorite(movieSlug);
+  const [pop, setPop] = useState(false);
 
   const isFavorite = data?.is_favorite ?? false;
 
@@ -33,11 +35,13 @@ export function FavoriteButton({ movieSlug, movieName, posterUrl }: Props) {
     toggle.mutate(
       { isFavorite, movie_name: movieName, poster_url: posterUrl },
       {
-        onSuccess: (nowFavorite) =>
+        onSuccess: (nowFavorite) => {
+          setPop(true);
           toast(
             nowFavorite ? "Đã thêm vào yêu thích." : "Đã bỏ khỏi yêu thích.",
             "success",
-          ),
+          );
+        },
         onError: (e) => {
           if (e instanceof ApiError && e.status === 401) {
             router.push(`/login?next=/phim/${movieSlug}`);
@@ -58,7 +62,11 @@ export function FavoriteButton({ movieSlug, movieName, posterUrl }: Props) {
       aria-pressed={isFavorite}
     >
       <Heart
-        className={cn(isFavorite && "fill-brand text-brand")}
+        onAnimationEnd={() => setPop(false)}
+        className={cn(
+          isFavorite && "fill-brand text-brand",
+          pop && "animate-pop",
+        )}
       />
       {isFavorite ? "Đã yêu thích" : "Yêu thích"}
     </Button>

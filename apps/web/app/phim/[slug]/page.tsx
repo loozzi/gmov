@@ -11,6 +11,7 @@ import { StarInput } from "@/components/movies/star-input";
 import { CommentSection } from "@/components/movies/comment-section";
 import { WatchlistButton } from "@/components/movies/watchlist-button";
 import { Button } from "@/components/ui/button";
+import { Reveal } from "@/components/ui/reveal";
 import { fetchMovieDetail, stripHtml } from "@/lib/server-movies";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +60,7 @@ export default async function MovieDetailPage({
 
   return (
     <div className="space-y-8">
-      <section className="relative overflow-hidden rounded-2xl border border-border">
+      <section className="border-border relative overflow-hidden rounded-2xl border">
         {poster && (
           <>
             <Image
@@ -70,11 +71,11 @@ export default async function MovieDetailPage({
               className="object-cover opacity-20 blur-2xl"
               aria-hidden
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-card via-card/70 to-transparent" />
+            <div className="from-card via-card/70 absolute inset-0 bg-gradient-to-t to-transparent" />
           </>
         )}
         <div className="relative flex flex-col gap-6 p-5 sm:flex-row sm:p-8">
-          <div className="relative aspect-[2/3] w-40 shrink-0 overflow-hidden rounded-xl border border-border sm:w-56">
+          <div className="border-border relative aspect-[2/3] w-40 shrink-0 overflow-hidden rounded-xl border sm:w-56">
             {poster && (
               <Image
                 src={poster}
@@ -90,10 +91,12 @@ export default async function MovieDetailPage({
             <div>
               <h1 className="text-2xl font-bold sm:text-3xl">{movie.name}</h1>
               {movie.original_name && (
-                <p className="mt-1 text-muted-foreground">{movie.original_name}</p>
+                <p className="text-muted-foreground mt-1">
+                  {movie.original_name}
+                </p>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+            <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
               {movie.year && (
                 <span className="flex items-center gap-1">
                   <Calendar className="size-4" /> {movie.year}
@@ -107,7 +110,7 @@ export default async function MovieDetailPage({
               {movie.quality && <span>{movie.quality}</span>}
               {movie.language && <span>{movie.language}</span>}
               {movie.current_episode && (
-                <span className="rounded-md bg-brand px-2 py-0.5 text-xs font-semibold text-brand-foreground">
+                <span className="bg-brand text-brand-foreground rounded-md px-2 py-0.5 text-xs font-semibold">
                   {movie.current_episode}
                 </span>
               )}
@@ -117,7 +120,7 @@ export default async function MovieDetailPage({
                 {movie.genres.map((g) => (
                   <span
                     key={g}
-                    className="rounded-full border border-border px-3 py-1 text-xs"
+                    className="border-border rounded-full border px-3 py-1 text-xs"
                   >
                     {g}
                   </span>
@@ -125,14 +128,19 @@ export default async function MovieDetailPage({
               </div>
             )}
             <div className="space-y-1">
-              {movie.director && <MetaRow label="Đạo diễn" value={movie.director} />}
+              {movie.director && (
+                <MetaRow label="Đạo diễn" value={movie.director} />
+              )}
               {movie.casts && <MetaRow label="Diễn viên" value={movie.casts} />}
               {movie.countries.length > 0 && (
                 <MetaRow label="Quốc gia" value={movie.countries.join(", ")} />
               )}
             </div>
             <div className="flex flex-wrap gap-2 pt-1">
-              <ResumeButton movieSlug={movie.slug} firstEpisode={firstEpisode} />
+              <ResumeButton
+                movieSlug={movie.slug}
+                firstEpisode={firstEpisode}
+              />
               <FavoriteButton
                 movieSlug={movie.slug}
                 movieName={movie.name}
@@ -153,61 +161,69 @@ export default async function MovieDetailPage({
       </section>
 
       {description && (
-        <section className="space-y-2">
-          <h2 className="text-xl font-bold">Nội dung phim</h2>
-          <p className="max-w-4xl text-sm leading-relaxed text-muted-foreground">
-            {description}
-          </p>
-        </section>
+        <Reveal>
+          <section className="space-y-2">
+            <h2 className="text-xl font-bold">Nội dung phim</h2>
+            <p className="text-muted-foreground max-w-4xl text-sm leading-relaxed">
+              {description}
+            </p>
+          </section>
+        </Reveal>
       )}
 
-      <section className="space-y-4">
-        <h2 className="flex items-center gap-2 text-xl font-bold">
-          <MonitorPlay className="size-5 text-brand" /> Danh sách tập
-        </h2>
-        {movie.servers.length === 0 && (
-          <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-            Phim chưa cập nhật tập nào. Quay lại sau nhé.
-          </div>
-        )}
-        {movie.servers.map((server) => (
-          <div
-            key={server.name}
-            className="space-y-3 rounded-xl border border-border bg-card p-4"
-          >
-            <h3 className="text-sm font-semibold text-brand">{server.name}</h3>
-            {server.episodes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Server này chưa có tập phim.
-              </p>
-            ) : (
-              <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
-                {server.episodes.map((ep) => (
-                  <Button
-                    key={`${server.name}-${ep.slug ?? ep.name}`}
-                    variant="secondary"
-                    size="sm"
-                    asChild
-                    className="min-w-0"
-                  >
-                    <Link
-                      href={`/xem/${movie.slug}/${ep.slug ?? ep.name}`}
-                      title={ep.name}
+      <Reveal>
+        <section className="space-y-4">
+          <h2 className="flex items-center gap-2 text-xl font-bold">
+            <MonitorPlay className="text-brand size-5" /> Danh sách tập
+          </h2>
+          {movie.servers.length === 0 && (
+            <div className="border-border bg-card text-muted-foreground rounded-xl border p-8 text-center text-sm">
+              Phim chưa cập nhật tập nào. Quay lại sau nhé.
+            </div>
+          )}
+          {movie.servers.map((server) => (
+            <div
+              key={server.name}
+              className="border-border bg-card space-y-3 rounded-xl border p-4"
+            >
+              <h3 className="text-brand text-sm font-semibold">
+                {server.name}
+              </h3>
+              {server.episodes.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  Server này chưa có tập phim.
+                </p>
+              ) : (
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
+                  {server.episodes.map((ep) => (
+                    <Button
+                      key={`${server.name}-${ep.slug ?? ep.name}`}
+                      variant="secondary"
+                      size="sm"
+                      asChild
+                      className="min-w-0"
                     >
-                      <span className="truncate">{ep.name}</span>
-                    </Link>
-                  </Button>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </section>
+                      <Link
+                        href={`/xem/${movie.slug}/${ep.slug ?? ep.name}`}
+                        title={ep.name}
+                      >
+                        <span className="truncate">{ep.name}</span>
+                      </Link>
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </section>
+      </Reveal>
 
-      <section className="space-y-4">
-        <h2 className="text-xl font-bold">Bình luận</h2>
-        <CommentSection movieSlug={movie.slug} />
-      </section>
+      <Reveal>
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold">Bình luận</h2>
+          <CommentSection movieSlug={movie.slug} />
+        </section>
+      </Reveal>
     </div>
   );
 }

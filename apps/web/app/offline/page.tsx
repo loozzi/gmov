@@ -8,10 +8,10 @@ export const metadata = {
 
 export default function OfflinePage() {
   return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
+    <div className="animate-reveal-up flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
       <p className="text-5xl">📡</p>
       <h1 className="text-2xl font-bold">Bạn đang ngoại tuyến</h1>
-      <p className="max-w-md text-sm text-muted-foreground">
+      <p className="text-muted-foreground max-w-md text-sm">
         Không có kết nối mạng. Các trang đã xem và phim đang phát cần mạng để
         tải — hãy kết nối lại rồi thử tiếp nhé.
       </p>

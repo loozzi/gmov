@@ -87,7 +87,7 @@ export function SearchBox({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div ref={boxRef} className="relative w-full">
       <form onSubmit={submit} className="relative w-full" role="search">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
         <Input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
@@ -105,12 +105,12 @@ export function SearchBox({ onNavigate }: { onNavigate?: () => void }) {
           }
         />
         {isFetching && debounced.length > 0 && (
-          <Loader2 className="absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+          <Loader2 className="text-muted-foreground absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin" />
         )}
       </form>
 
       {showDropdown && (
-        <div className="absolute top-full right-0 left-0 z-50 mt-1 overflow-hidden rounded-xl border border-border bg-card shadow-xl">
+        <div className="animate-zoom-in border-border bg-card absolute top-full right-0 left-0 z-50 mt-1 origin-top overflow-hidden rounded-xl border shadow-xl">
           <ul role="listbox" id={listId} aria-label="Gợi ý phim">
             {suggestions.map((m, i) => (
               <li
@@ -127,11 +127,11 @@ export function SearchBox({ onNavigate }: { onNavigate?: () => void }) {
                   }}
                   onMouseEnter={() => setActiveIndex(i)}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2 hover:bg-muted",
+                    "hover:bg-muted flex items-center gap-3 px-3 py-2",
                     i === activeIndex && "bg-muted",
                   )}
                 >
-                  <div className="relative h-12 w-9 shrink-0 overflow-hidden rounded bg-muted">
+                  <div className="bg-muted relative h-12 w-9 shrink-0 overflow-hidden rounded">
                     {(m.poster_url || m.thumb_url) && (
                       <Image
                         src={(m.poster_url || m.thumb_url) as string}
@@ -145,7 +145,7 @@ export function SearchBox({ onNavigate }: { onNavigate?: () => void }) {
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{m.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p className="text-muted-foreground truncate text-xs">
                       {[m.original_name, m.year].filter(Boolean).join(" · ")}
                     </p>
                   </div>
@@ -156,7 +156,7 @@ export function SearchBox({ onNavigate }: { onNavigate?: () => void }) {
           <button
             onClick={() => go(keyword)}
             className={cn(
-              "w-full cursor-pointer px-3 py-2.5 text-left text-sm font-medium text-brand hover:bg-muted",
+              "text-brand hover:bg-muted w-full cursor-pointer px-3 py-2.5 text-left text-sm font-medium",
             )}
           >
             {suggestions.length > 0

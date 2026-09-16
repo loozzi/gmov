@@ -27,7 +27,7 @@ export function PosterThumb({ src, alt, sizes = "288px", className }: Props) {
       <span
         aria-hidden
         className={cn(
-          "absolute inset-0 flex items-center justify-center bg-gradient-to-br from-muted via-card to-muted text-muted-foreground",
+          "from-muted via-card to-muted text-muted-foreground absolute inset-0 flex items-center justify-center bg-gradient-to-br",
           className,
         )}
       >
@@ -45,7 +45,7 @@ export function PosterThumb({ src, alt, sizes = "288px", className }: Props) {
       placeholder="blur"
       blurDataURL={BLUR_PLACEHOLDER}
       onError={() => setFailed(true)}
-      className={cn("object-cover", className)}
+      className={cn("animate-fade-in object-cover", className)}
     />
   );
 }

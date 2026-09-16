@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bookmark } from "lucide-react";
 
@@ -22,6 +23,7 @@ export function WatchlistButton({ movieSlug, movieName, posterUrl }: Props) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { data } = useWatchlistStatus(movieSlug, isAuthenticated);
   const toggle = useToggleWatchlist(movieSlug);
+  const [pop, setPop] = useState(false);
 
   const isSaved = data?.is_saved ?? false;
 
@@ -33,13 +35,15 @@ export function WatchlistButton({ movieSlug, movieName, posterUrl }: Props) {
     toggle.mutate(
       { isSaved, movie_name: movieName, poster_url: posterUrl },
       {
-        onSuccess: (nowSaved) =>
+        onSuccess: (nowSaved) => {
+          setPop(true);
           toast(
             nowSaved
               ? "Đã thêm vào danh sách muốn xem."
               : "Đã xóa khỏi danh sách muốn xem.",
             "success",
-          ),
+          );
+        },
         onError: (e) => {
           if (e instanceof ApiError && e.status === 401) {
             router.push(`/login?next=/phim/${movieSlug}`);
@@ -59,7 +63,10 @@ export function WatchlistButton({ movieSlug, movieName, posterUrl }: Props) {
       disabled={authLoading || toggle.isPending}
       aria-pressed={isSaved}
     >
-      <Bookmark className={cn(isSaved && "fill-brand text-brand")} />
+      <Bookmark
+        onAnimationEnd={() => setPop(false)}
+        className={cn(isSaved && "fill-brand text-brand", pop && "animate-pop")}
+      />
       {isSaved ? "Đã lưu" : "Muốn xem"}
     </Button>
   );

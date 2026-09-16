@@ -49,16 +49,19 @@ export function HeroCarousel({ movies }: { movies: MovieCardType[] }) {
             priority
             fetchPriority="high"
             sizes="100vw"
-            className="animate-hero-fade object-cover object-top"
+            className="animate-hero object-cover object-top"
           />
         )}
         {/* Cinematic vignette: text readable, bottom melts into page bg */}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-background/90 via-background/30 to-transparent" />
+        <div className="from-background via-background/20 absolute inset-0 bg-gradient-to-t to-transparent" />
+        <div className="from-background/90 via-background/30 absolute inset-0 bg-gradient-to-r to-transparent" />
 
-        <div className="absolute bottom-24 left-0 max-w-2xl space-y-4 p-4 sm:bottom-28 sm:p-10">
+        <div
+          key={`caption-${movie.slug}`}
+          className="animate-reveal-up absolute bottom-24 left-0 max-w-2xl space-y-4 p-4 sm:bottom-28 sm:p-10"
+        >
           <p className="flex items-center gap-2 text-xs font-bold tracking-[0.2em] text-white/80 uppercase">
-            <span className="rounded-sm bg-brand px-1.5 py-0.5 text-[10px] text-brand-foreground">
+            <span className="bg-brand text-brand-foreground rounded-sm px-1.5 py-0.5 text-[10px]">
               G
             </span>
             Phim nổi bật
@@ -133,8 +136,10 @@ export function HeroCarousel({ movies }: { movies: MovieCardType[] }) {
                   aria-label={`Slide ${i + 1}`}
                   onClick={() => setIndex(i)}
                   className={cn(
-                    "h-1.5 cursor-pointer rounded-full transition-all",
-                    i === index ? "w-6 bg-white" : "w-1.5 bg-white/40",
+                    "ease-emphasized h-1.5 cursor-pointer rounded-full transition-all duration-300",
+                    i === index
+                      ? "w-6 bg-white"
+                      : "w-1.5 bg-white/40 hover:bg-white/70",
                   )}
                 />
               ))}
