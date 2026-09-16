@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Bookmark, Heart, History, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
+import { ProfilePreviews } from "@/components/movies/profile-previews";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -45,44 +46,7 @@ export default function ProfilePage() {
           </p>
         </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Link
-          href="/me/favorites"
-          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-brand"
-        >
-          <Heart className="size-6 text-brand" />
-          <div>
-            <p className="font-semibold">Phim yêu thích</p>
-            <p className="text-xs text-muted-foreground">
-              Danh sách phim bạn đã lưu
-            </p>
-          </div>
-        </Link>
-        <Link
-          href="/me/watchlist"
-          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-brand"
-        >
-          <Bookmark className="size-6 text-brand" />
-          <div>
-            <p className="font-semibold">Muốn xem</p>
-            <p className="text-xs text-muted-foreground">
-              Phim để dành xem sau
-            </p>
-          </div>
-        </Link>
-        <Link
-          href="/me/history"
-          className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 hover:border-brand"
-        >
-          <History className="size-6 text-brand" />
-          <div>
-            <p className="font-semibold">Lịch sử xem</p>
-            <p className="text-xs text-muted-foreground">
-              Tiếp tục xem dở dang
-            </p>
-          </div>
-        </Link>
-      </div>
+      <ProfilePreviews />
       <Button
         variant="secondary"
         onClick={() => {

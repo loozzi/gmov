@@ -8,10 +8,12 @@ interface Props {
   title: string;
   href?: string;
   movies: MovieCardType[];
+  /** When set, the section renders even with no movies, showing this hint. */
+  emptyHint?: string;
 }
 
-export function MovieRail({ title, href, movies }: Props) {
-  if (movies.length === 0) return null;
+export function MovieRail({ title, href, movies, emptyHint }: Props) {
+  if (movies.length === 0 && !emptyHint) return null;
   return (
     <section className="group/rail space-y-2">
       <div className="flex items-baseline gap-2">
@@ -25,16 +27,19 @@ export function MovieRail({ title, href, movies }: Props) {
           </Link>
         )}
       </div>
-      <div className="rail-scroll -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
-        {movies.map((m) => (
-          <div
-            key={m.slug}
-            className="w-36 shrink-0 sm:w-44"
-          >
-            <MovieCard movie={m} />
-          </div>
-        ))}
-      </div>
+      {movies.length === 0 ? (
+        <p className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+          {emptyHint}
+        </p>
+      ) : (
+        <div className="rail-scroll -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
+          {movies.map((m) => (
+            <div key={m.slug} className="w-36 shrink-0 sm:w-44">
+              <MovieCard movie={m} />
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
