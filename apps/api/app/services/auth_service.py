@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import jwt
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import security
@@ -16,7 +16,9 @@ from app.schemas.auth import RegisterIn, TokenPair
 from app.services import user_service
 
 
-def _build_pair(user_id: uuid.UUID) -> tuple[TokenPair, RefreshToken]:
+def _build_pair(
+    user_id: uuid.UUID, family_id: uuid.UUID
+) -> tuple[TokenPair, RefreshToken]:
     """Create tokens + the (unsaved) refresh row. Caller commits."""
     access = security.create_access_token(user_id)
     refresh, jti = security.create_refresh_token(user_id)
@@ -25,12 +27,17 @@ def _build_pair(user_id: uuid.UUID) -> tuple[TokenPair, RefreshToken]:
     )
     return (
         TokenPair(access_token=access, refresh_token=refresh),
-        RefreshToken(user_id=user_id, jti=jti, expires_at=expires_at),
+        RefreshToken(
+            user_id=user_id,
+            jti=jti,
+            family_id=family_id,
+            expires_at=expires_at,
+        ),
     )
 
 
 async def _issue_pair(db: AsyncSession, user: User) -> TokenPair:
-    pair, row = _build_pair(user.id)
+    pair, row = _build_pair(user.id, uuid.uuid4())
     db.add(row)
     await db.commit()
     return pair
@@ -67,14 +74,44 @@ def _decode_refresh(token: str) -> dict:
 
 # A revoked token presented again within this window is treated as a
 # duplicate delivery (double boot, two tabs racing rotation), NOT theft:
-# re-issue instead of 401. Anything older still fails hard. Genuine theft
-# detection (token-family invalidation) remains future work.
+# re-issue instead of 401. Anything older is theft: every token in the
+# family is compromised and the whole family fails hard from then on.
 REFRESH_GRACE_SECONDS = 30
 
 
 async def _load_row(db: AsyncSession, jti: str) -> RefreshToken | None:
+    """Unlocked lookup: only used to discover the row's family_id."""
     stmt = select(RefreshToken).where(RefreshToken.jti == jti)
     return (await db.execute(stmt)).scalar_one_or_none()
+
+
+def _family_lock_stmt(family_id: uuid.UUID) -> Select[tuple[RefreshToken]]:
+    return (
+        select(RefreshToken)
+        .where(RefreshToken.family_id == family_id)
+        .order_by(RefreshToken.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+async def _lock_family(
+    db: AsyncSession, family_id: uuid.UUID
+) -> list[RefreshToken]:
+    """Lock the whole family up-front in a stable order. Always the first
+    (and only) row lock a refresh takes, so concurrent rotations/reuse of
+    the same family cannot acquire locks in opposite orders."""
+    return list((await db.execute(_family_lock_stmt(family_id))).scalars().all())
+
+
+async def _revoke_family(
+    db: AsyncSession, members: list[RefreshToken], now: datetime
+) -> None:
+    for member in members:
+        member.compromised = True
+        if member.revoked_at is None:
+            member.revoked_at = now
+    await db.commit()
 
 
 def _as_aware(value: datetime) -> datetime:
@@ -86,32 +123,43 @@ def _as_aware(value: datetime) -> datetime:
 
 async def refresh(db: AsyncSession, token: str) -> TokenPair:
     """Rotate refresh tokens atomically: revoke-old + issue-new share ONE
-    transaction. Any failure rolls everything back, so the old token stays
-    usable and the user is never logged out by a half-finished rotation."""
+    transaction, so an earlier failure leaves the old token usable and the
+    user is never logged out by a half-finished rotation. The theft branch
+    is the deliberate exception: it commits the family revocation before
+    raising so that write is durable. The family is locked before any state
+    is evaluated, so concurrent reuse cannot deadlock on lock ordering."""
     payload = _decode_refresh(token)
+    jti = str(payload["jti"])
     try:
-        row = await _load_row(db, str(payload["jti"]))
-        now = datetime.now(UTC)
-        if row is None or _as_aware(row.expires_at) <= now:
+        row = await _load_row(db, jti)
+        if row is None:
             raise AppException(
                 "Invalid refresh token", "INVALID_REFRESH_TOKEN", 401
             )
-        if row.revoked_at is None:
-            row.revoked_at = now  # normal rotation
-        elif (now - _as_aware(row.revoked_at)).total_seconds() > (
-            REFRESH_GRACE_SECONDS
-        ):
+        members = await _lock_family(db, row.family_id)
+        now = datetime.now(UTC)
+        presented = next((m for m in members if m.jti == jti), None)
+        if presented is None or _as_aware(presented.expires_at) <= now:
+            raise AppException(
+                "Invalid refresh token", "INVALID_REFRESH_TOKEN", 401
+            )
+        if presented.revoked_at is None:
+            presented.revoked_at = now  # normal rotation
+        elif presented.compromised or (
+            now - _as_aware(presented.revoked_at)
+        ).total_seconds() > REFRESH_GRACE_SECONDS:
+            await _revoke_family(db, members, now)
             raise AppException(
                 "Invalid refresh token", "INVALID_REFRESH_TOKEN", 401
             )
         # Grace path (recently revoked): duplicate delivery — re-issue
         # without touching the row.
-        user = await user_service.get_by_id(db, row.user_id)
+        user = await user_service.get_by_id(db, presented.user_id)
         if user is None or not user.is_active:
             raise AppException(
                 "Invalid refresh token", "INVALID_REFRESH_TOKEN", 401
             )
-        pair, new_row = _build_pair(user.id)
+        pair, new_row = _build_pair(user.id, presented.family_id)
         db.add(new_row)
         await db.commit()
         return pair

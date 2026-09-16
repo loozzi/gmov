@@ -5,6 +5,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.db.models.user import UserRole
+
 
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -15,6 +17,7 @@ class UserOut(BaseModel):
     display_name: str
     avatar_url: str | None
     is_active: bool
+    role: UserRole
     created_at: datetime
 
 

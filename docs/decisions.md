@@ -283,3 +283,90 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     Light mode mặc định theo OS (screenshot headless ra sáng là đúng,
     không phải bug). Verify: typecheck + build pass, screenshot
     dark/light đạt.
+
+## Feature: kiểm duyệt bình luận (comment moderation)
+
+71. **`Enum(native_enum=False)` cho `role`/`reason`/`status`** — dùng chung
+    một định nghĩa chạy được cả SQLite (test) lẫn Postgres (prod), không tạo
+    PG enum type nên Alembic không cần migration kiểu dữ liệu. Kèm
+    `values_callable` để lưu đúng **value** (`"user"`, `"open"`) chứ không
+    phải tên member — bug này lộ ra ở test và được sửa riêng (32cb61a).
+72. **Auto-hide giữ báo cáo `open`** để moderator vẫn phải duyệt; chính thao
+    tác hide thủ công mới resolve toàn bộ báo cáo `open` của bình luận đó
+    (cùng một commit). Unhide không hồi sinh báo cáo đã resolved.
+73. **Gate `/admin` chỉ là defense-in-depth ở UI** (client layout kiểm role,
+    `middleware.ts` chỉ redirect theo cookie) — thẩm quyền thật nằm ở
+    FastAPI `require_role("moderator","admin")`: 401 khi thiếu token, 403
+    `FORBIDDEN` khi đủ danh tính nhưng thiếu quyền.
+74. **`GET /comments` dùng optional auth** (`get_optional_user`) để một
+    endpoint phục vụ cả khách ẩn danh lẫn moderator: token thiếu/sai → ẩn
+    danh (không bao giờ 401), chỉ `moderator`/`admin` thấy `body` của bình
+    luận đã ẩn. Tránh nhân đôi route hoặc bắt khách phải đăng nhập.
+
+## Hardening & debt — 2026-09-16
+
+75. **Refresh-token reuse detection theo `family_id` + cờ `compromised`**:
+    mỗi login mở một family (`uuid4`), rotation giữ nguyên family. (Register
+    không cấp refresh token/family — chỉ login mới mở phiên.) Token đã revoke
+    trình lại **trong grace 30s** vẫn là duplicate delivery (boot/tab đua
+    nhau) nên re-issue; **quá 30s** là theft → `_revoke_family` revoke mọi
+    token còn sống của family và đặt `compromised=true`, trả 401
+    `INVALID_REFRESH_TOKEN`. Cờ `compromised` cần vì cửa sổ grace 30s: một
+    member vừa bị `_revoke_family` revoke nếu chỉ dựa vào `revoked_at` sẽ rơi
+    vào nhánh grace và được re-issue — `compromised` buộc mọi lần trình sau đó
+    thất bại thẳng, không qua grace. Migration backfill `family_id = id` cho
+    row cũ rồi set NOT NULL + index.
+76. **Login brute-force key đổi sang `ip + username`**
+    (`ratelimit:login-fail:{ip}:{sha256(username.lower())[:16]}`, kèm bucket
+    chặn trần theo IP `ratelimit:login-fail:ip:{ip}` ~20 lần/15 phút): bucket
+    IP-only khiến nhiều người sau cùng một NAT chia sẻ hạn mức 5 lần/15 phút
+    (một người gõ sai khoá cả lớp). Tách theo username vẫn chặn được
+    brute-force một tài khoản; username băm/truncate để không mở khoá Redis vô
+    hạn, còn bucket IP giữ trần tổng khi kẻ tấn công thử nhiều username.
+    `check`/`record` nhận `(ip, username)`, `clear` chỉ xoá bucket tổ hợp.
+77. **`reported` là field batch trên `GET /comments`** thay vì gọi
+    `GET /me/reports/{id}/status` cho từng bình luận: khi đã đăng nhập,
+    `comment_service.list_paginated` load một query tập `comment_id` mà viewer
+    đã báo cáo cho đúng các id sắp trả về (không N+1), ẩn danh luôn `false`.
+    Endpoint status giữ nguyên để tương thích; frontend bỏ `useReportStatus`
+    và invalidate comments query sau khi báo cáo thành công.
+78. **Tách `routers/reports.py` + `components/movies/comment-item.tsx` +
+    `components/ui/dialog.tsx`**: hai route report rời `me.py` sang router
+    riêng (`prefix="/me"`, path không đổi) cho dễ đọc; `CommentItem`/
+    `ReplyItem`/`CommentBody` rời `comment-section.tsx`; dialog Radix dùng
+    chung được `report-dialog` tái sử dụng. Refactor thuần, không đổi hành vi.
+
+## Moderation polish round 2 — 2026-09-16
+
+79. **`me.py` tách tiếp thành `progress.py` + `collections.py` + `reviews.py`**
+    (giữ nguyên `prefix="/me"` nên toàn bộ path/status không đổi): taxonomy
+    theo miền nghiệp vụ — `progress` (playback/heartbeat/continue-watching/
+    watched), `collections` (favorites + watchlist, cùng shape add/list/
+    status/delete), `reviews` (ratings + comments). Router cũ 312 dòng bị xóa;
+    `__init__.py` include 4 router `/me` cạnh nhau. Refactor thuần; đường dẫn
+    được các HTTP test sẵn có bao phủ (không có test parity riêng).
+
+80. **Refresh khóa cả family TRƯỚC khi đánh giá**: lookup `jti` không khóa chỉ
+    để lấy `family_id`, rồi khóa cả family bằng một `SELECT ... WHERE
+    family_id ORDER BY RefreshToken.id FOR UPDATE` (`populate_existing`) và
+    đánh giá `revoked_at`/grace/`compromised` trên chính set đã khóa đó. Tránh
+    hẳn thứ tự hai lock (khóa một row theo `jti` rồi mới khóa family) vốn để
+    hai request đồng thời cùng family khóa ngược thứ tự → deadlock Postgres.
+    Không dùng advisory lock (test chạy SQLite); migration/constraint parity
+    đã có test chốt.
+
+81. **Optimistic "Đã báo cáo" giữ dialog mounted**: trigger và `ReportDialog`
+    render cùng nhau (không early-return thay cả nút) nên `isPending` vẫn hiện
+    UI chờ và lỗi mạng giữ nguyên `reason`/`note` người dùng đã nhập; nút
+    chuyển disabled "Đã báo cáo" khi `reported || isPending || isSuccess` và
+    tự revert khi mutation fail. `onError` type `unknown` đúng chữ ký TanStack
+    Query.
+
+82. **`isPlaceholderData` thay `isFetching` cho affordance bảng cũ**
+    (`comment-section` + `admin/reports`): chỉ mờ/`aria-busy`/khóa phân trang
+    khi dữ liệu đang hiển thị là placeholder của trang trước, tránh nháy mờ
+    khi background refetch trả về cùng data. Spinner trang trí gắn
+    `aria-hidden`; `useReportComment(movieSlug)` scope invalidation xuống
+    `["reviews","comments",movieSlug]` thay vì toàn bộ comments; `ui/dialog.tsx`
+    bỏ export không dùng (`DialogTrigger`/`DialogClose`/portal/overlay giữ nội
+    bộ), `report-dialog` tái sử dụng không cần chúng.

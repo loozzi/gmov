@@ -7,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
 from app.db.models.comment import Comment
-from app.db.models.user import User
+from app.db.models.comment_report import CommentReport
+from app.db.models.user import User, UserRole
 from app.schemas.library import CommentAdd, CommentOut, CommentUser, ReplyOut
 
 
@@ -42,8 +43,13 @@ async def create(
 
 
 async def list_paginated(
-    db: AsyncSession, movie_slug: str, page: int, per_page: int
+    db: AsyncSession,
+    movie_slug: str,
+    page: int,
+    per_page: int,
+    viewer: User | None = None,
 ) -> tuple[list[CommentOut], int]:
+    mask_hidden = viewer is None or viewer.role == UserRole.USER
     total = (
         await db.execute(
             select(func.count())
@@ -78,13 +84,29 @@ async def list_paginated(
         for u in users
     }
 
+    reported_ids: set[uuid.UUID] = set()
+    if viewer is not None:
+        visible_ids = top_ids + [r.id for r in replies]
+        reported_ids = set(
+            (
+                await db.execute(
+                    select(CommentReport.comment_id).where(
+                        CommentReport.reporter_id == viewer.id,
+                        CommentReport.comment_id.in_(visible_ids),
+                    )
+                )
+            ).scalars().all()
+        )
+
     grouped: dict[uuid.UUID, list[ReplyOut]] = {tid: [] for tid in top_ids}
     for r in replies:
         grouped.setdefault(r.parent_id, []).append(
             ReplyOut(
                 id=r.id,
                 user=user_map[r.user_id],
-                body=r.body,
+                body=None if (mask_hidden and r.is_hidden) else r.body,
+                is_hidden=r.is_hidden,
+                reported=r.id in reported_ids,
                 created_at=r.created_at,
             )
         )
@@ -94,7 +116,9 @@ async def list_paginated(
             id=t.id,
             movie_slug=t.movie_slug,
             user=user_map[t.user_id],
-            body=t.body,
+            body=None if (mask_hidden and t.is_hidden) else t.body,
+            is_hidden=t.is_hidden,
+            reported=t.id in reported_ids,
             created_at=t.created_at,
             replies=grouped.get(t.id, []),
             reply_count=len(grouped.get(t.id, [])),

@@ -1,15 +1,27 @@
 """User model."""
 
+import enum
 import uuid
 
-from sqlalchemy import Boolean, String, Uuid
+from sqlalchemy import Boolean, CheckConstraint, Enum, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
 
 
+class UserRole(str, enum.Enum):
+    USER = "user"
+    MODERATOR = "moderator"
+    ADMIN = "admin"
+
+
 class User(Base, TimestampMixin):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('user','moderator','admin')", name="ck_users_role"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid, primary_key=True, default=uuid.uuid4
@@ -20,3 +32,15 @@ class User(Base, TimestampMixin):
     display_name: Mapped[str] = mapped_column(String(64), nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    role: Mapped[UserRole] = mapped_column(
+        Enum(
+            UserRole,
+            native_enum=False,
+            length=20,
+            validate_strings=True,
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        default=UserRole.USER,
+        server_default=UserRole.USER.value,
+        nullable=False,
+    )

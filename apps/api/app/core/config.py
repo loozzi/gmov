@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     nguonc_timeout_seconds: int = Field(default=10)
     cache_ttl_seconds: int = Field(default=3600)
 
+    comment_report_hide_threshold: int = Field(default=3, ge=1)
+
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default=[
             "http://localhost:3000",

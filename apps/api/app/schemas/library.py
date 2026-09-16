@@ -144,7 +144,9 @@ class CommentUser(BaseModel):
 class ReplyOut(BaseModel):
     id: uuid.UUID
     user: CommentUser
-    body: str
+    body: str | None
+    is_hidden: bool = False
+    reported: bool = False
     created_at: datetime
 
 
@@ -152,7 +154,9 @@ class CommentOut(BaseModel):
     id: uuid.UUID
     movie_slug: str
     user: CommentUser
-    body: str
+    body: str | None
+    is_hidden: bool = False
+    reported: bool = False
     created_at: datetime
     replies: list[ReplyOut] = Field(default_factory=list)
     reply_count: int = 0

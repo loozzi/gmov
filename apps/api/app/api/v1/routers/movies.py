@@ -3,7 +3,9 @@
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.deps import get_optional_user
 from app.core.exceptions import AppException
+from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.library import CommentOut, PaginatedComments, RatingSummary
 from app.schemas.movie import MovieDetail, PaginatedMovies
@@ -125,10 +127,11 @@ async def list_comments(
     movie_slug: str = Query(min_length=1),
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=20, ge=1, le=100),
+    viewer: User | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ) -> PaginatedComments:
     rows, total = await comment_service.list_paginated(
-        db, movie_slug, page, per_page
+        db, movie_slug, page, per_page, viewer=viewer
     )
     return PaginatedComments(
         items=[CommentOut.model_validate(r) for r in rows],

@@ -6,6 +6,7 @@ import {
   useQueryClient,
   keepPreviousData,
 } from "@tanstack/react-query";
+import { useAuth } from "@/components/auth/auth-provider";
 import { apiFetch } from "@/lib/api";
 
 export interface RatingSummary {
@@ -30,7 +31,9 @@ export interface CommentUser {
 export interface CommentReply {
   id: string;
   user: CommentUser;
-  body: string;
+  body: string | null;
+  is_hidden: boolean;
+  reported: boolean;
   created_at: string;
 }
 
@@ -38,7 +41,9 @@ export interface MovieComment {
   id: string;
   movie_slug: string;
   user: CommentUser;
-  body: string;
+  body: string | null;
+  is_hidden: boolean;
+  reported: boolean;
   created_at: string;
   replies: CommentReply[];
   reply_count: number;
@@ -133,12 +138,13 @@ export function useRemoveRating(movieSlug: string) {
 }
 
 export function useComments(movieSlug: string, page = 1) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ["reviews", "comments", movieSlug, page],
+    queryKey: ["reviews", "comments", movieSlug, page, user?.id ?? "anon"],
     queryFn: () =>
       apiFetch<PaginatedComments>(
         `/api/v1/comments?movie_slug=${encodeURIComponent(movieSlug)}&page=${page}&per_page=20`,
-        { auth: false },
+        { auth: true },
       ),
     placeholderData: keepPreviousData,
   });

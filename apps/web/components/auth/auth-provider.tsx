@@ -18,6 +18,8 @@ interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isModerator: boolean;
+  isAdmin: boolean;
   login: (username: string, password: string) => Promise<void>;
   register: (
     email: string,
@@ -127,6 +129,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       isLoading,
       isAuthenticated: user !== null,
+      isModerator: user?.role === "moderator" || user?.role === "admin",
+      isAdmin: user?.role === "admin",
       login,
       register,
       logout,
