@@ -13,7 +13,7 @@ import {
   User,
   UserPlus,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { SearchBox } from "@/components/layout/search-box";
@@ -53,6 +53,28 @@ function MenuDropdown({
   entries: CatalogEntry[];
   columns?: 1 | 3;
 }) {
+  // Hover opens the popup; a short close delay lets the pointer cross the gap
+  // into the portalled content (which cancels the close on enter). Keyboard and
+  // touch keep working: Radix still toggles on keydown, and mouse pointerdown
+  // is suppressed so clicking a hovered trigger does not close it.
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current !== null) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }, []);
+  const handleEnter = useCallback(() => {
+    cancelClose();
+    setOpen(true);
+  }, [cancelClose]);
+  const handleLeave = useCallback(() => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => setOpen(false), 150);
+  }, [cancelClose]);
+  useEffect(() => cancelClose, [cancelClose]);
+
   // Long catalogs (genres/countries/years) lay out in 3 columns so every entry
   // is visible at once instead of a tall scrolling list.
   const contentClass =
@@ -60,14 +82,25 @@ function MenuDropdown({
       ? "grid w-[30rem] grid-cols-3 gap-x-1 p-1.5"
       : "max-h-80 w-52 overflow-y-auto";
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <button className="flex cursor-pointer items-center gap-1 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+        <button
+          className="flex cursor-pointer items-center gap-1 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onMouseEnter={handleEnter}
+          onMouseLeave={handleLeave}
+          onPointerDown={(e) => {
+            if (e.pointerType === "mouse") e.preventDefault();
+          }}
+        >
           {label}
           <ChevronDown className="size-3.5" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className={contentClass}>
+      <DropdownMenuContent
+        className={contentClass}
+        onMouseEnter={handleEnter}
+        onMouseLeave={handleLeave}
+      >
         {entries.map((e) => (
           <DropdownMenuItem key={e.slug} asChild className="whitespace-nowrap">
             <Link href={`${base}/${e.slug}`}>{e.label}</Link>
