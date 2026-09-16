@@ -79,6 +79,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gmov_dev_password}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       NGUONC_BASE_URL: ${NGUONC_BASE_URL:-https://phim.nguonc.com/api}
+      COMMENT_REPORT_HIDE_THRESHOLD: ${COMMENT_REPORT_HIDE_THRESHOLD:-3}
       JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me-please}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
