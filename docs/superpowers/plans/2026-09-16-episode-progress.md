@@ -537,7 +537,9 @@ In `apps/web/components/movies/continue-watching-rail.tsx`:
 
 In `apps/web/app/me/history/page.tsx`:
 - add `import { progressLabel, progressPercent } from "@/lib/progress";`
-- inside the `data.items.map((p) => ...)` callback, before `return`, add:
+- the list currently uses a concise arrow (`{data.items.map((p) => (`); convert it
+  to a block body (`{data.items.map((p) => {`) and close it with `})}`), then
+  before the `return (` add:
 
 ```ts
               const label = progressLabel(
