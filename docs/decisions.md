@@ -306,21 +306,24 @@ Log ambiguous decisions here (Phase 0+). Newest last.
 ## Hardening & debt — 2026-09-16
 
 75. **Refresh-token reuse detection theo `family_id` + cờ `compromised`**:
-    mỗi login/register mở một family (`uuid4`), rotation giữ nguyên family.
-    Token đã revoke trình lại **trong grace 30s** vẫn là duplicate delivery
-    (boot/tab đua nhau) nên re-issue; **quá 30s** là theft → `_revoke_family`
-    revoke mọi token còn sống của family và đặt `compromised=true`, trả 401
-    `INVALID_REFRESH_TOKEN`. Cờ `compromised` cần vì member chưa từng được
-    revoke (chưa dùng) vẫn phải chết **và** giữ nguyên trạng thái chết ở mọi
-    lần trình sau — nếu chỉ dựa vào `revoked_at` thì một member khác chưa
-    revoke vẫn qua được, hoặc member đã revoke lại rơi tiếp vào nhánh grace
-    30s. Migration backfill `family_id = id` cho row cũ rồi set NOT NULL +
-    index.
+    mỗi login mở một family (`uuid4`), rotation giữ nguyên family. (Register
+    không cấp refresh token/family — chỉ login mới mở phiên.) Token đã revoke
+    trình lại **trong grace 30s** vẫn là duplicate delivery (boot/tab đua
+    nhau) nên re-issue; **quá 30s** là theft → `_revoke_family` revoke mọi
+    token còn sống của family và đặt `compromised=true`, trả 401
+    `INVALID_REFRESH_TOKEN`. Cờ `compromised` cần vì cửa sổ grace 30s: một
+    member vừa bị `_revoke_family` revoke nếu chỉ dựa vào `revoked_at` sẽ rơi
+    vào nhánh grace và được re-issue — `compromised` buộc mọi lần trình sau đó
+    thất bại thẳng, không qua grace. Migration backfill `family_id = id` cho
+    row cũ rồi set NOT NULL + index.
 76. **Login brute-force key đổi sang `ip + username`**
-    (`ratelimit:login-fail:{ip}:{username.lower()}`): bucket IP-only khiến
-    nhiều người sau cùng một NAT chia sẻ hạn mức 5 lần/15 phút (một người gõ
-    sai khoá cả lớp). Tách theo username vẫn chặn được brute-force một tài
-    khoản, đồng thời `check`/`record`/`clear` nhận `(ip, username)`.
+    (`ratelimit:login-fail:{ip}:{sha256(username.lower())[:16]}`, kèm bucket
+    chặn trần theo IP `ratelimit:login-fail:ip:{ip}` ~20 lần/15 phút): bucket
+    IP-only khiến nhiều người sau cùng một NAT chia sẻ hạn mức 5 lần/15 phút
+    (một người gõ sai khoá cả lớp). Tách theo username vẫn chặn được
+    brute-force một tài khoản; username băm/truncate để không mở khoá Redis vô
+    hạn, còn bucket IP giữ trần tổng khi kẻ tấn công thử nhiều username.
+    `check`/`record` nhận `(ip, username)`, `clear` chỉ xoá bucket tổ hợp.
 77. **`reported` là field batch trên `GET /comments`** thay vì gọi
     `GET /me/reports/{id}/status` cho từng bình luận: khi đã đăng nhập,
     `comment_service.list_paginated` load một query tập `comment_id` mà viewer

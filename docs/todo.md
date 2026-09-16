@@ -1,4 +1,4 @@
-# Tech debt & follow-ups (reviewed 2026-09-15)
+# Tech debt & follow-ups (reviewed 2026-09-16)
 
 Brought forward — none blocks current functionality.
 
