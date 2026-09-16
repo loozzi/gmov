@@ -22,8 +22,8 @@ yêu thích, lịch sử xem.
 - `apps/web`: Next.js 15 + TypeScript strict + Tailwind CSS v4
 - Hạ tầng: Docker multi-stage + docker-compose + nginx reverse proxy.
 - Quy ước làm việc: `AGENTS.md`. Tài liệu API: `docs/api-auth.md`,
-  `docs/api-movies.md`, `docs/api-library.md`. Quyết định kiến trúc:
-  `docs/decisions.md`.
+  `docs/api-movies.md`, `docs/api-library.md`, `docs/api-moderation.md`.
+  Quyết định kiến trúc: `docs/decisions.md`.
 
 ## Yêu cầu hệ thống
 

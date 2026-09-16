@@ -54,3 +54,14 @@ Brought forward — none blocks current functionality.
 17. ~~Nginx has no TLS~~ — DONE (Batch 2: `nginx.tls.conf.template` + certbot
     service + `docs/deploy.md`). Còn lại: deploy thật lên domain + thắt CSP
     bằng nonce thay `'unsafe-inline'`.
+
+## Kiểm duyệt bình luận (nợ tương lai, ngoài scope v1)
+
+18. **Chưa có ban/khoá người dùng** — chỉ ẩn bình luận, không cấm được
+    người đăng. Thêm khi bị spam lặp lại.
+19. **Chưa có spoiler tag** — `reason=spoiler` chỉ dùng để báo cáo, không có
+    cơ chế đánh dấu/che nội dung chủ động.
+20. **Chưa có thông báo cho moderator** — không email/push khi hàng đợi có
+    báo cáo mới; moderator phải tự vào `/admin/reports`.
+21. **Chưa có auto-moderation theo từ khoá** — chỉ ẩn theo ngưỡng số người
+    báo cáo, không lọc nội dung tự động.

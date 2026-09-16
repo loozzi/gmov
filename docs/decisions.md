@@ -283,3 +283,22 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     Light mode mặc định theo OS (screenshot headless ra sáng là đúng,
     không phải bug). Verify: typecheck + build pass, screenshot
     dark/light đạt.
+
+## Feature: kiểm duyệt bình luận (comment moderation)
+
+71. **`Enum(native_enum=False)` cho `role`/`reason`/`status`** — dùng chung
+    một định nghĩa chạy được cả SQLite (test) lẫn Postgres (prod), không tạo
+    PG enum type nên Alembic không cần migration kiểu dữ liệu. Kèm
+    `values_callable` để lưu đúng **value** (`"user"`, `"open"`) chứ không
+    phải tên member — bug này lộ ra ở test và được sửa riêng (32cb61a).
+72. **Auto-hide giữ báo cáo `open`** để moderator vẫn phải duyệt; chính thao
+    tác hide thủ công mới resolve toàn bộ báo cáo `open` của bình luận đó
+    (cùng một commit). Unhide không hồi sinh báo cáo đã resolved.
+73. **Gate `/admin` chỉ là defense-in-depth ở UI** (client layout kiểm role,
+    `middleware.ts` chỉ redirect theo cookie) — thẩm quyền thật nằm ở
+    FastAPI `require_role("moderator","admin")`: 401 khi thiếu token, 403
+    `FORBIDDEN` khi đủ danh tính nhưng thiếu quyền.
+74. **`GET /comments` dùng optional auth** (`get_optional_user`) để một
+    endpoint phục vụ cả khách ẩn danh lẫn moderator: token thiếu/sai → ẩn
+    danh (không bao giờ 401), chỉ `moderator`/`admin` thấy `body` của bình
+    luận đã ẩn. Tránh nhân đôi route hoặc bắt khách phải đăng nhập.
