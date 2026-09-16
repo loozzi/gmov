@@ -38,8 +38,13 @@ clock (tối đa 150s), không phải 20s wall-clock.
 
 ## CI
 
-Job `e2e` trong `.github/workflows/ci.yml`: dựng db/redis/api → chạy suite →
-upload `playwright-report/` + `test-results/` (trace) khi fail, giữ 7 ngày.
+E2E không chạy trên CI (chỉ chạy local): suite cần upstream thật + stream
+mẫu ngoài mạng, không ổn định trên runner. CI chỉ gate backend (ruff +
+pytest unit), frontend (lint/typecheck/build) và docker build. Chạy local:
+
+```bash
+PLAYWRIGHT_BACKEND_URL=http://localhost:8008 pnpm --filter gmov-web exec playwright test
+```
 
 ## Fail-open khi mất mạng ngoài (không phải skip mù)
 
