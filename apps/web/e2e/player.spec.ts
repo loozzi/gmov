@@ -24,8 +24,23 @@ test("play 20s -> reload -> resumes around 20s", async ({ page }) => {
   const video = page.locator("video");
   await expect(video).toBeVisible({ timeout: 30_000 });
 
-  // Real user gesture to start playback (the big center overlay button).
-  await page.getByRole("button", { name: /^phát$/i }).first().click();
+  // Some environments allow autoplay immediately; only click when still paused.
+  const alreadyPlaying = await page
+    .waitForFunction(
+      () => {
+        const v = document.querySelector("video");
+        return !!v && !v.paused && v.currentTime > 1;
+      },
+      { timeout: 8_000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  if (!alreadyPlaying) {
+    await page
+      .getByRole("button", { name: /^phát$/i })
+      .first()
+      .click({ timeout: 30_000 });
+  }
   await page.waitForFunction(
     () => {
       const v = document.querySelector("video");
