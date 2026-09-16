@@ -31,11 +31,17 @@ from app.schemas.library import (
     WatchlistOut,
     WatchlistStatus,
 )
+from app.schemas.moderation import (
+    ReportCreated,
+    ReportIn,
+    ReportStatusOut,
+)
 from app.services import (
     comment_service,
     favorite_service,
     progress_service,
     rating_service,
+    report_service,
     user_service,
     watchlist_service,
 )
@@ -47,6 +53,9 @@ PROGRESS_RATE_WINDOW = 60
 
 COMMENT_RATE_LIMIT = 10
 COMMENT_RATE_WINDOW = 60
+
+REPORT_RATE_LIMIT = report_service.RATE_LIMIT
+REPORT_RATE_WINDOW = report_service.RATE_WINDOW
 
 
 async def rate_limited_user(
@@ -67,6 +76,17 @@ async def rate_limited_comment_user(
         f"ratelimit:comments:{current.id}",
         COMMENT_RATE_LIMIT,
         COMMENT_RATE_WINDOW,
+    )
+    return current
+
+
+async def rate_limited_report_user(
+    current: User = Depends(get_current_user),
+) -> User:
+    await check_rate_limit(
+        f"ratelimit:reports:{current.id}",
+        REPORT_RATE_LIMIT,
+        REPORT_RATE_WINDOW,
     )
     return current
 
@@ -310,3 +330,25 @@ async def delete_comment(
 ) -> dict[str, bool]:
     await comment_service.delete_owned(db, current.id, comment_id)
     return {"ok": True}
+
+
+@router.post("/reports", response_model=ReportCreated)
+async def create_report(
+    data: ReportIn,
+    response: Response,
+    current: User = Depends(rate_limited_report_user),
+    db: AsyncSession = Depends(get_db),
+) -> ReportCreated:
+    row, created = await report_service.create(db, current.id, data)
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    return ReportCreated(id=row.id, status=row.status)
+
+
+@router.get("/reports/{comment_id}/status", response_model=ReportStatusOut)
+async def report_status(
+    comment_id: uuid.UUID,
+    current: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ReportStatusOut:
+    reported = await report_service.status(db, current.id, comment_id)
+    return ReportStatusOut(reported=reported)
