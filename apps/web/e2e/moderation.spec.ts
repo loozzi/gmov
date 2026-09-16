@@ -31,7 +31,7 @@ function freshReporter(): TestAccount {
   };
 }
 
-async function setModerator(username: string): Promise<boolean> {
+async function setRole(username: string, role: string): Promise<boolean> {
   try {
     const root = resolve(LAST_USER_FILE, "..", "..", "..", "..");
     await sh(
@@ -48,7 +48,7 @@ async function setModerator(username: string): Promise<boolean> {
         "app.cli",
         "set-role",
         username,
-        "moderator",
+        role,
       ],
       { timeout: 60_000 },
     );
@@ -98,94 +98,104 @@ test("report -> hide -> hidden placeholder -> unhide -> cleanup", async ({
   ) as TestAccount;
   const reporter = freshReporter();
 
-  const promoted = await setModerator(account.username);
+  const promoted = await setRole(account.username, "moderator");
   if (!promoted) {
     test.skip(true, "could not promote the base account to moderator via CLI");
     return;
   }
 
   try {
-    await registerUser(reporter);
-  } catch (e) {
-    test.skip(
-      true,
-      `reporter registration throttled: ${String(e).slice(0, 120)}`,
-    );
-    return;
-  }
+    try {
+      await registerUser(reporter);
+    } catch (e) {
+      test.skip(
+        true,
+        `reporter registration throttled: ${String(e).slice(0, 120)}`,
+      );
+      return;
+    }
 
-  const latest = (await api("/api/v1/movies/latest?page=1")) as MoviesPage;
-  const slug = latest.items[0]?.slug;
-  if (!slug) {
-    test.skip(true, "upstream returned no movies");
-    return;
-  }
+    const latest = (await api("/api/v1/movies/latest?page=1")) as MoviesPage;
+    const slug = latest.items[0]?.slug;
+    if (!slug) {
+      test.skip(true, "upstream returned no movies");
+      return;
+    }
 
-  const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3100";
-  const body = `E2E moderation ${Date.now().toString(36)}`;
-  const modCtx = await browser.newContext({ baseURL });
-  const repCtx = await browser.newContext({ baseURL });
-
-  try {
-    const modPage = await modCtx.newPage();
-    const repPage = await repCtx.newPage();
-    let posted = false;
+    const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3100";
+    const body = `E2E moderation ${Date.now().toString(36)}`;
+    const modCtx = await browser.newContext({ baseURL });
+    const repCtx = await browser.newContext({ baseURL });
 
     try {
-      await loginViaUi(modPage, account);
-      await modPage.goto(`/phim/${slug}`);
-      await expect(
-        modPage.getByPlaceholder(/chia sẻ cảm nhận/i),
-      ).toBeVisible({ timeout: 20_000 });
-      await modPage.getByPlaceholder(/chia sẻ cảm nhận/i).fill(body);
-      await modPage.getByRole("button", { name: /gửi bình luận/i }).click();
-      await expect(commentCard(modPage, body)).toBeVisible({ timeout: 20_000 });
-      posted = true;
+      const modPage = await modCtx.newPage();
+      const repPage = await repCtx.newPage();
+      let posted = false;
 
-      await loginViaUi(repPage, reporter);
-      await repPage.goto(`/phim/${slug}`);
-      const repCard = commentCard(repPage, body);
-      const reportButton = repCard.getByRole("button", { name: /^báo cáo$/i });
-      await expect(reportButton).toBeVisible({ timeout: 20_000 });
-      await reportButton.click();
+      try {
+        await loginViaUi(modPage, account);
+        await modPage.goto(`/phim/${slug}`);
+        await expect(modPage.getByPlaceholder(/chia sẻ cảm nhận/i)).toBeVisible(
+          { timeout: 20_000 },
+        );
+        await modPage.getByPlaceholder(/chia sẻ cảm nhận/i).fill(body);
+        await modPage.getByRole("button", { name: /gửi bình luận/i }).click();
+        posted = true;
+        await expect(commentCard(modPage, body)).toBeVisible({
+          timeout: 20_000,
+        });
 
-      const dialog = repPage.getByRole("dialog");
-      await expect(dialog.getByText(/báo cáo bình luận/i)).toBeVisible();
-      await dialog.getByRole("radio", { name: "Spam" }).check();
-      await dialog.getByRole("button", { name: /gửi báo cáo/i }).click();
-      await expect(repCard.getByText(/đã báo cáo/i)).toBeVisible({
-        timeout: 20_000,
-      });
+        await loginViaUi(repPage, reporter);
+        await repPage.goto(`/phim/${slug}`);
+        const repCard = commentCard(repPage, body);
+        const reportButton = repCard.getByRole("button", {
+          name: /^báo cáo$/i,
+        });
+        await expect(reportButton).toBeVisible({ timeout: 20_000 });
+        await reportButton.click();
 
-      await modPage.goto("/admin/reports");
-      const openCard = commentCard(modPage, body);
-      await expect(openCard).toBeVisible({ timeout: 20_000 });
-      await openCard.getByRole("button", { name: "Ẩn", exact: true }).click();
+        const dialog = repPage.getByRole("dialog");
+        await expect(dialog.getByText(/báo cáo bình luận/i)).toBeVisible();
+        await dialog.getByRole("radio", { name: "Spam" }).check();
+        await dialog.getByRole("button", { name: /gửi báo cáo/i }).click();
+        await expect(repCard.getByText(/đã báo cáo/i)).toBeVisible({
+          timeout: 20_000,
+        });
 
-      await repPage.reload();
-      const authorCard = commentCard(repPage, account.username);
-      await expect(authorCard.getByText("Bình luận đã bị ẩn")).toBeVisible({
-        timeout: 20_000,
-      });
-      await expect(repPage.getByText(body)).toBeHidden();
+        await modPage.goto("/admin/reports");
+        const openCard = commentCard(modPage, body);
+        await expect(openCard).toBeVisible({ timeout: 20_000 });
+        await openCard.getByRole("button", { name: "Ẩn", exact: true }).click();
 
-      await modPage.getByRole("button", { name: /^đã xử lý$/i }).click();
-      const resolvedCard = commentCard(modPage, body);
-      await expect(resolvedCard).toBeVisible({ timeout: 20_000 });
-      await resolvedCard
-        .getByRole("button", { name: "Bỏ ẩn", exact: true })
-        .click();
-      await expect(
-        resolvedCard.getByRole("button", { name: "Ẩn", exact: true }),
-      ).toBeVisible({ timeout: 20_000 });
+        await repPage.reload();
+        const authorCard = commentCard(repPage, account.username);
+        await expect(authorCard.getByText("Bình luận đã bị ẩn")).toBeVisible({
+          timeout: 20_000,
+        });
+        await expect(repPage.getByText(body)).toBeHidden();
 
-      await repPage.reload();
-      await expect(commentCard(repPage, body)).toBeVisible({ timeout: 20_000 });
+        await modPage.getByRole("button", { name: /^đã xử lý$/i }).click();
+        const resolvedCard = commentCard(modPage, body);
+        await expect(resolvedCard).toBeVisible({ timeout: 20_000 });
+        await resolvedCard
+          .getByRole("button", { name: "Bỏ ẩn", exact: true })
+          .click();
+        await expect(
+          resolvedCard.getByRole("button", { name: "Ẩn", exact: true }),
+        ).toBeVisible({ timeout: 20_000 });
+
+        await repPage.reload();
+        await expect(commentCard(repPage, body)).toBeVisible({
+          timeout: 20_000,
+        });
+      } finally {
+        if (posted) await deleteComment(modPage, slug, body);
+      }
     } finally {
-      if (posted) await deleteComment(modPage, slug, body);
+      await modCtx.close();
+      await repCtx.close();
     }
   } finally {
-    await modCtx.close();
-    await repCtx.close();
+    await setRole(account.username, "user");
   }
 });
