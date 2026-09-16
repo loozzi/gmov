@@ -335,3 +335,36 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     riêng (`prefix="/me"`, path không đổi) cho dễ đọc; `CommentItem`/
     `ReplyItem`/`CommentBody` rời `comment-section.tsx`; dialog Radix dùng
     chung được `report-dialog` tái sử dụng. Refactor thuần, không đổi hành vi.
+
+## Moderation polish round 2 — 2026-09-16
+
+79. **`me.py` tách tiếp thành `progress.py` + `collections.py` + `reviews.py`**
+    (giữ nguyên `prefix="/me"` nên toàn bộ path/status không đổi): taxonomy
+    theo miền nghiệp vụ — `progress` (playback/heartbeat/continue-watching/
+    watched), `collections` (favorites + watchlist, cùng shape add/list/
+    status/delete), `reviews` (ratings + comments). Router cũ 312 dòng bị xóa;
+    `__init__.py` include 4 router `/me` cạnh nhau. Refactor thuần, test parity
+    xác nhận không mất route.
+
+80. **`_revoke_family` order `SELECT ... FOR UPDATE` theo `RefreshToken.id`**:
+    refresh-token reuse detection revoke cả family trong một transaction, nên
+    hai request đồng thời (cùng family) có thể khóa các row theo thứ tự ngược
+    nhau → deadlock Postgres. Thêm `.order_by(RefreshToken.id)` trước
+    `.with_for_update()` ép mọi giao dịch lấy lock cùng thứ tự; migration/
+    constraint parity đã có test chốt.
+
+81. **Optimistic "Đã báo cáo" giữ dialog mounted**: trigger và `ReportDialog`
+    render cùng nhau (không early-return thay cả nút) nên `isPending` vẫn hiện
+    UI chờ và lỗi mạng giữ nguyên `reason`/`note` người dùng đã nhập; nút
+    chuyển disabled "Đã báo cáo" khi `reported || isPending || isSuccess` và
+    tự revert khi mutation fail. `onError` type `unknown` đúng chữ ký TanStack
+    Query.
+
+82. **`isPlaceholderData` thay `isFetching` cho affordance bảng cũ**
+    (`comment-section` + `admin/reports`): chỉ mờ/`aria-busy`/khóa phân trang
+    khi dữ liệu đang hiển thị là placeholder của trang trước, tránh nháy mờ
+    khi background refetch trả về cùng data. Spinner trang trí gắn
+    `aria-hidden`; `useReportComment(movieSlug)` scope invalidation xuống
+    `["reviews","comments",movieSlug]` thay vì toàn bộ comments; `ui/dialog.tsx`
+    bỏ export không dùng (`DialogTrigger`/`DialogClose`/portal/overlay giữ nội
+    bộ), `report-dialog` tái sử dụng không cần chúng.
