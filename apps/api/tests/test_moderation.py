@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core import ratelimit
 from app.db.base import Base
+from app.db.models.comment import Comment
 from app.db.models.comment_report import CommentReport, ReportStatus
 from app.db.models.user import User, UserRole
 from app.db.session import get_db
@@ -125,6 +126,34 @@ async def test_create_report_then_duplicate(client_env):
 
     rows = await _report_rows(env, cid)
     assert len(rows) == 1
+
+
+async def test_re_report_already_hidden_returns_existing(client_env):
+    env = client_env
+    author = await _register_login(env, "author@gmov.dev", "author")
+    reporter = await _register_login(env, "rep@gmov.dev", "reporter")
+    other1 = await _register_login(env, "o1@gmov.dev", "other1")
+    other2 = await _register_login(env, "o2@gmov.dev", "other2")
+    cid = await _comment(env, author)
+
+    r = await _report(env, reporter, cid)
+    assert r.status_code == 201, r.text
+    first_id = r.json()["id"]
+
+    assert (await _report(env, other1, cid)).status_code == 201
+    assert (await _report(env, other2, cid)).status_code == 201
+
+    async with env.factory() as db:
+        comment = await db.get(Comment, uuid.UUID(cid))
+    assert comment is not None
+    assert comment.is_hidden is True
+
+    r = await _report(env, reporter, cid)
+    assert r.status_code == 200, r.text
+    assert r.json()["id"] == first_id
+
+    rows = await _report_rows(env, cid)
+    assert len(rows) == 3
 
 
 async def test_report_own_comment_rejected(client_env):

@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -41,8 +42,6 @@ async def create(
             raise AppException(
                 "Cannot report your own comment", "CANNOT_REPORT_OWN", 422
             )
-        if comment.is_hidden:
-            raise AppException("Comment is hidden", "COMMENT_HIDDEN", 409)
         existing = (
             await db.execute(
                 select(CommentReport).where(
@@ -54,6 +53,9 @@ async def create(
         if existing is not None:
             return existing, False
 
+        if comment.is_hidden:
+            raise AppException("Comment is hidden", "COMMENT_HIDDEN", 409)
+
         row = CommentReport(
             comment_id=data.comment_id,
             reporter_id=user_id,
@@ -61,7 +63,21 @@ async def create(
             note=data.note,
         )
         db.add(row)
-        await db.flush()
+        try:
+            await db.flush()
+        except IntegrityError:
+            await db.rollback()
+            existing = (
+                await db.execute(
+                    select(CommentReport).where(
+                        CommentReport.comment_id == data.comment_id,
+                        CommentReport.reporter_id == user_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing is None:
+                raise
+            return existing, False
 
         open_count = (
             await db.execute(
