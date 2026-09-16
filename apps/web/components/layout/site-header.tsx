@@ -46,11 +46,19 @@ function MenuDropdown({
   label,
   base,
   entries,
+  columns = 1,
 }: {
   label: string;
   base: string;
   entries: CatalogEntry[];
+  columns?: 1 | 3;
 }) {
+  // Long catalogs (genres/countries/years) lay out in 3 columns so every entry
+  // is visible at once instead of a tall scrolling list.
+  const contentClass =
+    columns === 3
+      ? "grid w-[30rem] grid-cols-3 gap-x-1 p-1.5"
+      : "max-h-80 w-52 overflow-y-auto";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -59,9 +67,9 @@ function MenuDropdown({
           <ChevronDown className="size-3.5" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="max-h-80 w-52 overflow-y-auto">
+      <DropdownMenuContent className={contentClass}>
         {entries.map((e) => (
-          <DropdownMenuItem key={e.slug} asChild>
+          <DropdownMenuItem key={e.slug} asChild className="whitespace-nowrap">
             <Link href={`${base}/${e.slug}`}>{e.label}</Link>
           </DropdownMenuItem>
         ))}
@@ -203,9 +211,19 @@ export function SiteHeader() {
 
         <nav className="ml-2 hidden items-center lg:flex">
           <MenuDropdown label="Danh mục" base="/list" entries={LIST_TYPES} />
-          <MenuDropdown label="Thể loại" base="/the-loai" entries={GENRES} />
-          <MenuDropdown label="Quốc gia" base="/quoc-gia" entries={COUNTRIES} />
-          <MenuDropdown label="Năm" base="/nam" entries={YEARS} />
+          <MenuDropdown
+            label="Thể loại"
+            base="/the-loai"
+            entries={GENRES}
+            columns={3}
+          />
+          <MenuDropdown
+            label="Quốc gia"
+            base="/quoc-gia"
+            entries={COUNTRIES}
+            columns={3}
+          />
+          <MenuDropdown label="Năm" base="/nam" entries={YEARS} columns={3} />
         </nav>
 
         <div className="ml-auto hidden w-64 md:block xl:w-80">
