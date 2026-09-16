@@ -19,7 +19,8 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 min-w-[10rem] overflow-hidden rounded-lg border border-border bg-card p-1 text-card-foreground shadow-xl",
+        "border-border bg-card text-card-foreground z-50 min-w-[10rem] overflow-hidden rounded-lg border p-1 shadow-xl",
+        "data-[state=open]:animate-zoom-in data-[state=closed]:animate-zoom-out origin-[var(--radix-dropdown-menu-content-transform-origin)]",
         className,
       )}
       {...props}
@@ -37,7 +38,7 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm outline-none select-none focus:bg-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4",
+      "focus:bg-muted relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4",
       inset && "pl-8",
       className,
     )}
@@ -52,7 +53,7 @@ const DropdownMenuLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.Label
     ref={ref}
-    className={cn("px-2 py-1.5 text-xs text-muted-foreground", className)}
+    className={cn("text-muted-foreground px-2 py-1.5 text-xs", className)}
     {...props}
   />
 ));
@@ -64,7 +65,7 @@ const DropdownMenuSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.Separator
     ref={ref}
-    className={cn("-mx-1 my-1 h-px bg-border", className)}
+    className={cn("bg-border -mx-1 my-1 h-px", className)}
     {...props}
   />
 ));
@@ -78,7 +79,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
     ref={ref}
     checked={checked}
     className={cn(
-      "relative flex cursor-pointer items-center rounded-md py-2 pr-2 pl-8 text-sm outline-none select-none focus:bg-muted",
+      "focus:bg-muted relative flex cursor-pointer items-center rounded-md py-2 pr-2 pl-8 text-sm outline-none select-none",
       className,
     )}
     {...props}
