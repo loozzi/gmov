@@ -35,12 +35,24 @@ class CommentReport(Base, TimestampMixin):
         Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
     reason: Mapped[ReportReason] = mapped_column(
-        Enum(ReportReason, native_enum=False, length=20, validate_strings=True),
+        Enum(
+            ReportReason,
+            native_enum=False,
+            length=20,
+            validate_strings=True,
+            values_callable=lambda e: [m.value for m in e],
+        ),
         nullable=False,
     )
     note: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     status: Mapped[ReportStatus] = mapped_column(
-        Enum(ReportStatus, native_enum=False, length=20, validate_strings=True),
+        Enum(
+            ReportStatus,
+            native_enum=False,
+            length=20,
+            validate_strings=True,
+            values_callable=lambda e: [m.value for m in e],
+        ),
         default=ReportStatus.OPEN,
         server_default=ReportStatus.OPEN.value,
         index=True,

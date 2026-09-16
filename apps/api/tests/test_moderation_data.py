@@ -8,9 +8,10 @@ from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 from pydantic import ValidationError
-from sqlalchemy import create_engine, inspect, select
+from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings, settings
 from app.db.base import Base
@@ -180,6 +181,71 @@ def test_migration_upgrade_downgrade_upgrade(tmp_path, monkeypatch):
 
     command.upgrade(cfg, "head")
     _assert_schema(db_path, present=True)
+
+
+def test_migration_stores_enum_values(tmp_path, monkeypatch):
+    """The migrated schema must store lowercase enum values (matching the CHECK
+    constraint and server_default), not SQLAlchemy member names."""
+    from alembic import command
+    from alembic.config import Config
+
+    db_path = tmp_path / "enum_values.db"
+    monkeypatch.setattr(settings, "database_url", f"sqlite+aiosqlite:///{db_path}")
+    cfg = Config(str(APP_DIR / "alembic.ini"))
+    cfg.set_main_option("script_location", str(APP_DIR / "app" / "alembic"))
+    command.upgrade(cfg, "head")
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with Session(engine) as session:
+            user = _user("enumuser")
+            session.add(user)
+            session.flush()
+            comment = Comment(user_id=user.id, movie_slug="mao", body="hi")
+            session.add(comment)
+            session.flush()
+            report = CommentReport(
+                comment_id=comment.id,
+                reporter_id=user.id,
+                reason=ReportReason.SPAM,
+            )
+            session.add(report)
+            session.commit()
+
+            role_raw = session.execute(text("SELECT role FROM users")).scalar_one()
+            reason_raw, status_raw = session.execute(
+                text("SELECT reason, status FROM comment_reports")
+            ).one()
+            assert role_raw == "user"
+            assert reason_raw == "spam"
+            assert status_raw == "open"
+
+            # A row that relies on the migration's server_default must load via ORM.
+            session.execute(
+                text(
+                    "INSERT INTO users (id, email, username, hashed_password,"
+                    " display_name, is_active, created_at, updated_at)"
+                    " VALUES (:id, :email, :username, 'x', 'x', 1,"
+                    " CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "email": "backfill@gmov.dev",
+                    "username": "backfill",
+                },
+            )
+            session.commit()
+            session.expire_all()
+            backfilled = session.execute(
+                select(User).where(User.username == "backfill")
+            ).scalar_one()
+            assert backfilled.role == UserRole.USER
+            assert session.get(User, user.id).role == UserRole.USER
+            stored = session.execute(select(CommentReport)).scalar_one()
+            assert stored.reason == ReportReason.SPAM
+            assert stored.status == ReportStatus.OPEN
+    finally:
+        engine.dispose()
 
 
 async def test_cli_set_role_promotes(db_env, monkeypatch):

@@ -28,7 +28,13 @@ class User(Base, TimestampMixin):
     avatar_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, native_enum=False, length=20, validate_strings=True),
+        Enum(
+            UserRole,
+            native_enum=False,
+            length=20,
+            validate_strings=True,
+            values_callable=lambda e: [m.value for m in e],
+        ),
         default=UserRole.USER,
         server_default=UserRole.USER.value,
         nullable=False,
