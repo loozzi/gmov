@@ -95,6 +95,7 @@ async def _revoke_family(
     stmt = (
         select(RefreshToken)
         .where(RefreshToken.family_id == family_id)
+        .order_by(RefreshToken.id)
         .with_for_update()
         .execution_options(populate_existing=True)
     )

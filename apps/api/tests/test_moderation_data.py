@@ -1,6 +1,7 @@
 """Data-layer tests for comment moderation: models, migration, schemas, CLI."""
 
 import importlib.util
+import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -49,6 +50,7 @@ assert _spec is not None and _spec.loader is not None
 _migration = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_migration)
 PREVIOUS_HEAD = _migration.down_revision
+_MIGRATION_SOURCE = _MODERATION_MIGRATION.read_text()
 
 
 @pytest_asyncio.fixture
@@ -150,6 +152,10 @@ def test_hide_threshold_default_and_validation(monkeypatch):
         Settings(comment_report_hide_threshold=0)
 
 
+def _quoted_values(clause: str) -> set[str]:
+    return set(re.findall(r"'([a-z_]+)'", clause))
+
+
 def test_model_constraint_metadata_matches_migration():
     user_checks = {
         c.name
@@ -162,7 +168,16 @@ def test_model_constraint_metadata_matches_migration():
         for c in User.__table__.constraints
         if isinstance(c, CheckConstraint) and c.name == "ck_users_role"
     )
-    assert str(role_check.sqltext) == "role IN ('user','moderator','admin')"
+    model_roles = _quoted_values(str(role_check.sqltext))
+    assert model_roles == {"user", "moderator", "admin"}
+
+    migration_check = re.search(
+        r"create_check_constraint\(\s*'ck_users_role',\s*"
+        r"\"role IN \(([^)]*)\)\"",
+        _MIGRATION_SOURCE,
+    )
+    assert migration_check is not None
+    assert _quoted_values(migration_check.group(1)) == model_roles
 
     report_uniques = {
         c.name
@@ -170,6 +185,7 @@ def test_model_constraint_metadata_matches_migration():
         if isinstance(c, UniqueConstraint)
     }
     assert "uq_comment_reports_comment_reporter" in report_uniques
+    assert "uq_comment_reports_comment_reporter" in _MIGRATION_SOURCE
 
 
 def test_report_in_validates_reason_and_note_length():
