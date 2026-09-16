@@ -70,7 +70,7 @@ export function WatchView({ detail, episodeSlug }: Props) {
 
   const server =
     servers.find((s) => s.name === serverName) ?? servers[0] ?? null;
-  const episodes = server?.episodes ?? [];
+  const episodes = useMemo(() => server?.episodes ?? [], [server]);
   const currentEp =
     episodes.find((e) => (e.slug ?? e.name) === episodeSlug) ?? episodes[0] ?? null;
   const currentKey = currentEp ? (currentEp.slug ?? currentEp.name) : "";
@@ -78,13 +78,12 @@ export function WatchView({ detail, episodeSlug }: Props) {
   // Series position within the selected server (not the cross-server flat
   // list): "tập N/M" for the history/rail/detail UI.
   const seriesPosition = useMemo(() => {
-    const eps = server?.episodes ?? [];
-    const idx = eps.findIndex((e) => (e.slug ?? e.name) === currentKey) + 1;
+    const idx = episodes.findIndex((e) => (e.slug ?? e.name) === currentKey) + 1;
     return {
       episode_index: idx > 0 ? idx : null,
-      total_episodes: eps.length > 0 ? eps.length : null,
+      total_episodes: episodes.length > 0 ? episodes.length : null,
     };
-  }, [server, currentKey]);
+  }, [episodes, currentKey]);
 
   const src = currentEp?.m3u8_url ?? null;
   const isHls = src !== null;

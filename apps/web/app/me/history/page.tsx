@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
 import { toVietnameseMessage } from "@/lib/errors";
 import { useContinueWatching, useDeleteProgress } from "@/lib/me";
-import { progressLabel, progressPercent } from "@/lib/progress";
+import { progressLabel, progressPercent, seriesLabel } from "@/lib/progress";
 
 function formatClock(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
@@ -88,66 +88,66 @@ export default function HistoryPage() {
                 p.episode_name,
               );
               const hasSeries =
-                p.episode_index != null && p.total_episodes != null;
+                seriesLabel(p.episode_index, p.total_episodes) != null;
               return (
-              <div
-                key={p.id}
-                className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <Link
-                    href={`/phim/${p.movie_slug}`}
-                    className="truncate text-sm font-semibold hover:text-brand"
-                  >
-                    {p.movie_name}
-                  </Link>
-                  <p className="text-xs text-muted-foreground">
-                    {label}
-                    {p.server_name ? ` · ${p.server_name}` : ""}
-                    {p.duration_seconds && p.duration_seconds > 0 ? (
-                      p.position_seconds >= 0.9 * p.duration_seconds ? (
-                        <> · <span className="text-green-400">Đã xem xong</span></>
+                <div
+                  key={p.id}
+                  className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/phim/${p.movie_slug}`}
+                      className="truncate text-sm font-semibold hover:text-brand"
+                    >
+                      {p.movie_name}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">
+                      {label}
+                      {p.server_name ? ` · ${p.server_name}` : ""}
+                      {p.duration_seconds && p.duration_seconds > 0 ? (
+                        p.position_seconds >= 0.9 * p.duration_seconds ? (
+                          <> · <span className="text-green-400">Đã xem xong</span></>
+                        ) : (
+                          <> · đã xem {formatClock(p.position_seconds)}</>
+                        )
                       ) : (
                         <> · đã xem {formatClock(p.position_seconds)}</>
-                      )
-                    ) : (
-                      <> · đã xem {formatClock(p.position_seconds)}</>
-                    )}
-                  </p>
-                  {hasSeries || p.duration_seconds ? (
-                    <div className="mt-1.5 h-1 max-w-xs overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-brand"
-                        style={{
-                          width: `${progressPercent(
-                            p.episode_index,
-                            p.total_episodes,
-                            p.position_seconds,
-                            p.duration_seconds,
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                  ) : null}
+                      )}
+                    </p>
+                    {hasSeries || p.duration_seconds ? (
+                      <div className="mt-1.5 h-1 max-w-xs overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-brand"
+                          style={{
+                            width: `${progressPercent(
+                              p.episode_index,
+                              p.total_episodes,
+                              p.position_seconds,
+                              p.duration_seconds,
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                  <Button size="sm" asChild>
+                    <Link href={`/xem/${p.movie_slug}/${p.episode_slug}`}>
+                      <Play /> Xem tiếp
+                    </Link>
+                  </Button>
+                  <button
+                    onClick={() =>
+                      del.mutate(p.movie_slug, {
+                        onSuccess: () => toast("Đã xóa khỏi lịch sử.", "success"),
+                        onError: () => toast("Xóa thất bại. Thử lại nhé.", "error"),
+                      })
+                    }
+                    aria-label={`Xóa lịch sử ${p.movie_name}`}
+                    className="cursor-pointer rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-red-400"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
                 </div>
-                <Button size="sm" asChild>
-                  <Link href={`/xem/${p.movie_slug}/${p.episode_slug}`}>
-                    <Play /> Xem tiếp
-                  </Link>
-                </Button>
-                <button
-                  onClick={() =>
-                    del.mutate(p.movie_slug, {
-                      onSuccess: () => toast("Đã xóa khỏi lịch sử.", "success"),
-                      onError: () => toast("Xóa thất bại. Thử lại nhé.", "error"),
-                    })
-                  }
-                  aria-label={`Xóa lịch sử ${p.movie_name}`}
-                  className="cursor-pointer rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-red-400"
-                >
-                  <Trash2 className="size-4" />
-                </button>
-              </div>
               );
             })}
           </div>

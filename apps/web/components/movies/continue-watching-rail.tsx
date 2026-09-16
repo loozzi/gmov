@@ -44,6 +44,11 @@ export function ContinueWatchingRail() {
       </div>
       <div className="rail-scroll -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
         {data.items.slice(0, 10).map((p) => {
+          const label = progressLabel(
+            p.episode_index,
+            p.total_episodes,
+            p.episode_name,
+          );
           const ratio = progressPercent(
             p.episode_index,
             p.total_episodes,
@@ -65,7 +70,7 @@ export function ContinueWatchingRail() {
                   <Play className="size-5 fill-white" />
                 </span>
                 <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold text-white">
-                  {progressLabel(p.episode_index, p.total_episodes, p.episode_name)}
+                  {label}
                 </span>
               </div>
               <div className="space-y-1 p-3">
@@ -73,7 +78,7 @@ export function ContinueWatchingRail() {
                   {p.movie_name}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {progressLabel(p.episode_index, p.total_episodes, p.episode_name)}
+                  {label}
                   {remaining}
                 </p>
                 <div className="h-1 overflow-hidden rounded-full bg-muted">

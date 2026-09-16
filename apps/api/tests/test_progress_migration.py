@@ -28,3 +28,5 @@ def test_migration_adds_nullable_episode_position(tmp_path, monkeypatch):
 
     assert cols["episode_index"]["nullable"] is True
     assert cols["total_episodes"]["nullable"] is True
+    assert "INTEGER" in str(cols["episode_index"]["type"]).upper()
+    assert "INTEGER" in str(cols["total_episodes"]["type"]).upper()

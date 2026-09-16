@@ -50,7 +50,7 @@ test("embed mode: history follows the last opened episode", async ({ page }) => 
   );
 
   // ...and it must show the series position, not just the episode name.
-  await expect(card.getByText(/tập 2\/3/)).toBeVisible();
+  await expect(card.getByText(/tập 2\/3(?!\d)/)).toBeVisible();
 
   // Cleanup (best effort) so the shared history page stays tidy.
   await page
