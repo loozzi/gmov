@@ -110,6 +110,7 @@ export function WatchView({ detail, episodeSlug }: Props) {
   useEffect(() => {
     resumeDoneRef.current = false;
     markedRef.current = false;
+    embedRegisteredRef.current = false;
     posRef.current = { t: 0, d: 0 };
     playingRef.current = false;
     setStartAt(0);
@@ -176,14 +177,31 @@ export function WatchView({ detail, episodeSlug }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, isHls, episodeSlug, serverName]);
 
-  // Embed mode: register history entry once (never overwrites position).
+  // Embed mode: cross-origin iframe exposes no playtime, so we cannot save a
+  // position — but we CAN record which episode was opened last, so "Xem tiếp"
+  // follows the viewer. Register the CURRENT episode unless it is already the
+  // movie's latest row, or it carries a completed marker (1s/1s), which we
+  // must never clobber with a 0s/0s row. The watched list is required for
+  // that check, so never register while it is still unknown.
   useEffect(() => {
-    if (!isAuthenticated || isHls || !progressFetched || savedProgress) return;
-    if (embedRegisteredRef.current || !currentEp) return;
+    if (!isAuthenticated || isHls || !progressFetched || !currentEp) return;
+    if (embedRegisteredRef.current) return;
+    if (savedProgress?.episode_slug === episodeSlug) return;
+    if (!watchedData || watched.has(currentKey)) return;
     embedRegisteredRef.current = true;
     upsert.mutate(buildPayload(0, 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, isHls, progressFetched, savedProgress, currentEp]);
+  }, [
+    isAuthenticated,
+    isHls,
+    progressFetched,
+    savedProgress,
+    currentEp,
+    episodeSlug,
+    watchedData,
+    watched,
+    currentKey,
+  ]);
 
   const flatEpisodes = useMemo(
     () => servers.flatMap((s) => s.episodes.map((e) => ({ server: s.name, ep: e }))),

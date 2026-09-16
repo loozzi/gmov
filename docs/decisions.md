@@ -367,6 +367,18 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     khi dữ liệu đang hiển thị là placeholder của trang trước, tránh nháy mờ
     khi background refetch trả về cùng data. Spinner trang trí gắn
     `aria-hidden`; `useReportComment(movieSlug)` scope invalidation xuống
-    `["reviews","comments",movieSlug]` thay vì toàn bộ comments; `ui/dialog.tsx`
-    bỏ export không dùng (`DialogTrigger`/`DialogClose`/portal/overlay giữ nội
-    bộ), `report-dialog` tái sử dụng không cần chúng.
+     `["reviews","comments",movieSlug]` thay vì toàn bộ comments; `ui/dialog.tsx`
+     bỏ export không dùng (`DialogTrigger`/`DialogClose`/portal/overlay giữ nội
+     bộ), `report-dialog` tái sử dụng không cần chúng.
+
+## Sửa lỗi lịch sử ở chế độ embed — 2026-09-16
+
+83. **"Xem tiếp" phải theo tập vừa mở, không kẹt ở tập 1**: effect embed trước
+    đây upsert khi phim CHƯA có progress nào (`savedProgress`) + ref một lần,
+    nên sau tập 1 không tập nào ghi thêm → `continue-watching` luôn trả tập 1.
+    Nay đăng ký theo TẬP HIỆN TẠI: bỏ qua nếu tập đó đã là row mới nhất
+    (`savedProgress.episode_slug === episodeSlug`) hoặc mang marker "đã xem"
+    (row 1s/1s — không được ghi đè bằng 0s/0s), chỉ ghi khi danh sách watched
+    đã tải xong, và reset ref theo từng tập. Backend không đổi
+    (`_latest_per_movie_stmt` vốn đúng). Chốt bằng E2E `embed-history.spec.ts`
+    qua harness dev-only `/e2e/embed` (không phụ thuộc upstream).

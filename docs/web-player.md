@@ -10,8 +10,10 @@ Upstream provides only `embed.php` page URLs — **no direct m3u8 exists**
 - **`m3u8_url` present (future-proof):** full custom `VideoPlayer` (hls.js,
   native HLS fallback for Safari/iOS).
 - **embed only (today):** `EmbedPlayer` iframe 16:9. Cross-origin means no
-  time access — resume is advisory, progress registers once, and a manual
-  "Đánh dấu đã xem" button exists.
+  time access — resume is advisory, and a manual "Đánh dấu đã xem" button
+  exists. Opening an episode records it as the movie's current episode (so
+  "Xem tiếp" follows the last episode opened); it never overwrites a saved
+  position or a watched marker.
 
 ## Custom player controls
 
