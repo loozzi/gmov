@@ -38,13 +38,6 @@ async def create(
 ) -> tuple[CommentReport, bool]:
     try:
         comment = await _get_comment(db, data.comment_id)
-        comment = (
-            await db.execute(
-                select(Comment)
-                .where(Comment.id == data.comment_id)
-                .with_for_update()
-            )
-        ).scalar_one()
         if comment.user_id == user_id:
             raise AppException(
                 "Cannot report your own comment", "CANNOT_REPORT_OWN", 422
@@ -62,6 +55,14 @@ async def create(
 
         if comment.is_hidden:
             raise AppException("Comment is hidden", "COMMENT_HIDDEN", 409)
+
+        comment = (
+            await db.execute(
+                select(Comment)
+                .where(Comment.id == data.comment_id)
+                .with_for_update()
+            )
+        ).scalar_one()
 
         row = CommentReport(
             comment_id=data.comment_id,
