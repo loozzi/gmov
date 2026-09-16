@@ -397,6 +397,81 @@ async def test_refresh_reuse_does_not_affect_other_family(sqlite_factory):
         assert pair.access_token
 
 
+def test_family_lock_statement_is_family_wide_and_ordered():
+    """SQLite cannot run real row locks, so compile the lock for Postgres:
+    refresh must take ONE family-wide `FOR UPDATE` ordered by id (the old
+    per-jti lock followed by a family lock could deadlock)."""
+    import uuid as uuid_mod
+
+    from sqlalchemy.dialects import postgresql
+
+    from app.services import auth_service
+
+    sql = str(
+        auth_service._family_lock_stmt(uuid_mod.uuid4()).compile(
+            dialect=postgresql.dialect()
+        )
+    )
+    assert "FOR UPDATE" in sql
+    assert "refresh_tokens.family_id" in sql
+    assert "ORDER BY refresh_tokens.id" in sql
+
+
+async def test_refresh_compromises_rotated_sibling(sqlite_factory):
+    """Reuse beyond grace kills the whole locked family — including the
+    token that a real rotation just issued."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from app.core import security
+    from app.core.exceptions import AppException
+    from app.db.models.refresh_token import RefreshToken
+    from app.schemas.auth import RegisterIn
+    from app.services import auth_service, user_service
+
+    async with sqlite_factory() as db:
+        user = await user_service.create(
+            db,
+            RegisterIn(
+                email="sibling@gmov.dev",
+                username="siblinguser",
+                password="password123",
+            ),
+        )
+        original = await auth_service.login(
+            db, user.username, "password123"
+        )
+        rotated = await auth_service.refresh(db, original.refresh_token)
+
+        old_jti = str(security.decode_token(original.refresh_token)["jti"])
+        old = (
+            await db.execute(
+                select(RefreshToken).where(RefreshToken.jti == old_jti)
+            )
+        ).scalar_one()
+        old.revoked_at = datetime.now(UTC) - timedelta(hours=1)
+        await db.commit()
+        family_id = old.family_id
+
+        with pytest.raises(AppException) as exc:
+            await auth_service.refresh(db, original.refresh_token)
+        assert exc.value.code == "INVALID_REFRESH_TOKEN"
+
+        with pytest.raises(AppException) as exc:
+            await auth_service.refresh(db, rotated.refresh_token)
+        assert exc.value.code == "INVALID_REFRESH_TOKEN"
+
+        rows = (
+            await db.execute(
+                select(RefreshToken).where(RefreshToken.family_id == family_id)
+            )
+        ).scalars().all()
+        assert rows
+        assert all(member.revoked_at is not None for member in rows)
+        assert all(member.compromised for member in rows)
+
+
 async def test_login_failures_composite_per_username_capped_per_ip(_fake_redis):
     from app.core.exceptions import AppException
 
