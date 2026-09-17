@@ -94,3 +94,11 @@ Brought forward — none blocks current functionality.
     chạy khi media metadata sẵn sàng (stream mẫu mux), nên test đọc clock quá
     sớm. Cần một lần điều tra riêng — hoặc cho test chờ `currentTime` cập nhật
     thay vì đọc một lần.
+28. **Pool cho "Phim liên quan" chỉ lấy 3 trang mới nhất mỗi list** — nên phim
+    cũ/ít tín hiệu có thể ra rail "cùng thời" thay vì cùng người, và match
+    người chỉ đến từ các phim nằm trong cửa sổ thể loại/quốc gia/năm đó
+    (upstream không có search theo người — xem decisions #100). Muốn tốt hơn:
+    tăng số trang (tốn thêm call upstream) hoặc tự lập chỉ mục cast/director.
+29. **`/related` chưa có rate limit theo IP** — mỗi cache miss tốn ~10 call
+    upstream; hiện chỉ dựa vào cache 30 phút theo slug. Thêm giới hạn nếu bị
+    lạm dụng có chủ đích (cùng lý do với rate limit ở các endpoint khác).

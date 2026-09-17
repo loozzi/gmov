@@ -8,6 +8,11 @@ docker compose down -v
 docker compose --env-file /tmp/e2e.env up -d --build db redis api
 # /tmp/e2e.env chỉ cần: POSTGRES_PORT=5432, REDIS_PORT=6379, API_PORT=8000
 # (bỏ qua repo .env nếu port ở đó bị chiếm)
+#
+# CẢNH BÁO: đừng bao giờ chạy `docker compose up` trần. Không có --env-file thì
+# compose đọc .env của repo (5438/6389/8008) → nó TẠO LẠI stack đang chạy sang
+# port khác, và nếu port đó bị chiếm (vd 6389) thì stack tắt luôn. Khôi phục
+# bằng đúng lệnh --env-file ở trên.
 
 # 2. Chạy suite (tự dựng Next dev :3100 qua webServer config):
 pnpm --filter gmov-web exec playwright test
