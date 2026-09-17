@@ -19,7 +19,7 @@ import {
   type PinCandidates,
   type TestAccount,
 } from "./helpers/api";
-import { loginViaApi } from "./helpers/auth";
+import { loginViaApi, loginViaUi } from "./helpers/auth";
 
 // These specs MUST NOT register accounts: register is throttled 3/hour/IP and
 // the base account from global-setup is the only one used. Isolation is proven
@@ -481,6 +481,76 @@ test("a chooser handoff respects the ?next target", async ({ page }) => {
   }
 });
 
+test("a chooser handoff ignores a next that points back at the chooser", async ({
+  page,
+}) => {
+  const account = await loadAccount();
+
+  try {
+    await resetProfiles(account);
+    // self-referential next (the old guest CTA used to emit this): one pick
+    // must be enough — no second mandatory pick.
+    await page.goto("/login?next=%2Fprofiles");
+    await page.getByLabel(/email hoặc tên đăng nhập/i).fill(account.username);
+    await page.getByLabel(/^mật khẩu$/i).fill(account.password);
+    await page.getByRole("button", { name: /^đăng nhập$/i }).click();
+    await page.waitForURL((url) => url.pathname === "/profiles", {
+      timeout: 30_000,
+    });
+
+    await expect(page.getByTestId("profile-chooser")).toBeVisible();
+    await page
+      .locator('[data-testid^="profile-card-"][aria-label*="(đang xem)"]')
+      .click();
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+    await expect(page.getByTestId("profile-chooser")).toHaveCount(0);
+  } finally {
+    await cleanup(account);
+    await restoreDefault(account);
+  }
+});
+
+test("a chooser switch recovers from a stale has_pin via PIN_REQUIRED", async ({
+  page,
+}) => {
+  const account = await loadAccount();
+  const name = `Chooser ${stamp()}`;
+  let spareId = "";
+
+  try {
+    await resetProfiles(account);
+    const token = (await loginUser(account)).access_token;
+    spareId = (await createProfile(token, name, "panda")).id;
+
+    // Load the chooser while the profile is still unlocked, so the client
+    // caches has_pin === false.
+    await loginViaApi(page);
+    await page.goto("/profiles");
+    const card = page.getByTestId(`profile-card-${spareId}`);
+    await expect(card).toBeVisible();
+
+    // Set the PIN behind the client's back; the cached list is now stale.
+    await setProfilePin(token, spareId, account.password, "9753");
+
+    await card.click();
+    // The server answers PIN_REQUIRED; the chooser must open the PIN prompt
+    // instead of leaving a dead-end error on the page.
+    const pinDialog = page.getByTestId("profile-pin-dialog");
+    await expect(pinDialog).toBeVisible();
+    await pinDialog.getByLabel("Mã PIN").fill("9753");
+    await pinDialog.getByRole("button", { name: /^xác nhận$/i }).click();
+
+    await expect(pinDialog).toBeHidden();
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+    await expect(
+      page.locator("header").getByRole("button", { name: /chọn profile/i }),
+    ).toContainText(name);
+  } finally {
+    await cleanup(account, [], spareId ? { [spareId]: "9753" } : {});
+    await restoreDefault(account);
+  }
+});
+
 test("a stale has_pin reveals the current-PIN field on PIN_REQUIRED", async ({
   page,
 }) => {
@@ -548,10 +618,9 @@ test("the profile menu never locks page scroll (no scrollbar flicker)", async ({
     const token = (await loginUser(account)).access_token;
     spareId = (await createProfile(token, name, "ghost")).id;
 
-    // Two profiles so the picker fires on login; dismiss it to reach the header.
+    // Two profiles so the chooser appears on login; picking the current one is
+    // the (required) way through to the app chrome.
     await loginViaUi(page, account);
-    await page.getByTestId("profile-picker-dismiss").click();
-    await expect(page.getByTestId("profile-picker")).toBeHidden();
 
     const scrollState = () =>
       page.evaluate(() => ({

@@ -666,10 +666,11 @@ Log ambiguous decisions here (Phase 0+). Newest last.
 133. **PIN không bao giờ hiển thị: dialog full-screen + `type="password"`.**
      Form nhập PIN dùng ô `type="password"` (hiện dấu chấm) thay vì text, và
      `DialogContent` có thêm biến thể `fullScreen` (phủ kín viewport, nền tối,
-     không bo góc) cho `ProfilePinDialog`. Chỉ dialog nhập PIN để mở khoá/chuyển
-     profile dùng full-screen; form "Đặt/Đổi PIN" trong `/profiles/manage` vẫn là
-     dialog thường vì là form nhiều trường (mật khẩu + PIN mới), không phải bàn
-     phím PIN.
+     không bo góc) cho **mọi** `ProfilePinDialog` — tức mọi chỗ chỉ hỏi PIN:
+     mở khoá/chuyển profile ở trang chọn + menu header, và xác nhận xoá profile
+     có PIN. Form "Đặt/Đổi PIN" trong `/profiles/manage` vẫn là dialog thường vì
+     đó là `ProfileSetPinDialog` (form nhiều trường: mật khẩu tài khoản + PIN
+     hiện tại + PIN mới), không phải bàn phím PIN.
 134. **Menu header dùng `modal={false}` để không khoá scroll trang.** Radix
      `DropdownMenu` mặc định `modal` → đặt `body[data-scroll-locked]` +
      `overflow: hidden` khi mở; trang vẫn scroll được nên scrollbar viewport bị

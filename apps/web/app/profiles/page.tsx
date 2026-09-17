@@ -79,9 +79,11 @@ function ProfilesChooser() {
 
   // Always leave the chooser after a profile is picked (choosing is required).
   const leave = () => {
-    const target = safeNextPath(searchParams.get("next")) ?? "/";
-    router.push(target);
-    router.refresh();
+    const next = safeNextPath(searchParams.get("next"));
+    // A `next` pointing back at the chooser would demand a second pick.
+    const self =
+      next === "/profiles" || next?.startsWith("/profiles?") === true;
+    router.push(next && !self ? next : "/");
   };
 
   const handleSelect = (item: ProfileListItem) => {
@@ -152,7 +154,7 @@ function ProfilesChooser() {
           Bạn cần đăng nhập để chọn profile.
         </p>
         <Button asChild>
-          <Link href="/login?next=/profiles">Đăng nhập</Link>
+          <Link href="/login">Đăng nhập</Link>
         </Button>
       </div>
     );

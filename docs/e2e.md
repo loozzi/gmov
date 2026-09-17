@@ -96,7 +96,7 @@ cascade xoá report) + hạ account nền về `user`.
 
 ## Spec profiles (`profiles.spec.ts`)
 
-10 test phủ M1 + luồng chọn profile, **chỉ dùng account nền** — KHÔNG đăng ký
+12 test phủ M1 + luồng chọn profile, **chỉ dùng account nền** — KHÔNG đăng ký
 account nào (register bị throttle `3 tài khoản/giờ/IP`, đã từng dính). Cách ly
 được chứng minh bằng các profile tạo/xoá bên trong từng test; không cần data
 upstream (favorites nhận slug tuỳ ý) nên spec này không skip khi CDN chặn.
@@ -127,10 +127,16 @@ Timeout 120s/test.
    `type=password` → PIN sai/đúng → rời trang về `/` và chip header đổi tên.
 8. `a chooser handoff respects the ?next target` — `/login?next=/me/favorites` →
    sau khi chọn profile, URL phải là `/me/favorites` (không mất đích).
-9. `a stale has_pin reveals the current-PIN field on PIN_REQUIRED` — cache
-   `has_pin=false` trong khi server đã có PIN → dialog đổi PIN phải hiện ô "PIN
-   hiện tại" theo `PIN_REQUIRED`.
-10. `the profile menu never locks page scroll` — mở menu profile **và** menu tài
+9. `a chooser handoff ignores a next that points back at the chooser` —
+   `/login?next=/profiles` → **một** lần chọn là đủ, rời về `/` (chặn vòng lặp
+   chọn hai lần).
+10. `a chooser switch recovers from a stale has_pin via PIN_REQUIRED` — cache
+    `has_pin=false` trong khi server đã có PIN → chọn card từ `/profiles` phải
+    mở dialog PIN (không kẹt ở lỗi), PIN đúng → rời trang.
+11. `a stale has_pin reveals the current-PIN field on PIN_REQUIRED` — cache
+    `has_pin=false` trong khi server đã có PIN → dialog đổi PIN phải hiện ô "PIN
+    hiện tại" theo `PIN_REQUIRED`.
+12. `the profile menu never locks page scroll` — mở menu profile **và** menu tài
     khoản: `data-scroll-locked` phải vắng, `overflow` không `hidden`, trang vẫn
     scroll được (chống tái phát lỗi nháy scrollbar).
 

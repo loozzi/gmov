@@ -60,9 +60,11 @@
   Sau switch/xoá profile đang dùng: `setAccessToken` mới + `queryClient.resetQueries()`
   (data per-profile nằm rải ở nhiều query key). Không dùng localStorage —
   profile nhớ theo phiên/thiết bị qua refresh cookie.
-- **`ProfilePinDialog`** (nhập PIN để mở khoá/chuyển/đặt/xoá profile): modal
-  **full-screen** (`DialogContent.fullScreen`) nền tối; ô PIN là
-  `type="password"` nên không bao giờ đọc được chữ số.
+- **`ProfilePinDialog`** (mọi chỗ chỉ hỏi PIN: mở khoá/chuyển profile ở trang
+  chọn + menu header, xác nhận xoá profile có PIN): modal **full-screen**
+  (`DialogContent.fullScreen`) nền tối; ô PIN là `type="password"` nên không bao
+  giờ đọc được chữ số. Ngược lại `ProfileSetPinDialog` (đặt/đổi PIN trong
+  `/profiles/manage`, có cả mật khẩu tài khoản) vẫn là dialog thường.
 - **Header switcher** (`ProfileMenu`, cạnh avatar): dropdown liệt kê profile
   (avatar, tên, ổ khoá nếu có PIN, dấu check cho profile hiện tại) + link
   "Đổi profile" về `/profiles` + link "Quản lý profile"; chọn profile khoá sẽ mở

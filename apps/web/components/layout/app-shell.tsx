@@ -13,7 +13,10 @@ const IMMERSIVE_ROUTES = new Set(["/profiles"]);
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  if (IMMERSIVE_ROUTES.has(pathname)) return <>{children}</>;
+  if (IMMERSIVE_ROUTES.has(pathname)) {
+    // Keep a main landmark even without the site chrome.
+    return <main className="flex flex-1 flex-col">{children}</main>;
+  }
   return (
     <>
       <SiteHeader />
