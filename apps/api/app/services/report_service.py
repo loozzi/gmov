@@ -11,10 +11,10 @@ from sqlalchemy.orm import aliased
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.db.models.comment import Comment
-from app.db.models.comment_report import CommentReport, ReportStatus
+from app.db.models.comment_report import CommentReport, ReportSource, ReportStatus
 from app.db.models.user import User
-from app.schemas.library import CommentUser
 from app.schemas.moderation import (
+    AdminCommentUser,
     ReportCommentInfo,
     ReportIn,
     ReportItem,
@@ -70,6 +70,7 @@ async def create(
             comment_id=data.comment_id,
             reporter_id=user_id,
             reason=data.reason,
+            source=ReportSource.USER,
             note=data.note,
         )
         db.add(row)
@@ -149,7 +150,7 @@ async def list_reports(
     author = aliased(User)
     stmt = (
         select(CommentReport, reporter, Comment, author)
-        .join(reporter, reporter.id == CommentReport.reporter_id)
+        .outerjoin(reporter, reporter.id == CommentReport.reporter_id)
         .join(Comment, Comment.id == CommentReport.comment_id)
         .join(author, author.id == Comment.user_id)
         .where(*conditions)
@@ -164,17 +165,28 @@ async def list_reports(
             reason=report.reason,
             note=report.note,
             status=report.status,
+            source=report.source,
             created_at=report.created_at,
-            reporter=CommentUser(
-                username=reporter.username, display_name=reporter.display_name
+            reporter=(
+                AdminCommentUser(
+                    id=reporter.id,
+                    username=reporter.username,
+                    display_name=reporter.display_name,
+                    banned_at=reporter.banned_at,
+                )
+                if reporter is not None
+                else None
             ),
             comment=ReportCommentInfo(
                 id=comment.id,
                 body=comment.body,
                 is_hidden=comment.is_hidden,
                 movie_slug=comment.movie_slug,
-                user=CommentUser(
-                    username=author.username, display_name=author.display_name
+                user=AdminCommentUser(
+                    id=author.id,
+                    username=author.username,
+                    display_name=author.display_name,
+                    banned_at=author.banned_at,
                 ),
                 created_at=comment.created_at,
             ),

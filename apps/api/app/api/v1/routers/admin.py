@@ -1,4 +1,4 @@
-"""Moderation admin router: report queue + comment visibility toggles."""
+"""Moderation admin router: report queue, comment visibility, user bans."""
 
 import uuid
 
@@ -6,11 +6,17 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_role
+from app.core.exceptions import AppException
 from app.db.models.comment_report import ReportStatus
 from app.db.models.user import User, UserRole
 from app.db.session import get_db
-from app.schemas.moderation import CommentVisibilityOut, PaginatedReports
-from app.services import report_service
+from app.schemas.moderation import (
+    BanIn,
+    BannedUserOut,
+    CommentVisibilityOut,
+    PaginatedReports,
+)
+from app.services import report_service, user_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -69,3 +75,41 @@ async def dismiss_report(
 ) -> dict[str, bool]:
     await report_service.dismiss(db, actor, report_id)
     return {"ok": True}
+
+
+def _banned_out(user: User) -> BannedUserOut:
+    return BannedUserOut(
+        id=user.id,
+        username=user.username,
+        banned_at=user.banned_at,
+        ban_reason=user.ban_reason,
+    )
+
+
+@router.post("/users/{user_id}/ban", response_model=BannedUserOut)
+async def ban_user(
+    user_id: uuid.UUID,
+    data: BanIn = BanIn(),
+    actor: User = Depends(require_moderator),
+    db: AsyncSession = Depends(get_db),
+) -> BannedUserOut:
+    """Ban a spammer. Staff is out of reach (and so is the caller), otherwise a
+    compromised moderator account could silence the rest of the team."""
+    target = await user_service.get_by_id(db, user_id)
+    if target is None:
+        raise AppException("User not found", "USER_NOT_FOUND", 404)
+    if target.id == actor.id or target.role != UserRole.USER:
+        raise AppException("Cannot ban staff", "CANNOT_BAN_STAFF", 403)
+    return _banned_out(await user_service.ban(db, target, data.reason))
+
+
+@router.post("/users/{user_id}/unban", response_model=BannedUserOut)
+async def unban_user(
+    user_id: uuid.UUID,
+    actor: User = Depends(require_moderator),
+    db: AsyncSession = Depends(get_db),
+) -> BannedUserOut:
+    target = await user_service.get_by_id(db, user_id)
+    if target is None:
+        raise AppException("User not found", "USER_NOT_FOUND", 404)
+    return _banned_out(await user_service.unban(db, target))

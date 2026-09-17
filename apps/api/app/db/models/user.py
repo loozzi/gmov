@@ -2,8 +2,9 @@
 
 import enum
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, Enum, String, Uuid
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -32,6 +33,15 @@ class User(Base, TimestampMixin):
     display_name: Mapped[str] = mapped_column(String(64), nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Moderator ban (see docs/api-moderation.md). Distinct from is_active so a
+    # deactivated account and a banned one stay distinguishable, and so the ban
+    # keeps who/when/why for review.
+    banned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
+    ban_reason: Mapped[str | None] = mapped_column(
+        String(200), nullable=True, default=None
+    )
     role: Mapped[UserRole] = mapped_column(
         Enum(
             UserRole,

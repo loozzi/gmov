@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = Field(default=3600)
 
     comment_report_hide_threshold: int = Field(default=3, ge=1)
+    moderation_blocked_keywords: Annotated[list[str], NoDecode] = Field(default=[])
 
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default=[
@@ -50,7 +51,9 @@ class Settings(BaseSettings):
         ]
     )
 
-    @field_validator("cors_origins", "trusted_proxies", mode="before")
+    @field_validator(
+        "cors_origins", "trusted_proxies", "moderation_blocked_keywords", mode="before"
+    )
     @classmethod
     def _split_csv(cls, value: object) -> object:
         if isinstance(value, str):

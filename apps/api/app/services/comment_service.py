@@ -1,15 +1,22 @@
 """Comment persistence operations (one reply level)."""
 
+import logging
 import uuid
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.exceptions import AppException
 from app.db.models.comment import Comment
-from app.db.models.comment_report import CommentReport
+from app.db.models.comment_report import CommentReport, ReportReason, ReportSource
 from app.db.models.user import User, UserRole
 from app.schemas.library import CommentAdd, CommentOut, CommentUser, ReplyOut
+from app.services import moderation_filter
+
+logger = logging.getLogger(__name__)
+
+AUTO_NOTE_MAX = 500
 
 
 async def create(
@@ -30,13 +37,38 @@ async def create(
             or parent.parent_id is not None
         ):
             raise AppException("Invalid parent comment", "VALIDATION_ERROR", 422)
+    hits = moderation_filter.matched_keywords(
+        body, settings.moderation_blocked_keywords
+    )
     row = Comment(
         user_id=user_id,
         movie_slug=data.movie_slug,
         parent_id=data.parent_id,
         body=body,
+        is_hidden=bool(hits),
     )
     db.add(row)
+    if hits:
+        # Auto-hidden comments go into the same queue as user reports so a
+        # moderator can review/undo them (reporter_id NULL, source 'auto').
+        await db.flush()
+        note = ("Từ khoá: " + ", ".join(hits))[:AUTO_NOTE_MAX]
+        db.add(
+            CommentReport(
+                comment_id=row.id,
+                reporter_id=None,
+                reason=ReportReason.SPAM,
+                source=ReportSource.AUTO,
+                note=note,
+            )
+        )
+        logger.info(
+            "auto-hid comment %s (movie=%s user=%s keywords=%s)",
+            row.id,
+            data.movie_slug,
+            user_id,
+            hits,
+        )
     await db.commit()
     await db.refresh(row)
     return row
