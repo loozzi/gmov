@@ -17,15 +17,19 @@ import { skipIfNoUpstream } from "./helpers/net";
 
 // These specs MUST NOT register accounts (register is throttled 3/hour/IP).
 // They run on the shared base account and prove profile isolation with
-// profiles created/deleted inside each test. Onboarding shows real posters and
-// the engine ranks the upstream catalog snapshot, so the file needs upstream
-// access (and a non-empty catalog) — otherwise it skips visibly.
+// profiles created/deleted inside each test. Onboarding shows real upstream
+// posters and the engine ranks the local `catalog_items` snapshot, so the file
+// skips visibly when EITHER (a) upstream is unreachable (`skipIfNoUpstream()`)
+// OR (b) the snapshot is empty (authenticated probe in `beforeAll` below; seed
+// it with `python -m app.cli refresh-catalog --pages 1`).
 skipIfNoUpstream();
 
 test.setTimeout(150_000);
 
 const PERSONAL_RAIL = "Gợi ý cho bạn";
 const STEP1_HEADING = "Gu của bạn là gì?";
+const EMPTY_CATALOG_REASON =
+  "catalog snapshot rỗng — chạy `python -m app.cli refresh-catalog`";
 
 const stamp = () => Date.now().toString(36).slice(-6);
 
@@ -36,6 +40,24 @@ async function loadAccount(): Promise<TestAccount> {
 async function accountToken(account: TestAccount): Promise<string> {
   return (await loginUser(account)).access_token;
 }
+
+// The recommendation endpoint reads the local snapshot, so a successful call
+// returning an empty `items` list means `catalog_items` has no rows. Probe once
+// per file; each test then skips visibly instead of failing when it is empty.
+let catalogReady = true;
+test.beforeAll(async () => {
+  const account = await loadAccount();
+  const token = await accountToken(account);
+  try {
+    const res = await rawApi("/api/v1/me/recommendations?limit=50", {
+      headers: authHeaders(token),
+    });
+    const body = (await res.json()) as { items: unknown[] };
+    catalogReady = res.ok && Array.isArray(body.items) && body.items.length > 0;
+  } catch {
+    catalogReady = false;
+  }
+});
 
 /** Switch the browser session to `id` through the "Ai đang xem?" page. */
 async function switchViaUi(page: Page, id: string): Promise<void> {
@@ -102,7 +124,17 @@ async function likeAPoster(page: Page): Promise<void> {
     .first();
   await expect(like).toBeVisible({ timeout: 30_000 });
   await like.click();
+  // The control is a toggle: aria-pressed flips to "true" once the like lands.
+  await expect(like).toHaveAttribute("aria-pressed", "true");
+  // "Tiếp tục" submits the likes, so anchor on the POST before advancing.
+  const posted = page.waitForResponse(
+    (res) =>
+      res.request().method() === "POST" &&
+      res.url().includes("/api/v1/me/preferences/posters") &&
+      res.ok(),
+  );
   await page.getByTestId("onboarding-next").click();
+  await posted;
 }
 
 /** Step 2 (no likes): advance straight to the summary. */
@@ -143,14 +175,18 @@ async function expectPersonalRail(page: Page): Promise<void> {
 }
 
 test("a new profile onboards and gets a personal rail", async ({ page }) => {
+  test.skip(!catalogReady, EMPTY_CATALOG_REASON);
   const account = await loadAccount();
   const token = await accountToken(account);
   await resetProfiles(account);
-  const profile = await createProfile(token, `Gu ${stamp()}`, "star");
-  const switched = await switchProfile(token, profile.id);
-  const profileToken = switched.access_token as string;
+  let profileId = "";
+  let profileToken = "";
 
   try {
+    const profile = await createProfile(token, `Gu ${stamp()}`, "star");
+    profileId = profile.id;
+    profileToken = (await switchProfile(token, profile.id)).access_token ?? "";
+
     await loginViaApi(page);
     await switchViaUi(page, profile.id);
 
@@ -160,20 +196,25 @@ test("a new profile onboards and gets a personal rail", async ({ page }) => {
     await expectPersonalRail(page);
   } finally {
     await leaveOnDefault(page, account).catch(() => undefined);
-    await cleanup(account, [{ id: profile.id, token: profileToken }]);
+    await cleanup(account, [{ id: profileId, token: profileToken }]);
   }
 });
 
 test("skipping onboarding hides the personal rail and does not trap", async ({
   page,
 }) => {
+  test.skip(!catalogReady, EMPTY_CATALOG_REASON);
   const account = await loadAccount();
   const token = await accountToken(account);
   await resetProfiles(account);
-  const profile = await createProfile(token, `Skip ${stamp()}`, "cat");
-  const profileToken = (await switchProfile(token, profile.id)).access_token ?? "";
+  let profileId = "";
+  let profileToken = "";
 
   try {
+    const profile = await createProfile(token, `Skip ${stamp()}`, "cat");
+    profileId = profile.id;
+    profileToken = (await switchProfile(token, profile.id)).access_token ?? "";
+
     await loginViaApi(page);
     await switchViaUi(page, profile.id);
 
@@ -190,7 +231,14 @@ test("skipping onboarding hides the personal rail and does not trap", async ({
     );
     await page.getByTestId("onboarding-skip").click();
     await page.waitForURL((url) => url.pathname === "/");
-    await response;
+
+    // Anchor on the API's own classification before asserting the heading is
+    // absent, so the check cannot pass before the response actually landed.
+    const body = (await (await response).json()) as {
+      items: unknown[];
+      source: string;
+    };
+    expect(body.source).not.toBe("personal");
 
     // Skip means no taste: the rail falls back to popular/newest (or hides),
     // never the personal "Gợi ý cho bạn" heading.
@@ -206,21 +254,25 @@ test("skipping onboarding hides the personal rail and does not trap", async ({
     ).toHaveCount(0);
   } finally {
     await leaveOnDefault(page, account).catch(() => undefined);
-    await cleanup(account, [{ id: profile.id, token: profileToken }]);
+    await cleanup(account, [{ id: profileId, token: profileToken }]);
   }
 });
 
 test("redo preferences reopens onboarding and the rail comes back", async ({
   page,
 }) => {
+  test.skip(!catalogReady, EMPTY_CATALOG_REASON);
   const account = await loadAccount();
   const token = await accountToken(account);
   await resetProfiles(account);
-  const profile = await createProfile(token, `Redo ${stamp()}`, "dino");
-  const switched = await switchProfile(token, profile.id);
-  const profileToken = switched.access_token as string;
+  let profileId = "";
+  let profileToken = "";
 
   try {
+    const profile = await createProfile(token, `Redo ${stamp()}`, "dino");
+    profileId = profile.id;
+    profileToken = (await switchProfile(token, profile.id)).access_token ?? "";
+
     await loginViaApi(page);
     await switchViaUi(page, profile.id);
 
@@ -247,22 +299,30 @@ test("redo preferences reopens onboarding and the rail comes back", async ({
     await expectPersonalRail(page);
   } finally {
     await leaveOnDefault(page, account).catch(() => undefined);
-    await cleanup(account, [{ id: profile.id, token: profileToken }]);
+    await cleanup(account, [{ id: profileId, token: profileToken }]);
   }
 });
 
 test("each profile keeps its own personal rail across switches", async ({
   page,
 }) => {
+  test.skip(!catalogReady, EMPTY_CATALOG_REASON);
   const account = await loadAccount();
   const token = await accountToken(account);
   await resetProfiles(account);
-  const first = await createProfile(token, `A ${stamp()}`, "rocket");
-  const second = await createProfile(token, `B ${stamp()}`, "panda");
-  const firstToken = (await switchProfile(token, first.id)).access_token ?? "";
-  const secondToken = (await switchProfile(token, second.id)).access_token ?? "";
+  let firstId = "";
+  let secondId = "";
+  let firstToken = "";
+  let secondToken = "";
 
   try {
+    const first = await createProfile(token, `A ${stamp()}`, "rocket");
+    firstId = first.id;
+    const second = await createProfile(token, `B ${stamp()}`, "panda");
+    secondId = second.id;
+    firstToken = (await switchProfile(token, first.id)).access_token ?? "";
+    secondToken = (await switchProfile(token, second.id)).access_token ?? "";
+
     await loginViaApi(page);
     await switchViaUi(page, first.id);
     await page.goto("/onboarding");
@@ -285,8 +345,8 @@ test("each profile keeps its own personal rail across switches", async ({
   } finally {
     await leaveOnDefault(page, account).catch(() => undefined);
     await cleanup(account, [
-      { id: first.id, token: firstToken },
-      { id: second.id, token: secondToken },
+      { id: firstId, token: firstToken },
+      { id: secondId, token: secondToken },
     ]);
   }
 });
