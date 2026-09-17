@@ -52,19 +52,28 @@
   đủ `max`. Không có nút bỏ qua (bắt buộc chọn) và không có header để thoát ra;
   khách chưa đăng nhập thấy lời nhắc + link `/login`.
   **Đăng nhập/đăng ký luôn đáp xuống đây** (`router.replace("/profiles")`), kể cả
-  tài khoản một profile.
+  tài khoản một profile. Bấm card **đang xem** cũng đi qua `POST /switch` như mọi
+  card khác: chọn lại profile có PIN thì phải nhập PIN, không có lối tắt.
 - **`/profiles/manage`**: mỗi profile một hàng — đổi tên & avatar, đặt/đổi/xoá
   PIN (dialog riêng, cần **mật khẩu tài khoản**), và nút xoá. Profile mặc định
   **không có nút xoá**. Xoá profile có PIN → dialog nhập PIN + cảnh báo; xoá
   profile không PIN → `window.confirm`. Xoá chỉ mất dữ liệu của profile đó.
-  Sau switch/xoá profile đang dùng: `setAccessToken` mới + `queryClient.resetQueries()`
-  (data per-profile nằm rải ở nhiều query key). Không dùng localStorage —
-  profile nhớ theo phiên/thiết bị qua refresh cookie.
+  Sau switch: `setAccessToken` mới + `queryClient.resetQueries()` (data per-profile
+  nằm rải ở nhiều query key). Xoá **profile đang dùng** thì server không phát
+  profile kế nhiệm (mặc định có thể đang khoá PIN): trang `clear()` cache rồi
+  `router.replace("/profiles")` để chọn lại. Không dùng localStorage — profile
+  nhớ theo phiên/thiết bị qua refresh cookie.
 - **`ProfilePinDialog`** (mọi chỗ chỉ hỏi PIN: mở khoá/chuyển profile ở trang
   chọn + menu header, xác nhận xoá profile có PIN): modal **full-screen**
   (`DialogContent.fullScreen`) nền tối; ô PIN là `type="password"` nên không bao
   giờ đọc được chữ số. Ngược lại `ProfileSetPinDialog` (đặt/đổi PIN trong
   `/profiles/manage`, có cả mật khẩu tài khoản) vẫn là dialog thường.
+- **`ProfileGate`** (trong `AppShell`, mọi route không immersive): đã đăng nhập
+  mà **chưa chọn profile** → giữ một placeholder rồi `router.replace("/profiles?next=<đường
+  dẫn hiện tại>")`. Vì login không chọn profile, mọi endpoint gắn profile trả
+  `403 PROFILE_REQUIRED`; gate đưa người dùng về chooser thay vì để trang hiện
+  lỗi. Miễn trừ: `/profiles`, `/profiles/manage`, `/login`, `/register` — và
+  khách chưa đăng nhập vẫn duyệt web bình thường.
 - **Header switcher** (`ProfileMenu`, cạnh avatar): dropdown liệt kê profile
   (avatar, tên, ổ khoá nếu có PIN, dấu check cho profile hiện tại) + link
   "Đổi profile" về `/profiles` + link "Quản lý profile"; chọn profile khoá sẽ mở

@@ -154,3 +154,9 @@ Brought forward — none blocks current functionality.
     render một dòng `"Vì bạn thích <nhãn>"` dưới card; không có tooltip/badge
     riêng, và rail fallback luôn `reason = null`. Đủ dùng cho v1, mở rộng khi
     cần giải thích gợi ý trực quan hơn.
+35. **Đổi/đặt PIN không thu hồi phiên đã gắn profile đó.** Từ #136, "đã xác minh
+    PIN" chính là `refresh_tokens.profile_id`; phiên đã chọn profile trước khi
+    PIN được đặt vẫn giữ nguyên lựa chọn, nên đứa trẻ đang mở sẵn phiên đó không
+    bị đá ra khi phụ huynh đặt PIN. Muốn bịt: khi `set_pin` đổi/đặt PIN, set
+    `profile_id = NULL` cho mọi phiên khác của profile (giữ phiên hiện tại, vì nó
+    vừa chứng minh mật khẩu + `current_pin`). Cố ý để ngoài phạm vi fix login.

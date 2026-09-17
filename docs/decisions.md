@@ -690,3 +690,27 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      khỏi keyframe (việc căn giữa đã do utility `top-1/2 left-1/2 -translate-x-1/2
      -translate-y-1/2` lo); E2E giờ assert dialog thường căn giữa đúng ≤2px và
      dialog full-screen khớp viewport tại `(0,0)`.
+136. **Login KHÔNG chọn profile — `pid` trong access token là bằng chứng đã chọn
+     (và đã qua PIN).** Bug (user báo): đăng nhập xong profile **mặc định** đã
+     "đang hoạt động" dù chưa nhập PIN, vì `auth_service.login` phát token kèm
+     `pid = default` và `verify_pin` chỉ chạy ở `switch`/`delete` → `GET
+     /me/profile`, `/me/favorites`… trả `200` ngay sau login (đo được: PIN 1357
+     trên profile mặc định, login mới vẫn đọc được dữ liệu). Web cũng góp phần:
+     chooser thấy `is_current` thì `leave()` thẳng (`app/profiles/page.tsx`).
+     Chốt hướng **"không bind profile khi login"** (user chọn, strict nhất):
+     - `login`/`register` phát cặp token **không có `pid`**; `_profile_from_claims`
+       coi `pid` vắng = **chưa chọn** → `403 PROFILE_REQUIRED` (KHÔNG fallback về
+       profile mặc định — bỏ nhánh cũ của #130/#132).
+     - `POST /me/profiles/{id}/switch` là **cách duy nhất** để có token gắn
+       profile (đã verify PIN nếu profile có PIN). `GET /me/profiles`, `switch`,
+       `DELETE`, `PUT .../pin` chuyển sang `get_session_context` (profile có thể
+       `None`) để còn cửa thoát.
+     - `pid` trỏ profile đã xoá → `repoint_session(jti, None)` rồi
+       `PROFILE_REQUIRED`; refresh cũng vậy (không tự nhảy về mặc định). Xoá
+       profile đang dùng không phát profile kế nhiệm (`SwitchOut` cả hai null).
+     - Web: `ProfileGate` trong `AppShell` (đã đăng nhập + chưa chọn → giữ
+       placeholder rồi `router.replace("/profiles?next=…")`; miễn trừ
+       `/profiles`, `/profiles/manage`, `/login`, `/register`); chooser **luôn**
+       gọi `switch` kể cả card "Đang xem" nên PIN luôn được hỏi.
+     Không cần migration: `refresh_tokens.profile_id` đã `nullable` + `ON DELETE
+     SET NULL` từ đầu.

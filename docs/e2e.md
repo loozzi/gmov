@@ -96,7 +96,7 @@ cascade xoá report) + hạ account nền về `user`.
 
 ## Spec profiles (`profiles.spec.ts`)
 
-12 test phủ M1 + luồng chọn profile, **chỉ dùng account nền** — KHÔNG đăng ký
+14 test phủ M1 + luồng chọn profile, **chỉ dùng account nền** — KHÔNG đăng ký
 account nào (register bị throttle `3 tài khoản/giờ/IP`, đã từng dính). Cách ly
 được chứng minh bằng các profile tạo/xoá bên trong từng test; không cần data
 upstream (favorites nhận slug tuỳ ý) nên spec này không skip khi CDN chặn.
@@ -114,8 +114,9 @@ Timeout 120s/test.
    profile mặc định không có nút xoá; tạo tới `max` rồi profile thứ 6 bị
    server từ chối `409 PROFILE_LIMIT_REACHED`.
 4. `deleting a profile removes only its data` — xoá profile có PIN (dialog nhập
-   PIN): data của profile đó mất, profile khác nguyên vẹn, và scope của profile
-   đã xoá trả `404 PROFILE_NOT_FOUND`.
+   PIN): data của profile đó mất, profile khác nguyên vẹn, và một access token
+   còn giữ `pid` của profile đã xoá nhận `403 PROFILE_REQUIRED` (phiên về trạng
+   thái chưa chọn, **không** rơi vào profile mặc định).
 5. `creating a profile from the manage page adds a row` — nút "Thêm profile" ở
    `/profiles/manage` mở form và thêm hàng mới.
 6. `changing a PIN requires the current PIN` — đổi PIN qua manage đòi
@@ -138,12 +139,24 @@ Timeout 120s/test.
     hiện tại" theo `PIN_REQUIRED`.
 12. `the profile menu never locks page scroll` — mở menu profile **và** menu tài
     khoản: `data-scroll-locked` phải vắng, `overflow` không `hidden`, trang vẫn
-    scroll được (chống tái phát lỗi nháy scrollbar).
+    scroll được (chống tái phát lỗi nháy scrollbar). Chờ poll cho nội dung trang
+    render xong (ProfileGate giữ placeholder trong lúc resolve profile) rồi mới
+    assert trang có scrollbar.
+13. `an unselected session is sent to the chooser before it can browse` — đăng
+    nhập mà **không** chọn profile → `GET /` bị `ProfileGate` đá sang
+    `/profiles?next=%2F`, thấy chooser, không có header; chọn profile → về `/`.
+14. `picking the profile already on screen still asks for its PIN` — phiên đã
+    theo dõi profile có PIN: vào `/profiles` bấm đúng card đang xem ("Đang xem")
+    vẫn phải mở `ProfilePinDialog` và nhập PIN (chặn lối tắt `is_current`).
 
-Helper dùng chung ở `helpers/auth.ts`: `loginViaApi` (đăng nhập bằng route
-handler, vào thẳng `/`), `loginViaUi` (đăng nhập qua form rồi **đi tiếp qua
-trang chọn** — cần thiết vì login luôn đáp xuống `/profiles`), và
-`continuePastChooser` (chọn profile đang xem rồi tới đích, mặc định `/`).
+Helper dùng chung ở `helpers/auth.ts`: `loginViaApi(page, { skipChooser })`
+(đăng nhập bằng route handler; mặc định **đi tiếp qua trang chọn** vì login
+không chọn profile — dùng `skipChooser: true` cho test assert chính cú đá sang
+`/profiles`), `loginViaUi` (đăng nhập qua form rồi đi tiếp qua trang chọn), và
+`continuePastChooser` (bấm card **đầu tiên** — profile mặc định, không PIN — rồi
+tới đích, mặc định `/`). Phía Node, `helpers/api.ts::loginUser` cũng login rồi
+switch sang profile mặc định (`loginUnselected` giữ token thô) vì mọi helper
+seed/cleanup đều gắn profile.
 Cleanup dùng `resetProfiles` (xoá PIN + xoá mọi profile non-default) và xoá
 favorites đã thêm, best-effort để trả account về profile mặc định.
 
