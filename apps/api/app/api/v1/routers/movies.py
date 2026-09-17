@@ -1,8 +1,9 @@
 """Public movie catalog router (proxied NguonC + Redis cache)."""
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import ratelimit
 from app.core.deps import get_optional_user
 from app.core.exceptions import AppException
 from app.db.models.user import User
@@ -18,6 +19,12 @@ router = APIRouter(prefix="/movies", tags=["movies"])
 comments_router = APIRouter(tags=["comments"])
 
 LIST_TYPES = ("dang-chieu", "phim-le", "phim-bo", "tv-shows")
+
+# Related is the only catalog endpoint that fans out (~10 upstream listing
+# calls behind a cache miss), so it is the only one rate limited. Generous
+# enough for a browsing session, counted per client IP (cache hits included).
+RELATED_RATE_LIMIT = 60
+RELATED_RATE_WINDOW = 60
 
 
 async def _cached(
@@ -118,6 +125,7 @@ async def detail(slug: str, response: Response):
 async def related(
     slug: str,
     response: Response,
+    request: Request,
     limit: int = Query(
         default=related_service.DEFAULT_LIMIT,
         ge=1,
@@ -127,6 +135,11 @@ async def related(
     """Computed from the movie's own genre/country/year listings (see
     related_service): upstream neither has a related endpoint nor indexes
     people in search."""
+    await ratelimit.check_rate_limit(
+        f"ratelimit:related:{ratelimit.client_ip(request)}",
+        RELATED_RATE_LIMIT,
+        RELATED_RATE_WINDOW,
+    )
     # Cache the widest pool once and slice per request: `limit` is a view, not a
     # different computation, so it must not multiply cache entries (nor the ~10
     # upstream listing calls behind each miss).
