@@ -425,3 +425,52 @@ test("the picker appears after login and enforces the PIN", async ({
     await restoreDefault(account);
   }
 });
+
+test("a stale has_pin reveals the current-PIN field on PIN_REQUIRED", async ({
+  page,
+}) => {
+  const account = await loadAccount();
+  const name = `Stale ${stamp()}`;
+  let profileId = "";
+
+  try {
+    await resetProfiles(account);
+    const token = (await loginUser(account)).access_token;
+    const profile = await createProfile(token, name, "clover");
+    profileId = profile.id;
+
+    // Load the manage page while the profile is still unlocked, so the client
+    // caches has_pin === false.
+    await loginViaApi(page);
+    await page.goto("/profiles/manage");
+    const row = page.getByTestId(`profile-row-${profileId}`);
+    await expect(
+      row.getByRole("button", { name: `Đặt PIN ${name}` }),
+    ).toBeVisible();
+
+    // Set the PIN behind the client's back; the cached list still says the
+    // profile is unlocked (no reload, so has_pin stays stale).
+    await setProfilePin(token, profileId, account.password, "1357");
+
+    await row.getByRole("button", { name: `Đặt PIN ${name}` }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    // The stale cache hides the current-PIN field at this point.
+    await expect(dialog.getByLabel("PIN hiện tại")).toHaveCount(0);
+
+    await dialog.getByLabel("Mật khẩu tài khoản").fill(account.password);
+    await dialog.getByLabel("PIN mới").fill("2468");
+    await dialog.getByRole("button", { name: /^lưu$/i }).click();
+
+    // The server answers PIN_REQUIRED; the dialog must reveal the field (and
+    // switch its title to "Đổi PIN") instead of leaving the user stuck.
+    await expect(dialog.getByLabel("PIN hiện tại")).toBeVisible();
+    await expect(dialog.getByRole("alert")).toHaveText(/cần PIN hiện tại/i);
+
+    await dialog.getByLabel("PIN hiện tại").fill("1357");
+    await dialog.getByRole("button", { name: /^lưu$/i }).click();
+    await expect(dialog).toBeHidden();
+  } finally {
+    await cleanup(account, [], profileId ? { [profileId]: "2468" } : {});
+  }
+});

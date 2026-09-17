@@ -138,7 +138,11 @@ export function useDeleteProfile() {
     onSuccess: (data) => {
       if (data.access_token) {
         setAccessToken(data.access_token);
-        queryClient.clear();
+        // Deleting the active profile moves the session to the default, so
+        // every profile-scoped cache entry is stale for the same reason as a
+        // switch: reset (drop data + refetch active observers) instead of
+        // `clear()`, which would leave the header on the deleted profile.
+        void queryClient.resetQueries();
         return;
       }
       void queryClient.invalidateQueries({ queryKey: PROFILE_KEYS.all });
