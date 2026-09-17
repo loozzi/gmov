@@ -16,7 +16,7 @@ Thiết kế/động cơ: `docs/superpowers/specs/2026-09-17-profiles-and-recomm
 | PATCH | `/profiles/{id}` | `ProfilePatchIn` | 200 `ProfileOut` — đổi tên/avatar (kể cả profile mặc định); `404 PROFILE_NOT_FOUND`; `409 PROFILE_NAME_TAKEN` |
 | POST | `/profiles/{id}/switch` | `ProfileSwitchIn` | 200 `SwitchOut`; `403 PIN_REQUIRED`, `401 INVALID_PIN`, `404 PROFILE_NOT_FOUND`, `401 SESSION_STALE` |
 | DELETE | `/profiles/{id}` | `ProfileSwitchIn` | 200 `SwitchOut`; `403 PIN_REQUIRED`, `401 INVALID_PIN`, `409 DEFAULT_PROFILE`, `404 PROFILE_NOT_FOUND` |
-| PUT | `/profiles/{id}/pin` | `ProfilePinIn` | 200 `ProfileOut`; `400 INVALID_PASSWORD`, `404 PROFILE_NOT_FOUND` |
+| PUT | `/profiles/{id}/pin` | `ProfilePinIn` | 200 `ProfileOut`; `403 PIN_REQUIRED`, `401 INVALID_PIN`, `400 INVALID_PASSWORD`, `404 PROFILE_NOT_FOUND` |
 
 ## Shapes
 
@@ -38,7 +38,7 @@ Thiết kế/động cơ: `docs/superpowers/specs/2026-09-17-profiles-and-recomm
 // ProfilePatchIn  = { "name"?: str 1..32, "avatar"?: slug }
 
 // ProfileSwitchIn = { "pin"?: "1234" }   // regex ^\d{4}$
-// ProfilePinIn    = { "password": str, "pin"?: "1234" | null }
+// ProfilePinIn    = { "password": str, "current_pin"?: "1234", "pin"?: "1234" | null }
 
 // SwitchOut — DELETE non-active trả cả hai null
 { "access_token": "jwt" | null, "profile": ProfileOut | null }
@@ -71,8 +71,8 @@ Hard delete: dữ liệu của profile mất theo qua FK `ON DELETE CASCADE`
 | `PROFILE_NAME_TAKEN` | 409 | Tên trùng (case-insensitive) với profile khác cùng tài khoản |
 | `DEFAULT_PROFILE` | 409 | Cố xoá profile `is_default = true` |
 | `PROFILE_NOT_FOUND` | 404 | `{id}` không tồn tại **hoặc** không thuộc tài khoản hiện tại |
-| `PIN_REQUIRED` | 403 | Profile có PIN nhưng request không gửi `pin` (switch/delete) |
-| `INVALID_PIN` | 401 | `pin` sai |
+| `PIN_REQUIRED` | 403 | Profile có PIN nhưng request thiếu `pin` (switch/delete) hoặc thiếu `current_pin` (đổi/xoá PIN) |
+| `INVALID_PIN` | 401 | `pin` / `current_pin` sai |
 | `INVALID_PASSWORD` | 400 | Mật khẩu tài khoản sai khi đặt/đổi/xoá PIN |
 | `SESSION_STALE` | 401 | Switch khi access token thiếu claim `sid` |
 | `RATE_LIMITED` | 429 | Vượt ngân sách PIN set hoặc PIN attempt (kèm `Retry-After`) |
@@ -82,22 +82,26 @@ Hard delete: dữ liệu của profile mất theo qua FK `ON DELETE CASCADE`
 
 - PIN đúng **4 chữ số** (`^\d{4}$`), hash bằng passlib (bcrypt) vào
   `profiles.pin_hash`; không lưu thô, không log.
-- **Switch** và **xoá** profile có PIN → phải nhập PIN **của chính profile đó**.
-  Hai đường dùng **chung một bộ đếm** theo `(profile_id, IP)`
+- **Switch**, **xoá** hoặc **đổi/xoá PIN của** profile có PIN → phải nhập PIN
+  **của chính profile đó** (`switch/delete` dùng `pin`, đổi PIN dùng
+  `current_pin`). Ba đường dùng **chung một bộ đếm** theo `(profile_id, IP)`
   (`ratelimit:pin:{profile_id}:{ip}`) với `PIN_MAX_ATTEMPTS = 5` /
   `PIN_WINDOW = 60`s → `429 RATE_LIMITED` + `Retry-After`. Đổi endpoint không
   mở thêm ngân sách.
-- **Chỉ lần thử thất bại mới bị đếm** (thiếu PIN hoặc PIN sai); một lần PIN
-  đúng không tiêu ngân sách, nên thao tác hợp lệ không bao giờ tự khoá mình.
+- **Chỉ lần thử thất bại mới bị đếm** (thiếu PIN/`current_pin` hoặc sai); một
+  lần PIN đúng không tiêu ngân sách, nên thao tác hợp lệ không bao giờ tự khoá
+  mình.
 - **Đặt/đổi/xoá PIN cần mật khẩu tài khoản** (`ProfilePinIn.password`, kiểm tra
   bcrypt với `users.hashed_password`). Trẻ con không biết mật khẩu nên không tự
-  gỡ được khoá. Endpoint này có rate limit riêng theo IP
-  (`ratelimit:pin-set:{ip}`, cùng `PIN_MAX_ATTEMPTS`/`PIN_WINDOW`).
-- PIN sai → `401 INVALID_PIN`; thiếu khi đang cần → `403 PIN_REQUIRED` (khác
-  nhau để UI biết khi nào mở dialog).
+  gỡ được khoá. Thứ tự kiểm tra: `current_pin` trước, mật khẩu tài khoản sau.
+- **`current_pin` chỉ bắt buộc khi profile đã có PIN**: đặt PIN lần đầu hoặc
+  "xoá" PIN khi profile chưa có PIN đều bỏ qua `current_pin`. Nhờ vậy không có
+  ngõ cụt cho tài khoản chưa từng đặt PIN.
+- PIN/`current_pin` sai → `401 INVALID_PIN`; thiếu khi đang cần → `403
+  PIN_REQUIRED` (khác nhau để UI biết khi nào mở dialog).
 
-Cả hai key PIN nằm trong namespace `ratelimit:*` để E2E `global-setup` reset
-được counters giữa các lần chạy.
+Key PIN nằm trong namespace `ratelimit:*` để E2E `global-setup` reset được
+counters giữa các lần chạy.
 
 ## Session model
 
@@ -112,9 +116,15 @@ PIN chỉ có nghĩa khi server enforce trên mọi request.
   không dùng localStorage.
 - **Thiếu `pid`** (token cũ phát trước khi deploy) → `deps` đối xử mềm và dùng
   profile **mặc định**, nên session cũ không chết.
-- **`pid` lạ / profile đã xoá / thuộc user khác** → `404 PROFILE_NOT_FOUND`
-  (không lộ sự tồn tại profile của người khác). Ban được kiểm **trước** khi
-  resolve profile nên user bị cấm vẫn `401 ACCOUNT_BANNED`.
+- **`pid` thuộc user khác** → `404 PROFILE_NOT_FOUND` (không lộ sự tồn tại
+  profile của người khác). `pid` hỏng (không phải UUID) cũng `404`. Ban được
+  kiểm **trước** khi resolve profile nên user bị cấm vẫn `401 ACCOUNT_BANNED`.
+- **`pid` trỏ profile đã bị xoá → tự chữa lành**: server fallback về profile
+  **mặc định** của tài khoản và, nếu token có `sid`, ghi luôn
+  `refresh_tokens.profile_id` của phiên đó về profile mặc định (best-effort —
+  phiên đã bị logout thì bỏ qua). Nhờ vậy `GET /me/profile`, `GET /me/profiles`
+  và `GET /me/favorites` vẫn `200` thay vì kẹt `404`; thiết bị thứ hai không
+  còn phải chờ access token hết hạn.
 - **Switch cần `sid`**: thiếu → `401 SESSION_STALE`. `activate_session` ghi lại
   `refresh_tokens.profile_id` của đúng phiên đang gọi rồi phát access token mới.
 - **Refresh**: đọc row theo `jti`; nếu `profile_id` là NULL hoặc trỏ profile đã
@@ -122,11 +132,10 @@ PIN chỉ có nghĩa khi server enforce trên mọi request.
 - **Register** tạo user + profile mặc định (`is_default`) trong **cùng một
   transaction** (`app/services/user_service.py`).
 
-> **Hạn chế đã biết (multi-device, tạm hoãn)**: thiết bị thứ hai còn giữ `pid`
-> của một profile đã bị xoá ở nơi khác sẽ nhận `404 PROFILE_NOT_FOUND` cho đến
-> khi access token của nó hết hạn (≤30 phút); sau đó refresh mới fallback về
-> profile mặc định. Chấp nhận cho v1 — xử lý triệt để cần thông báo realtime
-> hoặc versioning phiên.
+> **Tự chữa lành (multi-device)**: profile đang dùng bị xoá ở thiết bị khác thì
+> mọi request kế tiếp trên thiết bị này tự fallback về profile mặc định và
+> `GET /me/profiles` vẫn hiển thị được danh sách + nút "Thêm profile". UI không
+> cần refresh token mới để thoát khỏi trạng thái kẹt.
 
 ## Migration
 
