@@ -22,11 +22,18 @@ export function RecommendationsRail() {
 
   if (authLoading || !isAuthenticated) return null;
   if (isLoading || isError || !data || data.items.length === 0) return null;
+  if (data.source === "newest") return null;
+
+  const reasons: Record<string, string> = {};
+  for (const item of data.items) {
+    if (item.reason) reasons[item.movie.slug] = item.reason;
+  }
 
   return (
     <MovieRail
       title={TITLES[data.source]}
       movies={data.items.map((item) => item.movie)}
+      reasons={reasons}
     />
   );
 }
