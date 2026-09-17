@@ -18,6 +18,12 @@ class RefreshToken(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
+    profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        default=None,
+    )
     family_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, index=True, nullable=False
     )

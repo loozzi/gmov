@@ -1,4 +1,4 @@
-"""Watchlist ("want to watch") movies per user."""
+"""Watchlist ("want to watch") movies per profile."""
 
 import uuid
 
@@ -11,12 +11,14 @@ from app.db.base import Base, TimestampMixin
 class Watchlist(Base, TimestampMixin):
     __tablename__ = "watchlist"
     __table_args__ = (
-        UniqueConstraint("user_id", "movie_slug", name="uq_watchlist_user_movie"),
+        UniqueConstraint(
+            "profile_id", "movie_slug", name="uq_watchlist_profile_movie"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    profile_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("profiles.id", ondelete="CASCADE"), index=True, nullable=False
     )
     movie_slug: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
     movie_name: Mapped[str] = mapped_column(String(255), nullable=False)

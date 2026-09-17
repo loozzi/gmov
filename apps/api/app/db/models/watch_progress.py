@@ -21,14 +21,14 @@ class WatchProgress(Base):
     __tablename__ = "watch_progress"
     __table_args__ = (
         UniqueConstraint(
-            "user_id", "movie_slug", "episode_slug",
-            name="uq_progress_user_movie_episode",
+            "profile_id", "movie_slug", "episode_slug",
+            name="uq_progress_profile_movie_episode",
         ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    profile_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("profiles.id", ondelete="CASCADE"), index=True, nullable=False
     )
     movie_slug: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
     movie_name: Mapped[str] = mapped_column(String(255), nullable=False)
