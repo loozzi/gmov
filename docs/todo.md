@@ -127,3 +127,19 @@ Brought forward — none blocks current functionality.
 30. **Chưa có trang quản lý người bị cấm** — cấm/bỏ cấm chỉ thao tác được từ
     hàng report của người đó (`AdminCommentUser.id`); không có `GET /admin/users`
     để xem/lọc danh sách đang bị cấm. Thêm khi số lượng ban đủ nhiều để cần.
+
+## Lộ trình tính năng (profiles & recommendations)
+
+31. ~~**M1 — Profiles**~~ — DONE (2026-09-17): profiles per tài khoản (tối đa
+    5), dữ liệu xem re-key sang `profile_id`, profile trong phiên (`sid`/`pid`),
+    CRUD + switch + PIN soft-gate, UI `/profiles` + `/profiles/manage` +
+    header switcher. API: `docs/api-profiles.md`; quyết định: `docs/decisions.md`
+    #112–116; E2E: `apps/web/e2e/profiles.spec.ts`.
+32. **M2 — Onboarding & gợi ý** — CHỜ LÀM (việc mở kế tiếp): thiết kế đã chốt ở
+    `docs/superpowers/specs/2026-09-17-profiles-and-recommendations-design.md`.
+    Gồm kho catalog snapshot + refresh lazy TTL 24h, sở thích per-profile
+    (`profile_preferences`: quiz + poster like), engine xếp hạng deterministic
+    (trọng số explicit lưu DB, hành vi tính lúc scoring), onboarding 3 bước
+    (`/onboarding`, skip được), rail "Gợi ý cho bạn" kèm `reason` + fallback
+    "Phổ biến"/"Mới cập nhật", và "Làm lại sở thích" trong `/profiles/manage`.
+    Plan M2 sẽ viết bám code thật sau khi M1 xanh.
