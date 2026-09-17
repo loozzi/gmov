@@ -516,3 +516,32 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      coi "index cast/director riêng" là hướng nâng cấp thật sự (cần crawl toàn
      catalog — để sau, xem todo #28). Tín hiệu người càng ít thì rail càng
      nghiêng về "cùng năm/thể loại/quốc gia" — chấp nhận, vì đó vẫn là gợi ý hợp lý.
+
+108. **Auto-moderation = blocklist từ khoá + vào thẳng hàng đợi báo cáo**: bình
+     luận khớp từ khoá bị `is_hidden=true` ngay và sinh một `CommentReport`
+     `source=auto` (`reporter_id` cho phép NULL) thay vì ẩn "câm" — moderator
+     thấy được trong `/admin/reports` để bỏ ẩn/dismiss, dùng lại toàn bộ UI
+     queue sẵn có. Ngưỡng auto-hide theo báo cáo người dùng giữ nguyên vì
+     `count(distinct reporter_id)` bỏ qua NULL (có test riêng). Lọc là khớp
+     chuỗi con, không phân biệt hoa/thường + dấu tiếng Việt (spam Việt hay gõ
+     không dấu); obfuscation kiểu "s.p.a.m" chấp nhận lọt, ghi vào todo.
+109. **Ban là cột riêng trên `users` (`banned_at`, `ban_reason`), không dùng
+     `is_active`**: giữ phân biệt "tự vô hiệu hóa" vs "bị cấm", có dấu vết
+     ai/khi nào/vì sao. Thực thi ở `deps._resolve_user` (401 `ACCOUNT_BANNED`)
+     nên mọi route cần đăng nhập chết ngay, kể cả access token đang cầm; login
+     trả 403, refresh (kể cả token cũ) trả 401. Không cấm được
+     moderator/admin hoặc chính mình (`CANNOT_BAN_STAFF`) để một tài khoản
+     moderator bị chiếm không "dọn" được ban quản trị. Cấm không ẩn bình luận
+     cũ (không can thiệp nội dung hồi tố).
+110. **`AdminCommentUser` chỉ xuất hiện ở response admin**: cần `id` (để cấm)
+     và `banned_at` (để render nút) trên hàng report, nhưng không mở rộng
+     `CommentUser` công khai ở `/comments` — tránh lộ UUID người dùng ra API
+     công cộng mà không có nhu cầu.
+
+111. **`player.spec` fail vì race của test, không phải bug resume**: đo timeline
+     sau reload cho thấy toast hiện ở ~107ms còn seek được áp ở ~208ms (media
+     event kế tiếp), và `autoPlay = true` + `--autoplay-policy=...` khiến nút
+     overlay "Phát" unmount giữa lúc click (Playwright retry tới hết 240s).
+     Sửa test: click best-effort và chờ vị trí khác 0 đầu tiên thay vì đọc
+     clock một lần — giữ nguyên bound ±5s nên resume hỏng vẫn fail (mutation
+     `target = 0` → `got 2.05`). Không đổi code sản phẩm.

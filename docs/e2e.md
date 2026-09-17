@@ -43,11 +43,17 @@ pnpm --filter gmov-web exec playwright show-report
 ≈ t1 ± 5s. Lưu ý headless decode chậm hơn realtime nên test chờ theo media
 clock (tối đa 150s), không phải 20s wall-clock.
 
-**Flake đã biết (pre-existing, không phải regression):** assertion resume đôi
-khi ra `expected ~20s, got 0` dù toast "Đã tiếp tục từ" vẫn hiện. Đã chứng minh
-không do feature sau này (stash diff → fail y hệt; seed progress 60s → seek
-đúng ~67s); nghi race giữa assert và seek hoặc `startedRef` latch — xem
-`docs/decisions.md` (#69). Cần buổi debug riêng, không chặn round khác.
+**Flake cũ đã sửa (2026-09-17, decision #111):** assertion resume từng ra
+`expected ~20s, got 0` sau reload. Đo timeline cho thấy đây là race của **test**
+chứ không phải bug player: (a) `VideoPlayer` mặc định `autoPlay = true` cộng
+`--autoplay-policy=no-user-gesture-required` của Playwright khiến nút overlay
+"Phát" unmount giữa lúc click → Playwright retry tới hết timeout 240s (test
+treo), và (b) test đọc `currentTime` **một lần** ngay sau toast, rơi vào khe
+~100ms giữa toast (fetch progress xong) và seek (áp ở media event kế tiếp).
+Fix: click best-effort (`timeout: 5s` + `catch`) và chờ **vị trí khác 0 đầu
+tiên** (≥2s) thay vì đọc một lần. Resume đúng nhảy ngay tới ~t1; resume hỏng
+phát lại từ 0 nên chỉ đạt 2s sau ~2s và vẫn bị bound ±5s bắt (đã verify bằng
+mutation ép `target = 0` → fail `got 2.05`).
 
 ## Spec kiểm duyệt (`moderation.spec.ts`)
 
@@ -75,6 +81,16 @@ storageState chung:
 
 Spec gọi `skipIfNoUpstream()` như các spec cần data khác, timeout 150s, và tái
 dùng `commentCard()` (locator `div.rounded-xl`) để bám đúng card theo text.
+
+Test thứ hai — `ban the comment author from the queue, then unban` — phủ luồng
+cấm tài khoản: author (1 account đăng ký mới) đăng bình luận qua API, **account
+nền** (đang là moderator) nộp báo cáo qua API, moderator bấm "Cấm" trên card
+`/admin/reports` (accept `window.confirm`) → assert pill "Đã cấm"; kiểm tra
+khoá tức thì bằng `rawApi` (token cũ `401 ACCOUNT_BANNED`, login `403`), rồi
+"Bỏ cấm" và assert token cũ dùng lại được. Chỉ đăng ký **một** account: cả file
+dùng 2/3 quota `3 tài khoản/giờ/IP`, tránh `skip` vì throttle (đã từng dính khi
+test này còn đăng ký 2 account). Cleanup xoá bình luận qua API (xoá comment →
+cascade xoá report) + hạ account nền về `user`.
 
 ## CI
 

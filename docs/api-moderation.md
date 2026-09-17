@@ -2,7 +2,9 @@
 
 Cho phép người dùng đã đăng nhập báo cáo bình luận; đủ số người báo cáo thì
 bình luận tự động bị ẩn chờ duyệt; moderator/admin có hàng đợi để ẩn/bỏ ẩn
-bình luận và bỏ qua báo cáo.
+bình luận và bỏ qua báo cáo. Bình luận chứa từ khoá trong blocklist bị ẩn ngay
+khi tạo (auto-moderation) và cũng vào hàng đợi; moderator có thể cấm/bỏ cấm
+tài khoản đăng spam.
 
 Base: `/api/v1`. Mọi lỗi là JSON `{"detail": ..., "code": ...}` (xem
 `docs/api-auth.md`).
@@ -73,14 +75,21 @@ token → `401`; đã đăng nhập nhưng role không đủ → `403 FORBIDDEN`
 | POST | `/admin/comments/{comment_id}/hide` | — | 200 `{"ok": true, "is_hidden": true}` |
 | POST | `/admin/comments/{comment_id}/unhide` | — | 200 `{"ok": true, "is_hidden": false}` |
 | POST | `/admin/reports/{report_id}/dismiss` | — | 200 `{"ok": true}` |
+| POST | `/admin/users/{user_id}/ban` | body `{reason?}` (≤200 ký tự) | 200 `BannedUserOut` |
+| POST | `/admin/users/{user_id}/unban` | — | 200 `BannedUserOut` |
 
 `status` không hợp lệ → 422. `PaginatedReports = {items: ReportItem[], page,
 per_page, total_items, open_total}`; `open_total` là tổng số báo cáo `open`
 **bất kể filter**, dùng cho badge trên UI.
 
-`ReportItem = {id, reason, note, status, created_at, reporter: CommentUser,
-comment: {id, body, is_hidden, movie_slug, user: CommentUser, created_at}}`.
-Sắp xếp mới nhất trước. `CommentUser = {username, display_name}`.
+`ReportItem = {id, reason, note, status, source, created_at, reporter, comment}`
+với `source ∈ user | auto`. Sắp xếp mới nhất trước.
+`reporter: AdminCommentUser | null` — `null` với báo cáo do bộ lọc từ khoá tạo
+(`source=auto`). `comment.user` cũng là `AdminCommentUser`.
+`AdminCommentUser = {id, username, display_name, banned_at}` — có `id` để
+moderator thao tác lên tài khoản và `banned_at` để UI render nút cấm/bỏ cấm mà
+không cần request thứ hai. (`CommentUser` công khai ở `/comments` vẫn chỉ có
+`username`, `display_name`.)
 
 Hành vi:
 
@@ -96,6 +105,25 @@ Hành vi:
 Xóa cứng bình luận vẫn chỉ dành cho chủ sở hữu (`DELETE /me/comments/{id}`);
 moderator chỉ bật/tắt `is_hidden`.
 
+### Cấm người dùng
+
+`POST /admin/users/{user_id}/ban` đặt `users.banned_at = now` +
+`users.ban_reason = reason`; `unban` xóa cả hai (no-op nếu chưa bị cấm). Cả hai
+idempotent, trả `{id, username, banned_at, ban_reason}`.
+
+- Không cấm được chính mình và không cấm được tài khoản role
+  `moderator`/`admin` → `403 CANNOT_BAN_STAFF` (một moderator bị chiếm tài
+  khoản không thể "dọn" cả ban quản trị).
+- `404 USER_NOT_FOUND` khi id không tồn tại; cần `require_role` như mọi route
+  admin khác.
+- Hiệu lực tức thì: `deps._resolve_user` từ chối `banned_at is not null`
+  (`401 ACCOUNT_BANNED`) nên **access token cũ chết ngay**; login trả
+  `403 ACCOUNT_BANNED`; refresh token (kể cả token phát hành trước khi cấm) bị
+  từ chối `401 INVALID_REFRESH_TOKEN`. Bỏ cấm thì token cũ dùng lại được (không
+  cần đăng nhập lại).
+- Cấm **không** ẩn bình luận cũ: đây là biện pháp lên tài khoản, không phải
+  chỉnh sửa nội dung hồi tố. Nội dung spam đã bị ẩn bằng hide/auto-hide.
+
 ## Auto-hide
 
 Đếm số báo cáo `open` từ các reporter **khác nhau** cho một bình luận. Khi đạt
@@ -104,16 +132,37 @@ Báo cáo vẫn giữ `open` để moderator duyệt (auto-hide không resolve).
 mới nhắm vào bình luận đã ẩn bị từ chối `409 COMMENT_HIDDEN`. Hide thủ công
 của moderator mới là thao tác resolve báo cáo.
 
+Báo cáo do bộ lọc từ khoá tạo (`source=auto`, `reporter_id=NULL`) **không** được
+đếm vào ngưỡng này: phép đếm là `count(distinct reporter_id)` và SQL bỏ qua
+`NULL` — nếu không, vài lần auto-ẩn sẽ vô tình đạt ngưỡng của báo cáo người dùng.
+
+## Auto-moderation theo từ khoá
+
+`comment_service.create` (đường ghi duy nhất cho cả bình luận gốc lẫn trả lời)
+so khớp `body` với `MODERATION_BLOCKED_KEYWORDS` **trước khi** lưu. So khớp
+không phân biệt hoa/thường, **không phân biệt dấu tiếng Việt**, gộp khoảng
+trắng (`normalize()` trong `services/moderation_filter.py`) và là khớp chuỗi
+con — nên "CÁ   ĐỘ" khớp "cá độ", "ca do" cũng khớp. Không xử lý obfuscation
+kiểu "s.p.a.m" (xem `docs/todo.md`).
+
+Khi khớp: bình luận được lưu với `is_hidden=true` **và** một `CommentReport`
+`source=auto, reason=spam, reporter_id=NULL, status=open` được tạo với `note`
+liệt kê từ khoá khớp (`note` cắt còn 500 ký tự) → xuất hiện trong
+`/admin/reports` như mọi báo cáo khác, moderator có thể bỏ ẩn (`unhide`) hoặc
+dismiss. Mặc định danh sách rỗng = tắt hoàn toàn (không đổi hành vi cũ).
+
 ## Config
 
 | Setting | Env | Mặc định |
 |---------|-----|----------|
 | `comment_report_hide_threshold` | `COMMENT_REPORT_HIDE_THRESHOLD` | `3` |
+| `moderation_blocked_keywords` | `MODERATION_BLOCKED_KEYWORDS` | rỗng (tắt) |
 
 Có mặt trong `.env.example` và service `api` của `docker-compose.yml`.
 
 ## Error codes
 
 `CANNOT_REPORT_OWN` (422), `COMMENT_HIDDEN` (409), `REPORT_NOT_FOUND` (404),
+`USER_NOT_FOUND` (404), `CANNOT_BAN_STAFF` (403), `ACCOUNT_BANNED` (401/403),
 `FORBIDDEN` (403). `INVALID_ROLE` có trong map lỗi phía web nhưng backend
 chưa phát mã này: CLI chặn role sai bằng argparse `choices` (thoát code 2).

@@ -59,14 +59,20 @@ Brought forward — none blocks current functionality.
 
 ## Kiểm duyệt bình luận (nợ tương lai, ngoài scope v1)
 
-18. **Chưa có ban/khoá người dùng** — chỉ ẩn bình luận, không cấm được
-    người đăng. Thêm khi bị spam lặp lại.
+18. ~~**Chưa có ban/khoá người dùng**~~ — DONE (2026-09-17: `users.banned_at`
+    + `ban_reason`, `POST /admin/users/{id}/ban|unban`, thực thi ở
+    `deps._resolve_user`/login/refresh; UI cấm/bỏ cấm ngay trên hàng report).
+    Còn lại: chưa có trang danh sách người bị cấm (phải vào từ hàng report của
+    họ) — xem #30.
 19. **Chưa có spoiler tag** — `reason=spoiler` chỉ dùng để báo cáo, không có
     cơ chế đánh dấu/che nội dung chủ động.
 20. **Chưa có thông báo cho moderator** — không email/push khi hàng đợi có
     báo cáo mới; moderator phải tự vào `/admin/reports`.
-21. **Chưa có auto-moderation theo từ khoá** — chỉ ẩn theo ngưỡng số người
-    báo cáo, không lọc nội dung tự động.
+21. ~~**Chưa có auto-moderation theo từ khoá**~~ — DONE (2026-09-17:
+    `MODERATION_BLOCKED_KEYWORDS` + `services/moderation_filter.py`, khớp
+    không phân biệt hoa/thường/dấu tiếng Việt, ẩn ngay + tạo report
+    `source=auto` vào hàng đợi). Còn lại: obfuscation kiểu "s.p.a.m"/zero-width
+    không bị bắt (khớp chuỗi con thuần).
 
 ## Nợ phát sinh từ hardening + kiểm duyệt (2026-09-16)
 
@@ -117,3 +123,7 @@ Brought forward — none blocks current functionality.
 29. ~~**`/related` chưa có rate limit theo IP**~~ — DONE (2026-09-17: 60
     req/phút/IP qua `check_rate_limit`, tính cả cache HIT; chỉ endpoint catalog
     này bị giới hạn vì mỗi cache miss fan-out ~10 call upstream).
+
+30. **Chưa có trang quản lý người bị cấm** — cấm/bỏ cấm chỉ thao tác được từ
+    hàng report của người đó (`AdminCommentUser.id`); không có `GET /admin/users`
+    để xem/lọc danh sách đang bị cấm. Thêm khi số lượng ban đủ nhiều để cần.
