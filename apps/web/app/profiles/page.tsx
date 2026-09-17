@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
-import { toVietnameseMessage } from "@/lib/errors";
+import { ApiError, toVietnameseMessage } from "@/lib/errors";
 import {
   useProfiles,
   useSwitchProfile,
@@ -86,8 +86,17 @@ export default function ProfilesPage() {
       { id: item.id },
       {
         onSuccess: () => toast(`Đã chuyển sang ${item.name}.`, "success"),
-        onError: (err: unknown) =>
-          setSwitchError(toVietnameseMessage(err)),
+        onError: (err: unknown) => {
+          // Stale `has_pin` (PIN set on another device): the server replies
+          // PIN_REQUIRED, so collect the PIN here instead of showing raw text.
+          if (err instanceof ApiError && err.code === "PIN_REQUIRED") {
+            setSwitchError(null);
+            setPinError(null);
+            setLocked(item);
+            return;
+          }
+          setSwitchError(toVietnameseMessage(err));
+        },
       },
     );
   };

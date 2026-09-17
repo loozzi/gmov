@@ -39,6 +39,27 @@ export interface ApiOptions extends RequestInit {
   auth?: boolean;
 }
 
+// Session failures the backend emits with HTTP 401 that a refresh can recover:
+// UNAUTHORIZED (deps.py) for expired/invalid access tokens, INVALID_REFRESH_TOKEN
+// for a dead refresh token, and SESSION_STALE for an old access token missing
+// `sid`. A business 401 such as INVALID_PIN must surface as-is instead (no
+// double submit, no refresh-cookie rotation on a PIN typo).
+const TOKEN_FAILURE_CODES = new Set([
+  "UNAUTHORIZED",
+  "INVALID_REFRESH_TOKEN",
+  "SESSION_STALE",
+]);
+
+async function isTokenFailure(res: Response): Promise<boolean> {
+  if (res.status !== 401) return false;
+  try {
+    const body = (await res.clone().json()) as { code?: unknown };
+    return typeof body.code === "string" && TOKEN_FAILURE_CODES.has(body.code);
+  } catch {
+    return false;
+  }
+}
+
 export async function apiFetch<T>(
   path: string,
   { auth = true, headers, ...init }: ApiOptions = {},
@@ -56,7 +77,7 @@ export async function apiFetch<T>(
     });
 
   let res = await request(accessToken);
-  if (res.status === 401 && auth) {
+  if (auth && (await isTokenFailure(res))) {
     const fresh = await refreshOnce();
     if (!fresh) {
       throw new ApiError(401, "UNAUTHORIZED", "Bạn cần đăng nhập để tiếp tục.");

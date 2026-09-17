@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toaster";
-import { toVietnameseMessage } from "@/lib/errors";
+import { ApiError, toVietnameseMessage } from "@/lib/errors";
 import {
   consumeProfilePicker,
   getProfilePickerPending,
@@ -73,7 +73,18 @@ function ProfilePickerOverlay() {
           setOpen(false);
           toast(`Đã chuyển sang ${item.name}.`, "success");
         },
-        onError: (error: unknown) => setSwitchError(toVietnameseMessage(error)),
+        onError: (error: unknown) => {
+          // The cached `has_pin` may be stale (set on another device): the
+          // server then answers PIN_REQUIRED, so open the PIN dialog instead
+          // of leaving the user with a dead end.
+          if (error instanceof ApiError && error.code === "PIN_REQUIRED") {
+            setSwitchError(null);
+            setPinError(null);
+            setLocked(item);
+            return;
+          }
+          setSwitchError(toVietnameseMessage(error));
+        },
       },
     );
   };

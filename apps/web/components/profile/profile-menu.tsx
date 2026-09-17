@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
-import { toVietnameseMessage } from "@/lib/errors";
+import { ApiError, toVietnameseMessage } from "@/lib/errors";
 import { requestProfilePicker } from "@/lib/profile-picker";
 import {
   useCurrentProfile,
@@ -54,8 +54,16 @@ export function ProfileMenu() {
       { id: item.id },
       {
         onSuccess: () => toast(`Đã chuyển sang ${item.name}.`, "success"),
-        onError: (error: unknown) =>
-          toast(toVietnameseMessage(error), "error"),
+        onError: (error: unknown) => {
+          // Stale `has_pin` (PIN set on another device): the server replies
+          // PIN_REQUIRED, so ask for the PIN instead of a generic toast.
+          if (error instanceof ApiError && error.code === "PIN_REQUIRED") {
+            setPinError(null);
+            setLocked(item);
+            return;
+          }
+          toast(toVietnameseMessage(error), "error");
+        },
       },
     );
   };
