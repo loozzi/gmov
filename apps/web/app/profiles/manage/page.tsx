@@ -142,6 +142,7 @@ export default function ManageProfilesPage() {
           {data.items.map((p) => (
             <div
               key={p.id}
+              data-testid={`profile-row-${p.id}`}
               className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-card p-4"
             >
               <ProfileAvatar avatar={p.avatar} className="size-14 text-3xl" />
@@ -169,6 +170,7 @@ export default function ManageProfilesPage() {
                 <Button
                   size="sm"
                   variant="secondary"
+                  aria-label={`Đổi tên & avatar ${p.name}`}
                   onClick={() => setEditProfile(p)}
                 >
                   <Pencil /> Đổi tên &amp; avatar
@@ -176,6 +178,9 @@ export default function ManageProfilesPage() {
                 <Button
                   size="sm"
                   variant="outline"
+                  aria-label={
+                    p.has_pin ? `Đổi PIN ${p.name}` : `Đặt PIN ${p.name}`
+                  }
                   onClick={() => setPinTarget({ profile: p, mode: "set" })}
                 >
                   <KeyRound /> {p.has_pin ? "Đổi PIN" : "Đặt PIN"}
@@ -184,6 +189,7 @@ export default function ManageProfilesPage() {
                   <Button
                     size="sm"
                     variant="ghost"
+                    aria-label={`Xoá PIN ${p.name}`}
                     onClick={() => setPinTarget({ profile: p, mode: "clear" })}
                   >
                     Xoá PIN
@@ -193,6 +199,7 @@ export default function ManageProfilesPage() {
                   <Button
                     size="sm"
                     variant="destructive"
+                    aria-label={`Xoá profile ${p.name}`}
                     onClick={() => handleDelete(p)}
                     disabled={deleteProfile.isPending}
                   >

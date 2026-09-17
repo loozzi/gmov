@@ -34,6 +34,7 @@ function ProfileCard({ item, disabled, onSelect }: ProfileCardProps) {
       type="button"
       onClick={() => onSelect(item)}
       disabled={disabled}
+      data-testid={`profile-card-${item.id}`}
       aria-label={item.is_current ? `${item.name} (đang xem)` : item.name}
       className="group flex w-28 cursor-pointer flex-col items-center gap-2 disabled:cursor-wait disabled:opacity-60"
     >
@@ -174,6 +175,7 @@ export default function ProfilesPage() {
               <button
                 type="button"
                 onClick={() => setFormOpen(true)}
+                data-testid="profile-add"
                 aria-label="Thêm profile"
                 className="group flex w-28 cursor-pointer flex-col items-center gap-2"
               >
