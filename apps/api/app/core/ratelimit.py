@@ -78,7 +78,12 @@ async def check_rate_limit(key: str, limit: int, window_seconds: int) -> None:
 
 def pin_attempt_key(profile_id: uuid.UUID, ip: str) -> str:
     """Counter shared by every PIN check (switch + delete) of a profile."""
-    return f"profile-pin:{profile_id}:{ip}"
+    return f"ratelimit:pin:{profile_id}:{ip}"
+
+
+def pin_set_key(ip: str) -> str:
+    """Per-IP budget for setting/changing/clearing a PIN."""
+    return f"ratelimit:pin-set:{ip}"
 
 
 async def check_pin_attempt_allowed(

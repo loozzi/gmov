@@ -141,7 +141,7 @@ async def set_profile_pin(
     db: AsyncSession = Depends(get_db),
 ) -> ProfileOut:
     await ratelimit.check_rate_limit(
-        f"profile-pin-set:{ratelimit.client_ip(request)}",
+        ratelimit.pin_set_key(ratelimit.client_ip(request)),
         profile_service.PIN_MAX_ATTEMPTS,
         profile_service.PIN_WINDOW,
     )
