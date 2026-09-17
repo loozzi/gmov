@@ -73,7 +73,11 @@ def _score(
         genre_part = GENRE_WEIGHT * sum(w for _, w in matched) / math.sqrt(len(genres))
     reason_genre = None
     if matched:
-        reason_genre = max(matched, key=lambda pair: (pair[1], pair[0]))[0]
+        best_genre, best_weight = max(
+            matched, key=lambda pair: (pair[1], pair[0])
+        )
+        if best_weight > 0:
+            reason_genre = best_genre
 
     score = genre_part
     if item.country and item.country in countries:

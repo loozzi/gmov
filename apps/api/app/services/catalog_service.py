@@ -34,6 +34,7 @@ logger = logging.getLogger("gmov.catalog")
 YEARS: tuple[int, ...] = tuple(range(2016, 2027))
 GENRE_SET = frozenset(GENRE_SLUGS.values())
 COUNTRY_SET = frozenset(COUNTRY_SLUGS.values())
+EXCLUDED_GENRE_SLUGS = frozenset({"phim-18"})
 
 LOCK_KEY = "catalog:refresh:lock"
 LOCK_TTL_SECONDS = 300
@@ -79,7 +80,11 @@ def _kind_of(key: str) -> str | None:
 
 def _default_kinds() -> list[str]:
     return [
-        *GENRE_SLUGS.values(),
+        *(
+            slug
+            for slug in GENRE_SLUGS.values()
+            if slug not in EXCLUDED_GENRE_SLUGS
+        ),
         *COUNTRY_SLUGS.values(),
         *(str(year) for year in YEARS),
     ]

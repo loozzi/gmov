@@ -16,6 +16,8 @@ from app.db.models.rating import Rating
 from app.db.models.watch_progress import WatchProgress
 from app.db.session import get_db
 from app.main import app
+from app.services import cache as cache_service
+from tests.conftest import make_access_token
 
 ME = "/api/v1/me"
 RECS = f"{ME}/recommendations"
@@ -382,3 +384,70 @@ async def test_limit_clamped_to_range(client_env):
 
     r = await client_env.client.get(f"{RECS}?limit=100", headers=headers)
     assert len(r.json()["items"]) == 3
+
+
+async def test_negative_only_match_has_no_reason(client_env):
+    headers, _ = await _register_login(client_env, "rec11@gmov.dev", "rec11")
+    pid = await _profile_id(client_env, headers)
+    await _set_prefs(client_env, headers, {})
+    await _seed_catalog(
+        client_env,
+        [
+            {"slug": "rated-bad", "genres": ["kinh-di"]},
+            {"slug": "candidate", "genres": ["kinh-di"]},
+        ],
+    )
+    await _seed_signals(client_env, pid, ratings=(("rated-bad", 1),))
+
+    r = await client_env.client.get(RECS, headers=headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["source"] == "personal"
+    by_slug = {item["movie"]["slug"]: item for item in body["items"]}
+    assert by_slug["candidate"]["reason"] is None
+
+
+async def test_recommendations_are_isolated_per_profile(client_env):
+    headers, user_id = await _register_login(client_env, "rec12@gmov.dev", "rec12")
+    pid_b = await _create_profile(client_env, headers, "B")
+    b_headers = {
+        "Authorization": f"Bearer {make_access_token(user_id, pid_b)}"
+    }
+    await _set_prefs(client_env, headers, {"hanh-dong": 2.0})
+    await _set_prefs(client_env, b_headers, {"kinh-di": 2.0})
+    await _seed_catalog(
+        client_env,
+        [
+            {"slug": "a-first", "genres": ["hanh-dong"]},
+            {
+                "slug": "a-second",
+                "genres": ["hanh-dong"],
+                "casts": "Shared Actor",
+            },
+            {
+                "slug": "b-seed",
+                "genres": ["kinh-di"],
+                "casts": "Shared Actor",
+            },
+            {"slug": "b-cand", "genres": ["kinh-di"], "casts": "Shared Actor"},
+        ],
+    )
+
+    baseline_a = (await client_env.client.get(RECS, headers=headers)).json()
+    assert [item["movie"]["slug"] for item in baseline_a["items"]] == [
+        "a-first",
+        "a-second",
+        "b-cand",
+        "b-seed",
+    ]
+
+    await cache_service.invalidate("")
+    await _seed_signals(
+        client_env, pid_b, favorites=("b-seed",), ratings=(("b-seed", 5),)
+    )
+
+    after_a = (await client_env.client.get(RECS, headers=headers)).json()
+    assert after_a == baseline_a
+
+    b_resp = (await client_env.client.get(RECS, headers=b_headers)).json()
+    assert b_resp != after_a

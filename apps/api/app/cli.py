@@ -25,6 +25,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "refresh-catalog", help="crawl the upstream catalog snapshot"
     )
     refresh.add_argument("--pages", type=int, default=settings.catalog_refresh_pages)
+    refresh.add_argument(
+        "--kinds",
+        help=(
+            "comma-separated listing keys (genre/country/year); "
+            "default: all genres except adult, plus countries and years"
+        ),
+    )
     return parser
 
 
@@ -42,9 +49,17 @@ async def _set_role(username: str, role: UserRole) -> int:
     return 0
 
 
-async def _refresh_catalog(pages: int) -> int:
+def _parse_kinds(value: str | None) -> list[str] | None:
+    if value is None:
+        return None
+    return [key.strip() for key in value.split(",") if key.strip()]
+
+
+async def _refresh_catalog(pages: int, kinds: str | None) -> int:
     async with session_factory() as session:
-        stats = await catalog_service.refresh(session, pages=max(1, pages))
+        stats = await catalog_service.refresh(
+            session, kinds=_parse_kinds(kinds), pages=max(1, pages)
+        )
     print(
         f"catalog refreshed: {stats.items_upserted} items "
         f"({stats.listings_ok} listings ok, {stats.listings_failed} failed)"
@@ -58,7 +73,7 @@ async def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "set-role":
             return await _set_role(args.username, UserRole(args.role))
         if args.command == "refresh-catalog":
-            return await _refresh_catalog(args.pages)
+            return await _refresh_catalog(args.pages, args.kinds)
         return 2
     finally:
         await engine.dispose()

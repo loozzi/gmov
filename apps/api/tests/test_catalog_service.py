@@ -213,6 +213,24 @@ async def test_by_slugs_follows_input_order_and_skips_unknown(db_env):
         assert await catalog_service.by_slugs(db, []) == []
 
 
+def test_default_kinds_exclude_adult_genre():
+    jobs = catalog_service._jobs(catalog_service._default_kinds(), 1)
+    keys = {key for _kind, key, _page in jobs}
+    assert "phim-18" not in keys
+    assert "hanh-dong" in keys
+
+
+@respx.mock
+async def test_adult_genre_is_still_crawlable_when_explicit(db_env):
+    mock_listing("/films/the-loai/phim-18", [card("adult")])
+
+    async with db_env.factory() as db:
+        stats = await catalog_service.refresh(db, kinds=["phim-18"])
+        assert stats.listings_ok == 1
+        item = (await catalog_service.by_slugs(db, ["adult"]))[0]
+        assert item.genres == ["phim-18"]
+
+
 class _FakeSession:
     async def __aenter__(self):
         return SimpleNamespace()
@@ -244,6 +262,22 @@ async def test_cli_refresh_catalog_dispatches(monkeypatch, capsys):
     assert called["pages"] == 2
     out = capsys.readouterr().out
     assert "7" in out
+
+
+async def test_cli_refresh_catalog_passes_explicit_kinds(monkeypatch):
+    called = {}
+
+    async def fake_refresh(db, *, kinds=None, pages=1):
+        called["kinds"] = kinds
+        return catalog_service.RefreshStats()
+
+    monkeypatch.setattr(catalog_service, "refresh", fake_refresh)
+    monkeypatch.setattr(cli, "session_factory", lambda: _FakeSession())
+    monkeypatch.setattr(cli, "engine", _FakeEngine())
+
+    code = await cli.main(["refresh-catalog", "--kinds", "phim-18,hanh-dong"])
+    assert code == 0
+    assert called["kinds"] == ["phim-18", "hanh-dong"]
 
 
 async def test_cli_set_role_still_dispatches(db_env, monkeypatch):

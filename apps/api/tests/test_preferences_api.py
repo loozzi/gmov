@@ -321,6 +321,35 @@ async def test_behavior_rules_skip_missing_catalog_films(client_env):
     assert seen == {"fav", "missing", "finished"}
 
 
+async def test_poster_feedback_rejects_over_limit_list(client_env):
+    headers, _ = await _register_login(client_env, "pref9@gmov.dev", "pref9")
+
+    r = await client_env.client.post(
+        f"{ME}/preferences/posters",
+        headers=headers,
+        json={"liked": [f"slug-{i}" for i in range(201)]},
+    )
+    assert r.status_code == 422, r.text
+
+
+async def test_preferences_reject_out_of_range_weight(client_env):
+    headers, _ = await _register_login(client_env, "pref10@gmov.dev", "pref10")
+
+    r = await client_env.client.put(
+        f"{ME}/preferences",
+        headers=headers,
+        json={"genres": {"hanh-dong": 11.0}, "countries": {}},
+    )
+    assert r.status_code == 422, r.text
+
+    r = await client_env.client.put(
+        f"{ME}/preferences",
+        headers=headers,
+        json={"genres": {}, "countries": {"han-quoc": -10.5}},
+    )
+    assert r.status_code == 422, r.text
+
+
 async def test_preferences_are_isolated_per_profile(client_env):
     headers, user_id = await _register_login(client_env, "pref7@gmov.dev", "pref7")
     await client_env.client.put(
