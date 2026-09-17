@@ -86,14 +86,18 @@ Brought forward — none blocks current functionality.
     chạm tới, đổi sang `sa.false()` như `RefreshToken.compromised`.
 26. **E2E fixture bypass throttle** — `global-setup` xóa key `ratelimit:*` thay
     vì nâng cap; chỉ trong test env, chấp nhận.
-27. **`player.spec` đã fail sẵn trong môi trường này** — test "play 20s →
-    reload → resumes around 20s" đọc `currentTime = 0` sau reload (dù toast
-    "Đã tiếp tục từ" đã hiện, tức progress có lưu). Đã A/B: fail y hệt trên
-    `d57647b` (commit trước lớp motion 2026-09-16) nên KHÔNG liên quan motion.
-    Nghi ngờ thời điểm: toast hiện ngay khi fetch progress xong, còn seek chỉ
-    chạy khi media metadata sẵn sàng (stream mẫu mux), nên test đọc clock quá
-    sớm. Cần một lần điều tra riêng — hoặc cho test chờ `currentTime` cập nhật
-    thay vì đọc một lần.
+27. ~~**`player.spec` đã fail sẵn trong môi trường này**~~ — DONE (2026-09-17).
+    Điều tra bằng probe đo timeline: toast hiện ở 107ms nhưng seek chỉ áp ở
+    ~208ms (video còn autoplay từ 0 trước đó) → đúng 2 race của **test**, không
+    phải bug sản phẩm: (a) `VideoPlayer` mặc định `autoPlay = true` + Playwright
+    ép `--autoplay-policy=no-user-gesture-required` nên nút overlay "Phát"
+    unmount giữa lúc click → Playwright retry tới hết 240s; (b) test đọc
+    `currentTime` một lần ngay sau toast, rơi vào khe ~100ms trước khi seek áp
+    (cold cache thì lâu hơn). Sửa: click best-effort (`timeout: 5s` + catch) và
+    chờ **vị trí khác 0 đầu tiên** (≥2s) thay vì đọc một lần — resume đúng nhảy
+    ngay tới ~t1, còn resume hỏng phát lại từ 0 nên chỉ đạt 2s sau ~2s và bị
+    bound ±5s bắt. Verify: 3/3 pass (`--repeat-each=3`) + mutation test (ép
+    `target = 0`) fail đúng "got 2.05".
 28. **Pool cho "Phim liên quan" chỉ lấy 3 trang mới nhất mỗi list** — nên phim
     cũ/ít tín hiệu có thể ra rail "cùng thời" thay vì cùng người, và match
     người chỉ đến từ các phim nằm trong cửa sổ thể loại/quốc gia/năm đó

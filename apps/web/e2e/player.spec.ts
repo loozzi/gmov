@@ -25,7 +25,15 @@ test("play 20s -> reload -> resumes around 20s", async ({ page }) => {
   await expect(video).toBeVisible({ timeout: 30_000 });
 
   // Real user gesture to start playback (the big center overlay button).
-  await page.getByRole("button", { name: /^phát$/i }).first().click();
+  // Best-effort: playback may already be running (autoPlay defaults on and
+  // Playwright forces --autoplay-policy=no-user-gesture-required), in which
+  // case the overlay button unmounts mid-click and the click never settles.
+  // The assertions below check the real outcome, so a failed click is fine.
+  await page
+    .getByRole("button", { name: /^phát$/i })
+    .first()
+    .click({ timeout: 5_000 })
+    .catch(() => {});
   await page.waitForFunction(
     () => {
       const v = document.querySelector("video");
@@ -55,9 +63,23 @@ test("play 20s -> reload -> resumes around 20s", async ({ page }) => {
   await expect(page.getByText(/đã tiếp tục từ/i)).toBeVisible({
     timeout: 30_000,
   });
-  // ...and the player clock must actually be there (±5s per spec,
-  // anchored at the real playback position t1).
-  const t2: number = await page.evaluate(currentTime);
+  // ...and the player clock must actually be there (±5s per spec, anchored at
+  // the real playback position t1). The seek lands on the next media event
+  // after the progress fetch resolves (measured ~100ms, longer on a cold
+  // cache), so reading the clock once right after the toast races it: wait
+  // for the FIRST non-trivial position instead. A correct resume jumps to
+  // ~t1 immediately, while a broken one restarts at 0 and only reaches 2s
+  // after ~2s of real playback — which the ±5s bound below rejects.
+  const resumed = await page.waitForFunction(
+    () => {
+      const v = document.querySelector("video");
+      if (!v || v.currentTime < 2) return null;
+      return Number(v.currentTime.toFixed(2));
+    },
+    undefined,
+    { timeout: 30_000, polling: 50 },
+  );
+  const t2: number = (await resumed.jsonValue()) as number;
   expect(
     t2,
     `expected resume around ${t1.toFixed(1)}s (±5s) after reload, got ${t2}`,
