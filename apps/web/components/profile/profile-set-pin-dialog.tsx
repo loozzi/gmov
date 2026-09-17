@@ -44,12 +44,16 @@ export function ProfileSetPinDialog({
   const [currentPin, setCurrentPin] = useState("");
   const [pin, setPinValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // The stored `has_pin` can be stale (the PIN was set from another device);
+  // the server then answers PIN_REQUIRED while the field is hidden. Reveal the
+  // field as soon as that happens so the user is never stuck.
+  const [currentPinRequired, setCurrentPinRequired] = useState(false);
 
   const isClear = mode === "clear";
-  const requiresCurrent = profile?.has_pin === true;
+  const requiresCurrent = profile?.has_pin === true || currentPinRequired;
   const title = isClear
     ? "Xoá PIN"
-    : profile?.has_pin
+    : requiresCurrent
       ? "Đổi PIN"
       : "Đặt PIN";
 
@@ -59,6 +63,7 @@ export function ProfileSetPinDialog({
     setCurrentPin("");
     setPinValue("");
     setError(null);
+    setCurrentPinRequired(false);
   }, [open]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -79,7 +84,12 @@ export function ProfileSetPinDialog({
           toast(isClear ? "Đã xoá PIN." : "Đã lưu PIN.", "success");
           onOpenChange(false);
         },
-        onError: (err: unknown) => setError(setPinErrorMessage(err)),
+        onError: (err: unknown) => {
+          if (err instanceof ApiError && err.code === "PIN_REQUIRED") {
+            setCurrentPinRequired(true);
+          }
+          setError(setPinErrorMessage(err));
+        },
       },
     );
   };
