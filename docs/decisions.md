@@ -499,3 +499,10 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      chúng chỉ thêm `director`/`casts` cho scorer; response `/related` vẫn là
      `MovieCard` nên không leak field, và không làm phình response của các list
      endpoint hiện có (đổi `MovieCard` sẽ ảnh hưởng mọi list + test shape).
+
+106. **`/related` là endpoint catalog duy nhất có rate limit (60/phút/IP)**: mỗi
+     cache miss fan-out ~10 call upstream nên nó là chỗ duy nhất có đòn bẩy
+     khuếch đại; các endpoint catalog khác chỉ 1 call nên giữ nguyên không giới
+     hạn (nhất quán với việc chúng không có limit từ trước). Đếm cả cache HIT
+     (mục đích là chặn hammering), dùng `ratelimit.client_ip` — chỉ tin
+     `X-Forwarded-For` khi peer là trusted proxy, như auth.

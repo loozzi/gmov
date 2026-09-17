@@ -41,6 +41,14 @@ backend tự tính từ dữ liệu listing: mỗi item listing đều có `cast
    không đổi thứ tự), cắt theo `limit`. Danh sách rỗng là hợp lệ (frontend ẩn
    rail). Một listing lỗi bị bỏ qua, không làm hỏng cả rail.
 
+Cache: pool được tính ở `MAX_LIMIT` và cache dưới key **không chứa `limit`**
+(`nguonc:related:{slug}:{hash}`), response cắt theo `limit` — nên `limit=6` rồi
+`limit=12` chỉ tốn một lần fan-out. TTL 30 phút + bản `:stale`.
+
+**Rate limit**: `60 request/phút/IP` (`ratelimit:related:{ip}`, tính cả cache
+HIT) — đây là endpoint catalog duy nhất bị giới hạn vì mỗi cache miss fan-out
+~10 call upstream; các endpoint khác chỉ 1 call.
+
 
 ## Normalized shapes
 

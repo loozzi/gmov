@@ -99,6 +99,6 @@ Brought forward — none blocks current functionality.
     người chỉ đến từ các phim nằm trong cửa sổ thể loại/quốc gia/năm đó
     (upstream không có search theo người — xem decisions #100). Muốn tốt hơn:
     tăng số trang (tốn thêm call upstream) hoặc tự lập chỉ mục cast/director.
-29. **`/related` chưa có rate limit theo IP** — mỗi cache miss tốn ~10 call
-    upstream; hiện chỉ dựa vào cache 30 phút theo slug. Thêm giới hạn nếu bị
-    lạm dụng có chủ đích (cùng lý do với rate limit ở các endpoint khác).
+29. ~~**`/related` chưa có rate limit theo IP**~~ — DONE (2026-09-17: 60
+    req/phút/IP qua `check_rate_limit`, tính cả cache HIT; chỉ endpoint catalog
+    này bị giới hạn vì mỗi cache miss fan-out ~10 call upstream).
