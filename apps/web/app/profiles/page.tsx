@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Lock, Plus, RefreshCw, Settings } from "lucide-react";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { ProfileAvatar } from "@/components/profile/profile-avatar";
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
 import { ApiError, toVietnameseMessage } from "@/lib/errors";
+import { safeNextPath } from "@/lib/nav";
 import {
   useProfiles,
   useSwitchProfile,
@@ -36,33 +38,35 @@ function ProfileCard({ item, disabled, onSelect }: ProfileCardProps) {
       disabled={disabled}
       data-testid={`profile-card-${item.id}`}
       aria-label={item.is_current ? `${item.name} (đang xem)` : item.name}
-      className="group flex w-28 cursor-pointer flex-col items-center gap-2 disabled:cursor-wait disabled:opacity-60"
+      className="group flex w-32 cursor-pointer flex-col items-center gap-3 disabled:cursor-wait disabled:opacity-60"
     >
       <span className="relative">
         <ProfileAvatar
           avatar={item.avatar}
           className={cn(
-            "size-24 text-5xl transition-transform group-hover:scale-105",
+            "size-28 text-6xl transition-transform group-hover:scale-105 sm:size-32",
             item.is_current && "ring-brand ring-2",
           )}
         />
         {item.has_pin && (
-          <span className="bg-card border-border absolute -right-1 -bottom-1 rounded-full border p-1.5">
+          <span className="absolute -right-1 -bottom-1 rounded-full border border-neutral-700 bg-neutral-800 p-1.5 text-neutral-300">
             <Lock className="size-3.5" />
           </span>
         )}
       </span>
-      <span className="max-w-full truncate text-sm font-medium">
+      <span className="max-w-full truncate text-base font-medium">
         {item.name}
       </span>
       {item.is_current && (
-        <span className="text-brand text-xs">Đang xem</span>
+        <span className="text-brand -mt-2 text-xs">Đang xem</span>
       )}
     </button>
   );
 }
 
-export default function ProfilesPage() {
+function ProfilesChooser() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const toast = useToast();
   const { data, isLoading, isError, error, refetch, isFetching } =
@@ -71,12 +75,21 @@ export default function ProfilesPage() {
   const [locked, setLocked] = useState<ProfileListItem | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
-
   const [switchError, setSwitchError] = useState<string | null>(null);
+
+  // Always leave the chooser after a profile is picked (choosing is required).
+  const leave = () => {
+    const target = safeNextPath(searchParams.get("next")) ?? "/";
+    router.push(target);
+    router.refresh();
+  };
 
   const handleSelect = (item: ProfileListItem) => {
     setSwitchError(null);
-    if (item.is_current) return;
+    if (item.is_current) {
+      leave();
+      return;
+    }
     if (item.has_pin) {
       setPinError(null);
       setLocked(item);
@@ -85,7 +98,10 @@ export default function ProfilesPage() {
     switchProfile.mutate(
       { id: item.id },
       {
-        onSuccess: () => toast(`Đã chuyển sang ${item.name}.`, "success"),
+        onSuccess: () => {
+          toast(`Đã chuyển sang ${item.name}.`, "success");
+          leave();
+        },
         onError: (err: unknown) => {
           // Stale `has_pin` (PIN set on another device): the server replies
           // PIN_REQUIRED, so collect the PIN here instead of showing raw text.
@@ -111,6 +127,7 @@ export default function ProfilesPage() {
           setLocked(null);
           setPinError(null);
           toast(`Đã chuyển sang ${target.name}.`, "success");
+          leave();
         },
         onError: (err: unknown) => setPinError(pinErrorMessage(err)),
       },
@@ -119,9 +136,9 @@ export default function ProfilesPage() {
 
   if (authLoading) {
     return (
-      <div className="flex flex-wrap justify-center gap-6 py-12">
+      <div className="flex min-h-dvh flex-wrap items-center justify-center gap-8 bg-neutral-950">
         {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="size-24 rounded-full" />
+          <Skeleton key={i} className="size-28 rounded-full bg-neutral-800" />
         ))}
       </div>
     );
@@ -129,9 +146,9 @@ export default function ProfilesPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="mx-auto flex max-w-md flex-col items-center gap-3 py-16 text-center">
-        <h1 className="text-2xl font-bold">Ai đang xem?</h1>
-        <p className="text-sm text-muted-foreground">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-neutral-950 px-6 text-center text-neutral-50">
+        <h1 className="text-3xl font-bold">Ai đang xem?</h1>
+        <p className="text-sm text-neutral-400">
           Bạn cần đăng nhập để chọn profile.
         </p>
         <Button asChild>
@@ -142,26 +159,22 @@ export default function ProfilesPage() {
   }
 
   return (
-    <section className="py-6 sm:py-10">
-      <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold sm:text-3xl">Ai đang xem?</h1>
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/profiles/manage">
-            <Settings /> Quản lý profile
-          </Link>
-        </Button>
-      </div>
+    <section
+      data-testid="profile-chooser"
+      className="flex min-h-dvh flex-col items-center justify-center gap-10 bg-neutral-950 px-6 py-12 text-neutral-50"
+    >
+      <h1 className="text-3xl font-bold sm:text-4xl">Ai đang xem?</h1>
 
       {isLoading ? (
-        <div className="mt-10 flex flex-wrap justify-center gap-6">
+        <div className="flex flex-wrap justify-center gap-8">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="size-24 rounded-full" />
+            <Skeleton key={i} className="size-28 rounded-full bg-neutral-800" />
           ))}
         </div>
       ) : isError || !data ? (
-        <div className="mx-auto mt-10 flex max-w-md flex-col items-center gap-3 rounded-xl border border-border bg-card p-8 text-center">
+        <div className="flex max-w-md flex-col items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900 p-8 text-center">
           <p className="font-medium">Không tải được danh sách profile.</p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-neutral-400">
             {toVietnameseMessage(error)}
           </p>
           <Button
@@ -178,12 +191,12 @@ export default function ProfilesPage() {
           {switchError && (
             <p
               role="alert"
-              className="mx-auto mt-6 max-w-md rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-sm text-red-300"
+              className="max-w-md rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-sm text-red-300"
             >
               {switchError}
             </p>
           )}
-          <div className="mt-10 flex flex-wrap justify-center gap-8">
+          <div className="flex flex-wrap justify-center gap-8 sm:gap-10">
             {data.items.map((item) => (
               <ProfileCard
                 key={item.id}
@@ -198,17 +211,28 @@ export default function ProfilesPage() {
                 onClick={() => setFormOpen(true)}
                 data-testid="profile-add"
                 aria-label="Thêm profile"
-                className="group flex w-28 cursor-pointer flex-col items-center gap-2"
+                className="group flex w-32 cursor-pointer flex-col items-center gap-3"
               >
-                <span className="border-border text-muted-foreground group-hover:border-brand group-hover:text-brand flex size-24 items-center justify-center rounded-full border-2 border-dashed transition-colors">
+                <span className="flex size-28 items-center justify-center rounded-full border-2 border-dashed border-neutral-700 text-neutral-400 transition-colors group-hover:border-brand group-hover:text-brand sm:size-32">
                   <Plus className="size-8" />
                 </span>
-                <span className="text-sm font-medium">Thêm profile</span>
+                <span className="text-base font-medium">Thêm profile</span>
               </button>
             )}
           </div>
         </>
       )}
+
+      <Button
+        asChild
+        variant="ghost"
+        size="sm"
+        className="text-neutral-400 hover:bg-white/10 hover:text-neutral-50"
+      >
+        <Link href="/profiles/manage">
+          <Settings /> Quản lý profile
+        </Link>
+      </Button>
 
       <ProfilePinDialog
         open={locked !== null}
@@ -226,5 +250,21 @@ export default function ProfilesPage() {
 
       <ProfileFormDialog open={formOpen} onOpenChange={setFormOpen} />
     </section>
+  );
+}
+
+export default function ProfilesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-dvh flex-wrap items-center justify-center gap-8 bg-neutral-950">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="size-28 rounded-full bg-neutral-800" />
+          ))}
+        </div>
+      }
+    >
+      <ProfilesChooser />
+    </Suspense>
   );
 }

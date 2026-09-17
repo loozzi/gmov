@@ -20,7 +20,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
 import { ApiError, toVietnameseMessage } from "@/lib/errors";
-import { requestProfilePicker } from "@/lib/profile-picker";
 import {
   useCurrentProfile,
   useProfiles,
@@ -102,8 +101,10 @@ export function ProfileMenu() {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>Profile</DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => requestProfilePicker()}>
-            <Users /> Đổi profile
+          <DropdownMenuItem asChild>
+            <Link href="/profiles">
+              <Users /> Đổi profile
+            </Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {list.isLoading && (

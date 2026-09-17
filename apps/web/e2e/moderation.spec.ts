@@ -13,6 +13,7 @@ import {
   registerUser,
   type TestAccount,
 } from "./helpers/api";
+import { loginViaUi } from "./helpers/auth";
 import { skipIfNoUpstream } from "./helpers/net";
 
 skipIfNoUpstream();
@@ -59,17 +60,6 @@ async function setRole(username: string, role: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function loginViaUi(page: Page, account: TestAccount): Promise<void> {
-  await page.goto("/login");
-  await page.getByLabel(/email hoặc tên đăng nhập/i).fill(account.username);
-  await page.getByLabel(/^mật khẩu$/i).fill(account.password);
-  await page.getByRole("button", { name: /^đăng nhập$/i }).click();
-  await page.waitForURL((url) => url.pathname !== "/login", { timeout: 30_000 });
-  await expect(
-    page.locator("header").getByRole("button", { name: /tài khoản/i }),
-  ).toBeVisible({ timeout: 20_000 });
 }
 
 function commentCard(page: Page, text: string) {

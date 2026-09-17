@@ -31,14 +31,18 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     closeDisabled?: boolean;
+    fullScreen?: boolean;
   }
->(({ className, children, closeDisabled, ...props }, ref) => (
+>(({ className, children, closeDisabled, fullScreen, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "border-border bg-card fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border p-5 shadow-xl focus:outline-none",
+        "fixed z-50 focus:outline-none",
+        fullScreen
+          ? "inset-0 h-dvh w-screen max-w-none overflow-y-auto rounded-none border-0 bg-neutral-950 p-6 text-neutral-50"
+          : "border-border bg-card top-1/2 left-1/2 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border p-5 shadow-xl",
         "data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out",
         className,
       )}
@@ -48,7 +52,12 @@ const DialogContent = React.forwardRef<
       <DialogPrimitive.Close
         aria-label="Đóng"
         disabled={closeDisabled}
-        className="text-muted-foreground hover:bg-muted hover:text-foreground absolute top-4 right-4 cursor-pointer rounded-md p-1 disabled:pointer-events-none disabled:opacity-50"
+        className={cn(
+          "absolute top-4 right-4 cursor-pointer rounded-md p-1 disabled:pointer-events-none disabled:opacity-50",
+          fullScreen
+            ? "text-neutral-400 hover:bg-white/10 hover:text-neutral-50"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        )}
       >
         <X className="size-4" />
       </DialogPrimitive.Close>

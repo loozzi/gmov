@@ -67,15 +67,17 @@ async function cleanup(
   }
 }
 
-/** Log in through the actual form so AuthProvider.login() runs in THIS tab.
- * Needed by the picker spec: the picker only appears when the user logged in
- * inside that tab (the module-level intent is not persisted across reloads). */
-async function loginViaUi(page: Page, account: TestAccount): Promise<void> {
+/** Log in through the actual form and STOP on the chooser (the immersive
+ * `/profiles` screen): the picker tests need to see it before picking. */
+async function loginToChooser(
+  page: Page,
+  account: TestAccount,
+): Promise<void> {
   await page.goto("/login");
   await page.getByLabel(/email hoặc tên đăng nhập/i).fill(account.username);
   await page.getByLabel(/^mật khẩu$/i).fill(account.password);
   await page.getByRole("button", { name: /^đăng nhập$/i }).click();
-  await page.waitForURL((url) => url.pathname !== "/login", {
+  await page.waitForURL((url) => url.pathname === "/profiles", {
     timeout: 30_000,
   });
 }
@@ -122,13 +124,13 @@ test("second profile keeps its own My list and switching back preserves the firs
     await expect(page.getByText(`Phim mặc định ${keepSlug}`).first()).toBeVisible();
     await expect(page.getByText(`Phim Bé ${secondSlug}`)).toHaveCount(0);
 
-    // Switch to the second profile through the UI.
+    // Switch to the second profile through the UI: picking leaves the chooser.
     await page.goto("/profiles");
     await page.getByTestId(`profile-card-${second.id}`).click();
-    await expect(page.getByTestId(`profile-card-${second.id}`)).toHaveAttribute(
-      "aria-label",
-      "Bé (đang xem)",
-    );
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+    await expect(
+      page.locator("header").getByRole("button", { name: /chọn profile/i }),
+    ).toContainText("Bé");
     await page.goto("/me/favorites");
     await expect(page.getByText(`Phim Bé ${secondSlug}`).first()).toBeVisible();
     await expect(page.getByText(`Phim mặc định ${keepSlug}`)).toHaveCount(0);
@@ -136,10 +138,10 @@ test("second profile keeps its own My list and switching back preserves the firs
     // Switch back: the first profile's data is intact.
     await page.goto("/profiles");
     await page.getByTestId(`profile-card-${def.id}`).click();
-    await expect(page.getByTestId(`profile-card-${def.id}`)).toHaveAttribute(
-      "aria-label",
-      `${def.name} (đang xem)`,
-    );
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+    await expect(
+      page.locator("header").getByRole("button", { name: /chọn profile/i }),
+    ).toContainText(def.name);
     await page.goto("/me/favorites");
     await expect(page.getByText(`Phim mặc định ${keepSlug}`).first()).toBeVisible();
     await expect(page.getByText(`Phim Bé ${secondSlug}`)).toHaveCount(0);
@@ -171,22 +173,25 @@ test("a locked profile asks for its PIN", async ({ page }) => {
     await page.goto("/profiles");
     await page.getByTestId(`profile-card-${locked.id}`).click();
 
-    const dialog = page.getByRole("dialog");
+    // The PIN prompt is a full-screen modal and never shows the digits.
+    const dialog = page.getByTestId("profile-pin-dialog");
     await expect(dialog).toBeVisible();
+    const pinInput = dialog.getByLabel("Mã PIN");
+    await expect(pinInput).toHaveAttribute("type", "password");
 
     // Wrong PIN: the dialog stays open and shows the error.
-    await dialog.getByLabel("Mã PIN").fill("0000");
+    await pinInput.fill("0000");
     await dialog.getByRole("button", { name: /^xác nhận$/i }).click();
     await expect(dialog.getByRole("alert")).toHaveText(/PIN không đúng/i);
 
-    // Right PIN: the switch goes through and the card becomes current.
-    await dialog.getByLabel("Mã PIN").fill("2468");
+    // Right PIN: the switch goes through and the chooser hands off to home.
+    await pinInput.fill("2468");
     await dialog.getByRole("button", { name: /^xác nhận$/i }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByTestId(`profile-card-${locked.id}`)).toHaveAttribute(
-      "aria-label",
-      "Bé (đang xem)",
-    );
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+    await expect(
+      page.locator("header").getByRole("button", { name: /chọn profile/i }),
+    ).toContainText("Bé");
   } finally {
     await cleanup(account, [], lockedId ? { [lockedId]: "2468" } : {});
   }
@@ -383,7 +388,7 @@ test("changing a PIN requires the current PIN", async ({ page }) => {
   }
 });
 
-test("the picker appears after login and enforces the PIN", async ({
+test("logging in lands on the full-screen chooser and enforces the PIN", async ({
   page,
 }) => {
   const account = await loadAccount();
@@ -397,18 +402,36 @@ test("the picker appears after login and enforces the PIN", async ({
     spareId = spare.id;
     await setProfilePin(token, spareId, account.password, "4321");
 
-    // Log in through the form in THIS tab: only then does the picker fire.
-    await loginViaUi(page, account);
+    // Log in through the form in THIS tab: the chooser is the landing page.
+    await loginToChooser(page, account);
 
-    const picker = page.getByTestId("profile-picker");
-    await expect(picker).toBeVisible();
+    const chooser = page.getByTestId("profile-chooser");
+    await expect(chooser).toBeVisible();
+    // Immersive screen: the app chrome is hidden, so choosing is the only way
+    // forward (no "Để sau", no header links out).
+    await expect(page.locator("header")).toHaveCount(0);
+    await expect(page.getByText(/Để sau/i)).toHaveCount(0);
 
-    // A locked profile prompts for its PIN before switching.
-    await page.getByTestId(`profile-picker-option-${spareId}`).click();
-    const pinDialog = page.getByRole("dialog", {
-      name: `Nhập PIN cho ${name}`,
-    });
+    // A locked profile opens the full-screen PIN modal (masked input).
+    await page.getByTestId(`profile-card-${spareId}`).click();
+    const pinDialog = page.getByTestId("profile-pin-dialog");
     await expect(pinDialog).toBeVisible();
+    await expect(pinDialog.getByLabel("Mã PIN")).toHaveAttribute(
+      "type",
+      "password",
+    );
+    const viewport = page.viewportSize();
+    // The open animation scales the surface, so poll until it covers the whole
+    // viewport (this is what makes it a full-screen modal).
+    await expect
+      .poll(
+        async () => {
+          const b = await pinDialog.boundingBox();
+          return { w: Math.round(b?.width ?? 0), h: Math.round(b?.height ?? 0) };
+        },
+        { timeout: 5_000 },
+      )
+      .toEqual({ w: viewport?.width, h: viewport?.height });
 
     await pinDialog.getByLabel("Mã PIN").fill("0000");
     await pinDialog.getByRole("button", { name: /^xác nhận$/i }).click();
@@ -417,12 +440,43 @@ test("the picker appears after login and enforces the PIN", async ({
     await pinDialog.getByLabel("Mã PIN").fill("4321");
     await pinDialog.getByRole("button", { name: /^xác nhận$/i }).click();
 
-    await expect(picker).toBeHidden();
+    // Picking hands off to the app: home page with the new profile in header.
+    await expect(pinDialog).toBeHidden();
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
     await expect(
       page.locator("header").getByRole("button", { name: /chọn profile/i }),
     ).toContainText(name);
   } finally {
     await cleanup(account, [], spareId ? { [spareId]: "4321" } : {});
+    await restoreDefault(account);
+  }
+});
+
+test("a chooser handoff respects the ?next target", async ({ page }) => {
+  const account = await loadAccount();
+
+  try {
+    await resetProfiles(account);
+    await page.goto("/login?next=%2Fme%2Ffavorites");
+    await page.getByLabel(/email hoặc tên đăng nhập/i).fill(account.username);
+    await page.getByLabel(/^mật khẩu$/i).fill(account.password);
+    await page.getByRole("button", { name: /^đăng nhập$/i }).click();
+    await page.waitForURL(
+      (url) =>
+        url.pathname === "/profiles" &&
+        url.searchParams.get("next") === "/me/favorites",
+      { timeout: 30_000 },
+    );
+
+    await expect(page.getByTestId("profile-chooser")).toBeVisible();
+    await page
+      .locator('[data-testid^="profile-card-"][aria-label*="(đang xem)"]')
+      .click();
+    await page.waitForURL((url) => url.pathname === "/me/favorites", {
+      timeout: 20_000,
+    });
+  } finally {
+    await cleanup(account);
     await restoreDefault(account);
   }
 });

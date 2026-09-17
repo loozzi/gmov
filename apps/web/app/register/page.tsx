@@ -54,7 +54,8 @@ export default function RegisterPage() {
         values.password,
         values.website || undefined,
       );
-      router.push("/");
+      // Picking a profile is part of signing in: land on the chooser.
+      router.replace("/profiles");
       router.refresh();
     } catch (e) {
       setServerError(toVietnameseMessage(e));
