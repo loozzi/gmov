@@ -9,6 +9,7 @@ from app.api.v1.routers import (
     movies,
     profiles,
     progress,
+    recommendations,
     reports,
     reviews,
     users,
@@ -21,6 +22,7 @@ api_router.include_router(movies.router)
 api_router.include_router(movies.comments_router)
 api_router.include_router(profiles.router)
 api_router.include_router(progress.router)
+api_router.include_router(recommendations.router)
 api_router.include_router(collections.router)
 api_router.include_router(reviews.router)
 api_router.include_router(reports.router)
