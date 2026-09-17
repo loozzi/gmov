@@ -7,11 +7,12 @@ deliberately swallows — that would make a test pass for the wrong reason.
 """
 
 import httpx
+import pytest
 import respx
 
 from app.core.config import settings
 from app.schemas.movie import CandidateCard, CandidatePage, MovieDetail
-from app.services import related_service
+from app.services import nguonc, related_service
 from app.services.catalog_map import country_slug
 
 BASE = settings.nguonc_base_url
@@ -405,3 +406,88 @@ async def test_related_slices_one_cached_pool(client):
     assert len(wider.json()["items"]) == 4
     assert wider.json()["items"][:2] == small.json()["items"]
     assert detail_route.call_count == 1
+
+
+@pytest.fixture(autouse=True)
+def _no_retry_backoff(monkeypatch):
+    """Upstream failures are expected here; do not sleep between retries."""
+    monkeypatch.setattr(nguonc, "BACKOFF_SECONDS", (0.0, 0.0))
+
+
+def register_franchise_fixture():
+    """Detail whose name carries a part marker + the franchise-root search."""
+    detail_route = mock_detail(make_detail(name="Đế Chế Đại Hàn (Phần 2)"))
+    listing_routes = []
+    listing_routes += mock_listing("/films/the-loai/hoat-hinh")
+    listing_routes += mock_listing("/films/the-loai/gia-tuong")
+    listing_routes += mock_listing("/films/quoc-gia/nhat-ban")
+    listing_routes += mock_listing(
+        "/films/nam-phat-hanh/2026", {1: [candidate("decoy")]}
+    )
+    search_route = respx.get(
+        f"{BASE}/films/search", params={"keyword": "Đế Chế Đại Hàn", "page": 1}
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json=candidate_payload(
+                # Search items carry no year, like the real upstream.
+                [candidate("part-1", director="Satou Teruo", casts="Aoi Yu", year=None)]
+            ),
+        )
+    )
+    return detail_route, search_route, listing_routes
+
+
+@respx.mock
+async def test_related_searches_franchise_root(client):
+    _, search_route, _ = register_franchise_fixture()
+    r = await client.get("/api/v1/movies/mao/related?limit=6")
+    assert r.status_code == 200, r.text
+    slugs = [item["slug"] for item in r.json()["items"]]
+    # director(6) + cast(3) + franchise root(5) beats the same-year decoy(2).
+    assert slugs[0] == "part-1"
+    assert search_route.call_count == 1
+    assert search_route.calls[0].request.url.params["keyword"] == "Đế Chế Đại Hàn"
+
+
+@respx.mock
+async def test_related_all_listings_down_is_empty_not_error(client):
+    mock_detail(make_detail())
+    for path in (
+        "/films/the-loai/hoat-hinh",
+        "/films/the-loai/gia-tuong",
+        "/films/quoc-gia/nhat-ban",
+        "/films/nam-phat-hanh/2026",
+    ):
+        mock_listing(path, status=500)
+
+    r = await client.get("/api/v1/movies/mao/related")
+    assert r.status_code == 200, r.text
+    assert r.json() == {"items": []}
+
+
+@respx.mock
+async def test_related_unknown_slug_is_404(client):
+    respx.get(f"{BASE}/film/khong-ton-tai").mock(
+        return_value=httpx.Response(404, json={"status": "error"})
+    )
+    r = await client.get("/api/v1/movies/khong-ton-tai/related")
+    assert r.status_code == 404
+    assert r.json()["code"] == "MOVIE_NOT_FOUND"
+
+
+@respx.mock
+async def test_related_rate_limit(client, monkeypatch):
+    # Keep the window small instead of firing 60 requests.
+    from app.api.v1.routers import movies
+
+    monkeypatch.setattr(movies, "RELATED_RATE_LIMIT", 2)
+    register_rich_fixture()
+
+    for _ in range(2):
+        ok = await client.get("/api/v1/movies/mao/related?limit=2")
+        assert ok.status_code == 200, ok.text
+
+    blocked = await client.get("/api/v1/movies/mao/related?limit=2")
+    assert blocked.status_code == 429
+    assert blocked.json()["code"] == "RATE_LIMITED"
