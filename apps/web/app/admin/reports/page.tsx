@@ -2,23 +2,31 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import {
+  Ban,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Undo2,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
-import { toVietnameseMessage } from "@/lib/errors";
+import { ApiError, toVietnameseMessage } from "@/lib/errors";
 import {
   REPORT_REASON_LABELS,
+  useBanUser,
   useDismissReport,
   useHideComment,
   useReports,
+  useUnbanUser,
   useUnhideComment,
+  type AdminCommentUser,
   type ReportItem,
   type ReportsFilter,
   type ReportStatus,
 } from "@/lib/moderation";
-import type { CommentUser } from "@/lib/reviews";
 import { cn } from "@/lib/utils";
 
 const TABS: { value: ReportsFilter; label: string }[] = [
@@ -40,8 +48,68 @@ function formatDate(raw: string): string {
   return d.toLocaleString("vi-VN");
 }
 
-function UserLabel({ user }: { user: CommentUser }) {
+function UserLabel({ user }: { user: AdminCommentUser }) {
   return <span title={`@${user.username}`}>{user.display_name}</span>;
+}
+
+function banErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.code === "CANNOT_BAN_STAFF") {
+    return "Không thể cấm thành viên ban quản trị.";
+  }
+  return toVietnameseMessage(error);
+}
+
+function BanUserControl({ user }: { user: AdminCommentUser }) {
+  const toast = useToast();
+  const ban = useBanUser();
+  const unban = useUnbanUser();
+  const isBanned = user.banned_at !== null;
+  const pending = ban.isPending || unban.isPending;
+
+  const handleToggle = () => {
+    if (isBanned) {
+      unban.mutate(user.id, {
+        onSuccess: () => toast(`Đã bỏ cấm ${user.display_name}.`, "success"),
+        onError: (error: unknown) =>
+          toast(banErrorMessage(error), "error"),
+      });
+      return;
+    }
+    if (
+      !window.confirm(
+        `Cấm ${user.display_name} (@${user.username})? Họ sẽ không thể bình luận.`,
+      )
+    ) {
+      return;
+    }
+    ban.mutate(
+      { userId: user.id },
+      {
+        onSuccess: () => toast(`Đã cấm ${user.display_name}.`, "success"),
+        onError: (error: unknown) =>
+          toast(banErrorMessage(error), "error"),
+      },
+    );
+  };
+
+  return (
+    <>
+      {isBanned && (
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          Đã cấm
+        </span>
+      )}
+      <Button
+        size="sm"
+        variant={isBanned ? "ghost" : "destructive"}
+        onClick={handleToggle}
+        disabled={pending}
+      >
+        {isBanned ? <Undo2 /> : <Ban />}
+        {isBanned ? "Bỏ cấm" : "Cấm"}
+      </Button>
+    </>
+  );
 }
 
 function ReportRow({ item }: { item: ReportItem }) {
@@ -88,9 +156,17 @@ function ReportRow({ item }: { item: ReportItem }) {
         )}
         <span>{formatDate(item.created_at)}</span>
       </div>
-      <p className="text-sm">
+      <p className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-muted-foreground">Người báo cáo: </span>
-        <UserLabel user={item.reporter} />
+        {item.source === "auto" ? (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
+            Tự động (từ khoá)
+          </span>
+        ) : item.reporter ? (
+          <UserLabel user={item.reporter} />
+        ) : (
+          <span className="text-muted-foreground">Không rõ</span>
+        )}
       </p>
       <p className="text-sm">
         <span className="text-muted-foreground">Phim: </span>
@@ -135,6 +211,10 @@ function ReportRow({ item }: { item: ReportItem }) {
             Bỏ qua
           </Button>
         )}
+        <span className="ml-auto flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Tác giả:</span>
+          <BanUserControl user={item.comment.user} />
+        </span>
       </div>
     </div>
   );

@@ -8,6 +8,8 @@ import httpx
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.schemas.movie import (
+    CandidateCard,
+    CandidatePage,
     Episode,
     MovieCard,
     MovieDetail,
@@ -192,3 +194,43 @@ async def fetch_detail(slug: str) -> MovieDetail:
     data = await _get(f"/film/{slug}")
     data = _require_success(data)
     return to_detail(data.get("movie", {}))
+
+
+CANDIDATE_PATHS = {
+    "genre": "/films/the-loai/{}",
+    "country": "/films/quoc-gia/{}",
+    "year": "/films/nam-phat-hanh/{}",
+}
+
+
+def to_candidate_card(raw: dict) -> CandidateCard:
+    card = to_card(raw)
+    return CandidateCard(
+        **card.model_dump(),
+        director=raw.get("director"),
+        casts=raw.get("casts"),
+    )
+
+
+def to_candidate_page(data: dict) -> CandidatePage:
+    paginate = data.get("paginate", {})
+    return CandidatePage(
+        items=[to_candidate_card(i) for i in data.get("items", [])],
+        current_page=int(paginate.get("current_page", 1)),
+        total_page=int(paginate.get("total_page", 1)),
+    )
+
+
+async def fetch_candidate_page(
+    kind: str, key: str, page: int = 1
+) -> CandidatePage:
+    """Candidate listing WITH people fields, for the related-movie scorer.
+
+    `kind` is "genre"/"country"/"year" (key = slug or year) or "search"
+    (key = keyword, e.g. the franchise root of a title).
+    """
+    if kind == "search":
+        data = await _get("/films/search", {"keyword": key, "page": page})
+    else:
+        data = await _get(CANDIDATE_PATHS[kind].format(key), {"page": page})
+    return to_candidate_page(_require_success(data))

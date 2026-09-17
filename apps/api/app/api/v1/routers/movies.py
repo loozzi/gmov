@@ -1,22 +1,30 @@
 """Public movie catalog router (proxied NguonC + Redis cache)."""
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import ratelimit
 from app.core.deps import get_optional_user
 from app.core.exceptions import AppException
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.library import CommentOut, PaginatedComments, RatingSummary
-from app.schemas.movie import MovieDetail, PaginatedMovies
-from app.services import cache, comment_service, nguonc, rating_service
+from app.schemas.movie import MovieDetail, PaginatedMovies, RelatedMovies
+from app.services import cache, comment_service, nguonc, rating_service, related_service
 from app.services.cache import DETAIL_TTL, LIST_TTL, SEARCH_TTL
+from app.services.related_service import RELATED_TTL
 
 router = APIRouter(prefix="/movies", tags=["movies"])
 
 comments_router = APIRouter(tags=["comments"])
 
 LIST_TYPES = ("dang-chieu", "phim-le", "phim-bo", "tv-shows")
+
+# Related is the only catalog endpoint that fans out (~10 upstream listing
+# calls behind a cache miss), so it is the only one rate limited. Generous
+# enough for a browsing session, counted per client IP (cache hits included).
+RELATED_RATE_LIMIT = 60
+RELATED_RATE_WINDOW = 60
 
 
 async def _cached(
@@ -111,6 +119,35 @@ async def detail(slug: str, response: Response):
         response, f"detail:{slug}", {}, DETAIL_TTL, MovieDetail,
         lambda: nguonc.fetch_detail(slug),
     )
+
+
+@router.get("/{slug}/related", response_model=RelatedMovies)
+async def related(
+    slug: str,
+    response: Response,
+    request: Request,
+    limit: int = Query(
+        default=related_service.DEFAULT_LIMIT,
+        ge=1,
+        le=related_service.MAX_LIMIT,
+    ),
+):
+    """Computed from the movie's own genre/country/year listings (see
+    related_service): upstream neither has a related endpoint nor indexes
+    people in search."""
+    await ratelimit.check_rate_limit(
+        f"ratelimit:related:{ratelimit.client_ip(request)}",
+        RELATED_RATE_LIMIT,
+        RELATED_RATE_WINDOW,
+    )
+    # Cache the widest pool once and slice per request: `limit` is a view, not a
+    # different computation, so it must not multiply cache entries (nor the ~10
+    # upstream listing calls behind each miss).
+    data = await _cached(
+        response, f"related:{slug}", {}, RELATED_TTL, RelatedMovies,
+        lambda: related_service.related(slug, related_service.MAX_LIMIT),
+    )
+    return RelatedMovies(items=data.items[:limit])
 
 
 @router.get("/{movie_slug}/rating", response_model=RatingSummary)

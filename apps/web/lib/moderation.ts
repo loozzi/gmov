@@ -7,10 +7,10 @@ import {
   keepPreviousData,
 } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import type { CommentUser } from "@/lib/reviews";
 
 export type ReportReason = "spam" | "harassment" | "spoiler" | "other";
 export type ReportStatus = "open" | "resolved" | "dismissed";
+export type ReportSource = "user" | "auto";
 export type ReportsFilter = ReportStatus | "all";
 
 export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
@@ -20,12 +20,19 @@ export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
   other: "Khác",
 };
 
+export interface AdminCommentUser {
+  id: string;
+  username: string;
+  display_name: string;
+  banned_at: string | null;
+}
+
 export interface ReportedComment {
   id: string;
   body: string | null;
   is_hidden: boolean;
   movie_slug: string;
-  user: CommentUser;
+  user: AdminCommentUser;
   created_at: string;
 }
 
@@ -34,9 +41,22 @@ export interface ReportItem {
   reason: ReportReason;
   note: string | null;
   status: ReportStatus;
+  source: ReportSource;
   created_at: string;
-  reporter: CommentUser;
+  reporter: AdminCommentUser | null;
   comment: ReportedComment;
+}
+
+export interface BanUserResponse {
+  id: string;
+  username: string;
+  banned_at: string | null;
+  ban_reason: string | null;
+}
+
+export interface BanUserInput {
+  userId: string;
+  reason?: string | null;
 }
 
 export interface PaginatedReports {
@@ -120,6 +140,33 @@ export function useDismissReport() {
   return useMutation({
     mutationFn: (reportId: string) =>
       apiFetch<{ ok: boolean }>(`/api/v1/admin/reports/${reportId}/dismiss`, {
+        method: "POST",
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "reports"] });
+    },
+  });
+}
+
+export function useBanUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, reason }: BanUserInput) =>
+      apiFetch<BanUserResponse>(`/api/v1/admin/users/${userId}/ban`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason ?? null }),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "reports"] });
+    },
+  });
+}
+
+export function useUnbanUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      apiFetch<BanUserResponse>(`/api/v1/admin/users/${userId}/unban`, {
         method: "POST",
       }),
     onSuccess: () => {

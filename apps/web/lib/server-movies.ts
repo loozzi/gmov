@@ -1,7 +1,7 @@
 import "server-only";
 
 import { browsePath } from "@/lib/browse";
-import type { MovieDetail, PaginatedMovies } from "@/lib/types";
+import type { MovieDetail, PaginatedMovies, RelatedMovies } from "@/lib/types";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
 
@@ -63,6 +63,13 @@ export function fetchSearch(keyword: string, page = 1) {
 
 export function fetchMovieDetail(slug: string) {
   return get<MovieDetail>(`/api/v1/movies/${slug}`, 1800);
+}
+
+export function fetchRelated(slug: string, limit = 12) {
+  return get<RelatedMovies>(
+    `/api/v1/movies/${slug}/related?limit=${limit}`,
+    1800,
+  );
 }
 
 export function stripHtml(html: string | null): string {

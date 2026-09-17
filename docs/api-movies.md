@@ -14,10 +14,45 @@ Base: `/api/v1/movies`. Every response carries `X-Cache: HIT | MISS | STALE`.
 | GET | `/year/{year}?page=1` | `/films/nam-phat-hanh/{year}` (1900–2100) | 10 min |
 | GET | `/search?keyword=&page=1` | `/films/search` | 5 min |
 | GET | `/{slug}` | `/film/{slug}` | 30 min |
+| GET | `/{slug}/related?limit=12` | computed, xem bên dưới | 30 min |
 
 Unknown `type` → 404 `INVALID_LIST_TYPE`; bad year → 400 `INVALID_YEAR`;
 unknown slug → 404 `MOVIE_NOT_FOUND` (from upstream); upstream down with no
-cache → 502 `UPSTREAM_ERROR`.
+cache → 502 `UPSTREAM_ERROR`. `limit` ngoài 1–24 → 422.
+
+## Phim liên quan (`/{slug}/related`)
+
+Upstream **không có** endpoint related và search **không index diễn viên/đạo
+diễn** (chỉ khớp tên phim — xem `docs/nguonc-api.md`). Nên danh sách này do
+backend tự tính từ dữ liệu listing: mỗi item listing đều có `casts`,
+`director`, `year`, nên **không cần fetch chi tiết từng ứng viên**.
+
+1. Lấy detail của phim (dùng chung cache key với `/{slug}`).
+2. Gom ứng viên từ: tối đa 2 thể loại (3 trang mỗi thể loại), quốc gia (3
+   trang), năm (3 trang), và nếu tên có hậu tố phần ("(Phần 2)") thì search
+   thêm phần gốc của tên — search chỉ khớp title nên đây là cách chắc chắn
+   nhất để với tới các phần khác.
+3. Chấm điểm: đạo diễn trùng +6/tên, diễn viên trùng +3/tên (tối đa 3 tên),
+   trúng phần gốc tên +5, cùng năm +2, +2 mỗi danh sách thể loại mà ứng viên
+   xuất hiện, cùng quốc gia +1, **trừ** khoảng cách năm (tối đa −4) vì listing
+   xếp mới-nhất-trước nên dễ lấn át phim cũ. Tên người được chuẩn hoá
+   alphanumeric nên "Woo Min-ho" ≡ "Woo Min Ho".
+4. Bỏ chính phim đó, bỏ điểm ≤ 0, sắp xếp `(-điểm, slug)` (deterministic, cache
+   không đổi thứ tự), cắt theo `limit`. Danh sách rỗng là hợp lệ (frontend ẩn
+   rail). Một listing lỗi bị bỏ qua, không làm hỏng cả rail.
+
+Cache: pool được tính ở `MAX_LIMIT` và cache dưới key **không chứa `limit`**
+(`nguonc:related:{slug}:{hash}`), response cắt theo `limit` — nên `limit=6` rồi
+`limit=12` chỉ tốn một lần fan-out. TTL 30 phút + bản `:stale`.
+
+Giới hạn chất lượng đã đo (2026-09-17): mỗi listing upstream trả **10 item/trang**,
+xếp mới-nhất-trước, và match cùng người **chỉ nằm ở trang 1** — nên tăng độ sâu
+hay số thể loại không thêm kết quả mà chỉ tốn call (chi tiết: decisions #107).
+
+**Rate limit**: `60 request/phút/IP` (`ratelimit:related:{ip}`, tính cả cache
+HIT) — đây là endpoint catalog duy nhất bị giới hạn vì mỗi cache miss fan-out
+~10 call upstream; các endpoint khác chỉ 1 call.
+
 
 ## Normalized shapes
 
@@ -30,6 +65,9 @@ Detail adds `provider_id, director, casts, formats[], genres[], countries[]`
 and `servers[]`. Each server: `{name, episodes: [{name, slug, embed_url,
 m3u8_url}]}`. Upstream only provides `embed` page URLs today, so `m3u8_url`
 is `null` until direct streams appear (see `docs/nguonc-api.md`).
+
+Related returns `{items: MovieCard[]}` — `director`/`casts` never leak (the
+internal candidate model that carries them is not a response model).
 
 ## Cache behavior
 

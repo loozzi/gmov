@@ -43,6 +43,10 @@ export interface PaginatedMovies {
   per_page: number;
 }
 
+export interface RelatedMovies {
+  items: MovieCard[];
+}
+
 export type UserRole = "user" | "moderator" | "admin";
 
 export interface User {

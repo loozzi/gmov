@@ -36,6 +36,8 @@ async def _resolve_user(db: AsyncSession, token: str) -> User:
     user = await user_service.get_by_id(db, user_id)
     if user is None or not user.is_active:
         raise AppException("Invalid token", "UNAUTHORIZED", 401)
+    if user.banned_at is not None:
+        raise AppException("Account banned", "ACCOUNT_BANNED", 401)
     return user
 
 

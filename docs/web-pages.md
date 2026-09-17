@@ -25,7 +25,10 @@
 - `/phim/[slug]` — backdrop/poster, meta (năm, thời lượng, thể loại, quốc gia,
   đạo diễn, diễn viên, mô tả), `generateMetadata` (title/description/og:image),
   ResumeButton ("Xem ngay" / "Xem tiếp tập X từ MM:SS"), FavoriteButton
-  (optimistic + rollback), server/episode grid linking `/xem/...` (Phase 6).
+  (optimistic + rollback), server/episode grid linking `/xem/...` (Phase 6),
+  và rail **"Phim liên quan"** (server-rendered từ
+  `/api/v1/movies/{slug}/related`, đặt giữa danh sách tập và bình luận; rail tự
+  ẩn khi không có ứng viên — thuật toán: `docs/api-movies.md`).
 - `/tim-kiem?keyword=&page=` — server results; header search debounces 400ms
   and shows 5 quick suggestions. Old `/search` redirects here.
 - `/me`, `/me/favorites`, `/me/watchlist`, `/me/history` — auth pages (middleware-guarded).

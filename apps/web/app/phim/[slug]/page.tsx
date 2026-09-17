@@ -9,10 +9,11 @@ import { RatingSummary } from "@/components/movies/rating-summary";
 import { ResumeButton } from "@/components/movies/resume-button";
 import { StarInput } from "@/components/movies/star-input";
 import { CommentSection } from "@/components/movies/comment-section";
+import { MovieRail } from "@/components/movies/movie-rail";
 import { WatchlistButton } from "@/components/movies/watchlist-button";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
-import { fetchMovieDetail, stripHtml } from "@/lib/server-movies";
+import { fetchMovieDetail, fetchRelated, stripHtml } from "@/lib/server-movies";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,10 @@ export default async function MovieDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const movie = await fetchMovieDetail(slug);
+  const [movie, related] = await Promise.all([
+    fetchMovieDetail(slug),
+    fetchRelated(slug),
+  ]);
   if (!movie) notFound();
 
   const poster = movie.poster_url || movie.thumb_url;
@@ -216,6 +220,10 @@ export default async function MovieDetailPage({
             </div>
           ))}
         </section>
+      </Reveal>
+
+      <Reveal>
+        <MovieRail title="Phim liên quan" movies={related?.items ?? []} />
       </Reveal>
 
       <Reveal>

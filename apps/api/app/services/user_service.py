@@ -1,6 +1,7 @@
 """User persistence operations (used by services, not routers)."""
 
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,6 +41,28 @@ async def create(db: AsyncSession, data: RegisterIn) -> User:
         display_name=data.username,
     )
     db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def ban(db: AsyncSession, user: User, reason: str | None) -> User:
+    """Ban a user (idempotent: banning twice refreshes time and reason).
+
+    Enforcement lives in deps._resolve_user / auth_service, so an existing
+    access or refresh token stops working immediately.
+    """
+    user.banned_at = datetime.now(UTC)
+    user.ban_reason = reason or None
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def unban(db: AsyncSession, user: User) -> User:
+    """Lift a ban (no-op when the user is not banned)."""
+    user.banned_at = None
+    user.ban_reason = None
     await db.commit()
     await db.refresh(user)
     return user

@@ -23,6 +23,13 @@ class ReportStatus(str, enum.Enum):
     DISMISSED = "dismissed"
 
 
+class ReportSource(str, enum.Enum):
+    """Who opened the report: a user, or the keyword filter on comment create."""
+
+    USER = "user"
+    AUTO = "auto"
+
+
 class CommentReport(Base, TimestampMixin):
     __tablename__ = "comment_reports"
     __table_args__ = (
@@ -37,8 +44,21 @@ class CommentReport(Base, TimestampMixin):
     comment_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("comments.id", ondelete="CASCADE"), index=True, nullable=False
     )
-    reporter_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    # NULL for ReportSource.AUTO rows: the keyword filter is not a user.
+    reporter_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    source: Mapped[ReportSource] = mapped_column(
+        Enum(
+            ReportSource,
+            native_enum=False,
+            length=10,
+            validate_strings=True,
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        default=ReportSource.USER,
+        server_default=ReportSource.USER.value,
+        nullable=False,
     )
     reason: Mapped[ReportReason] = mapped_column(
         Enum(

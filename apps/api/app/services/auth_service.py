@@ -57,6 +57,8 @@ async def login(db: AsyncSession, login: str, password: str) -> TokenPair:
         raise AppException("Invalid credentials", "INVALID_CREDENTIALS", 401)
     if not user.is_active:
         raise AppException("Account is disabled", "ACCOUNT_DISABLED", 403)
+    if user.banned_at is not None:
+        raise AppException("Account banned", "ACCOUNT_BANNED", 403)
     return await _issue_pair(db, user)
 
 
@@ -155,7 +157,7 @@ async def refresh(db: AsyncSession, token: str) -> TokenPair:
         # Grace path (recently revoked): duplicate delivery — re-issue
         # without touching the row.
         user = await user_service.get_by_id(db, presented.user_id)
-        if user is None or not user.is_active:
+        if user is None or not user.is_active or user.banned_at is not None:
             raise AppException(
                 "Invalid refresh token", "INVALID_REFRESH_TOKEN", 401
             )

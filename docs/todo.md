@@ -59,14 +59,20 @@ Brought forward — none blocks current functionality.
 
 ## Kiểm duyệt bình luận (nợ tương lai, ngoài scope v1)
 
-18. **Chưa có ban/khoá người dùng** — chỉ ẩn bình luận, không cấm được
-    người đăng. Thêm khi bị spam lặp lại.
+18. ~~**Chưa có ban/khoá người dùng**~~ — DONE (2026-09-17: `users.banned_at`
+    + `ban_reason`, `POST /admin/users/{id}/ban|unban`, thực thi ở
+    `deps._resolve_user`/login/refresh; UI cấm/bỏ cấm ngay trên hàng report).
+    Còn lại: chưa có trang danh sách người bị cấm (phải vào từ hàng report của
+    họ) — xem #30.
 19. **Chưa có spoiler tag** — `reason=spoiler` chỉ dùng để báo cáo, không có
     cơ chế đánh dấu/che nội dung chủ động.
 20. **Chưa có thông báo cho moderator** — không email/push khi hàng đợi có
     báo cáo mới; moderator phải tự vào `/admin/reports`.
-21. **Chưa có auto-moderation theo từ khoá** — chỉ ẩn theo ngưỡng số người
-    báo cáo, không lọc nội dung tự động.
+21. ~~**Chưa có auto-moderation theo từ khoá**~~ — DONE (2026-09-17:
+    `MODERATION_BLOCKED_KEYWORDS` + `services/moderation_filter.py`, khớp
+    không phân biệt hoa/thường/dấu tiếng Việt, ẩn ngay + tạo report
+    `source=auto` vào hàng đợi). Còn lại: obfuscation kiểu "s.p.a.m"/zero-width
+    không bị bắt (khớp chuỗi con thuần).
 
 ## Nợ phát sinh từ hardening + kiểm duyệt (2026-09-16)
 
@@ -81,16 +87,43 @@ Brought forward — none blocks current functionality.
 24. **Migration backfill `refresh_tokens.family_id`** — `UPDATE ... SET
     family_id = id` quét toàn bảng dưới ACCESS EXCLUSIVE; ổn ở scale hiện tại,
     batch nếu bảng lớn.
-25. **`Comment.is_hidden` dùng `server_default="false"`** — SQLite đọc
-    `bool('false') = True` (latent, chỉ ảnh hưởng test; Postgres đúng). Nếu
-    chạm tới, đổi sang `sa.false()` như `RefreshToken.compromised`.
+25. ~~**`Comment.is_hidden` dùng `server_default="false"`**~~ — DONE
+    (2026-09-17: model đổi sang `false()` + migration `c41d7e9b2a05`
+    (`alter_column server_default=sa.false()`). Xác nhận lại bug: DDL SQLite là
+    `DEFAULT 'false'` → lưu **text** `'false'` → `bool()` = True; test mới
+    `tests/test_comment_hidden_default.py` (upgrade migration rồi INSERT raw
+    không set `is_hidden`) đỏ trước / xanh sau. Postgres đã verify: default là
+    boolean `false`, raw insert trả `f`).
 26. **E2E fixture bypass throttle** — `global-setup` xóa key `ratelimit:*` thay
     vì nâng cap; chỉ trong test env, chấp nhận.
-27. **`player.spec` đã fail sẵn trong môi trường này** — test "play 20s →
-    reload → resumes around 20s" đọc `currentTime = 0` sau reload (dù toast
-    "Đã tiếp tục từ" đã hiện, tức progress có lưu). Đã A/B: fail y hệt trên
-    `d57647b` (commit trước lớp motion 2026-09-16) nên KHÔNG liên quan motion.
-    Nghi ngờ thời điểm: toast hiện ngay khi fetch progress xong, còn seek chỉ
-    chạy khi media metadata sẵn sàng (stream mẫu mux), nên test đọc clock quá
-    sớm. Cần một lần điều tra riêng — hoặc cho test chờ `currentTime` cập nhật
-    thay vì đọc một lần.
+27. ~~**`player.spec` đã fail sẵn trong môi trường này**~~ — DONE (2026-09-17).
+    Điều tra bằng probe đo timeline: toast hiện ở 107ms nhưng seek chỉ áp ở
+    ~208ms (video còn autoplay từ 0 trước đó) → đúng 2 race của **test**, không
+    phải bug sản phẩm: (a) `VideoPlayer` mặc định `autoPlay = true` + Playwright
+    ép `--autoplay-policy=no-user-gesture-required` nên nút overlay "Phát"
+    unmount giữa lúc click → Playwright retry tới hết 240s; (b) test đọc
+    `currentTime` một lần ngay sau toast, rơi vào khe ~100ms trước khi seek áp
+    (cold cache thì lâu hơn). Sửa: click best-effort (`timeout: 5s` + catch) và
+    chờ **vị trí khác 0 đầu tiên** (≥2s) thay vì đọc một lần — resume đúng nhảy
+    ngay tới ~t1, còn resume hỏng phát lại từ 0 nên chỉ đạt 2s sau ~2s và bị
+    bound ±5s bắt. Verify: 3/3 pass (`--repeat-each=3`) + mutation test (ép
+    `target = 0`) fail đúng "got 2.05".
+28. **Pool "Phim liên quan" bị giới hạn bởi dữ liệu upstream (đã ĐO, đừng
+    tăng page mù quáng)** — đo 2026-09-17 trên 4 phim (`de-che-dai-han-phan-1`,
+    `luc-luong-lanterns-phan-1`, `giac-quan-thu-sau-mat-trai`, `tay-co-bac`):
+    mọi listing (genre/country/year) trả **10 item/trang**, xếp mới-nhất-trước;
+    match cùng người **chỉ xuất hiện ở trang 1**, các trang sâu hơn 0 hit
+    (year list 7 trang: 0 unique; genre list #3+ chỉ lặp lại hit đã có ở #1) và
+    2/4 phim không có match cùng người nào dù quét hết genre+country+year. Kết
+    luận: `CANDIDATE_PAGES=3`/`MAX_GENRE_LISTS=2` **không phải** nút thắt — tăng
+    độ sâu chỉ tốn thêm call upstream mà ~0 giá trị. Fix thật sự duy nhất là
+    **index cast/director riêng** (crawl toàn catalog để tra "phim khác của
+    người này"), ngoài scope v1; đường ống hiện tại đã lấy hết tín hiệu mà
+    upstream cho phép (chi tiết + số đo: decisions #107).
+29. ~~**`/related` chưa có rate limit theo IP**~~ — DONE (2026-09-17: 60
+    req/phút/IP qua `check_rate_limit`, tính cả cache HIT; chỉ endpoint catalog
+    này bị giới hạn vì mỗi cache miss fan-out ~10 call upstream).
+
+30. **Chưa có trang quản lý người bị cấm** — cấm/bỏ cấm chỉ thao tác được từ
+    hàng report của người đó (`AdminCommentUser.id`); không có `GET /admin/users`
+    để xem/lọc danh sách đang bị cấm. Thêm khi số lượng ban đủ nhiều để cần.
