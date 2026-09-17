@@ -40,11 +40,15 @@ export async function continuePastChooser(
   await expect(page.getByTestId("profile-chooser")).toBeVisible({
     timeout: 20_000,
   });
-  await page
+  const firstCard = page
     .getByTestId("profile-chooser")
     .locator('[data-testid^="profile-card-"]')
-    .first()
-    .click();
+    .first();
+  await expect(
+    firstCard.locator("svg.lucide-lock"),
+    "the first chooser card (the shared account's default profile) must stay PIN-free",
+  ).toHaveCount(0);
+  await firstCard.click();
   await page.waitForURL((url) => url.pathname === target, {
     timeout: 20_000,
   });

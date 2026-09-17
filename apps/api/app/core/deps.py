@@ -26,7 +26,6 @@ oauth2_optional = OAuth2PasswordBearer(
 class ActiveProfile:
     user: User
     profile: Profile
-    session_jti: str | None
 
 
 @dataclass(frozen=True)
@@ -94,7 +93,7 @@ async def _profile_from_claims(
         return profile
     session_jti = payload.get("sid")
     if session_jti is not None:
-        await profile_service.repoint_session(db, str(session_jti), None)
+        await profile_service.clear_session_profile(db, str(session_jti), profile_id)
     return None
 
 
@@ -123,9 +122,7 @@ async def get_active_profile(
     profile = await _profile_from_claims(db, user, payload)
     if profile is None:
         raise AppException("Profile required", "PROFILE_REQUIRED", 403)
-    return ActiveProfile(
-        user=user, profile=profile, session_jti=payload.get("sid")
-    )
+    return ActiveProfile(user=user, profile=profile)
 
 
 async def get_current_user(

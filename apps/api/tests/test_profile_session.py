@@ -252,6 +252,37 @@ async def test_deleted_pid_resets_session_to_unselected(client_env):
         assert row.profile_id is None
 
 
+async def test_stale_pid_keeps_a_newer_selection(client_env):
+    """Tabs share one refresh session. A tab still holding the pid of a deleted
+    profile must not clear the selection another tab just made."""
+    tokens = await _register_login(client_env, "race1@gmov.dev", "race1")
+    kept = await _add_profile(client_env, tokens["access_token"], "Kept")
+    gone = await _add_profile(client_env, tokens["access_token"], "Gone")
+    user = await _user(client_env, "race1")
+    sid = security.decode_token(tokens["refresh_token"])["jti"]
+
+    # Another tab switched this session to `kept`...
+    await _set_session_profile(client_env, tokens["refresh_token"], kept)
+    # ...while this tab still presents a token for `gone`, since deleted.
+    async with client_env.factory() as db:
+        await db.delete(await db.get(Profile, gone))
+        await db.commit()
+
+    r = await client_env.client.get(
+        f"{ME}/profile", headers=_hand_signed(user.id, pid=gone, sid=sid)
+    )
+    assert r.status_code == 403
+    assert r.json()["code"] == "PROFILE_REQUIRED"
+
+    async with client_env.factory() as db:
+        row = (
+            await db.execute(
+                select(RefreshToken).where(RefreshToken.jti == sid)
+            )
+        ).scalar_one()
+        assert row.profile_id == kept
+
+
 async def test_banned_user_still_401_even_with_valid_pid(client_env):
     await _register_login(client_env, "ban1@gmov.dev", "ban1")
     user = await _user(client_env, "ban1")

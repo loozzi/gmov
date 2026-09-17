@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import ratelimit, security
@@ -41,13 +41,6 @@ async def get_by_id(
 ) -> Profile | None:
     """Unscoped lookup, used to tell a deleted profile from a foreign one."""
     return await db.get(Profile, profile_id)
-
-
-async def default_for(db: AsyncSession, user_id: uuid.UUID) -> Profile:
-    stmt = select(Profile).where(
-        Profile.user_id == user_id, Profile.is_default.is_(True)
-    )
-    return (await db.execute(stmt)).scalar_one()
 
 
 async def _name_taken(
@@ -181,16 +174,23 @@ async def activate_session(
     await db.commit()
 
 
-async def repoint_session(
-    db: AsyncSession, session_jti: str, profile_id: uuid.UUID | None
+async def clear_session_profile(
+    db: AsyncSession, session_jti: str, vanished_profile_id: uuid.UUID
 ) -> None:
-    """Best-effort session repair after a token's profile vanished (None
-    leaves the session unselected, i.e. back to the chooser). A missing row
-    (e.g. the session was logged out) is not an error."""
-    row = await _session_row(db, session_jti)
-    if row is None:
-        return
-    row.profile_id = profile_id
+    """Drop a session's profile pointer after that profile vanished.
+
+    Conditional on purpose: tabs share one refresh session, so another tab may
+    already have selected a new profile (`activate_session`) — clearing
+    unconditionally would throw that newer selection away. A missing or
+    already-cleared row changes nothing."""
+    await db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.jti == session_jti,
+            RefreshToken.profile_id == vanished_profile_id,
+        )
+        .values(profile_id=None)
+    )
     await db.commit()
 
 

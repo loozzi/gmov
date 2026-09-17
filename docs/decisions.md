@@ -702,15 +702,18 @@ Log ambiguous decisions here (Phase 0+). Newest last.
        coi `pid` vắng = **chưa chọn** → `403 PROFILE_REQUIRED` (KHÔNG fallback về
        profile mặc định — bỏ nhánh cũ của #130/#132).
      - `POST /me/profiles/{id}/switch` là **cách duy nhất** để có token gắn
-       profile (đã verify PIN nếu profile có PIN). `GET /me/profiles`, `switch`,
-       `DELETE`, `PUT .../pin` chuyển sang `get_session_context` (profile có thể
-       `None`) để còn cửa thoát.
+       profile (đã verify PIN nếu profile có PIN). `GET /me/profiles`, `switch`
+       và `DELETE` chuyển sang `get_session_context` (profile có thể `None`) để
+       còn cửa thoát; nhóm quản lý profile vẫn chỉ cần `get_current_user`.
      - `pid` trỏ profile đã xoá → `repoint_session(jti, None)` rồi
        `PROFILE_REQUIRED`; refresh cũng vậy (không tự nhảy về mặc định). Xoá
        profile đang dùng không phát profile kế nhiệm (`SwitchOut` cả hai null).
      - Web: `ProfileGate` trong `AppShell` (đã đăng nhập + chưa chọn → giữ
        placeholder rồi `router.replace("/profiles?next=…")`; miễn trừ
        `/profiles`, `/profiles/manage`, `/login`, `/register`); chooser **luôn**
-       gọi `switch` kể cả card "Đang xem" nên PIN luôn được hỏi.
+       gọi `switch` kể cả card "Đang xem" nên PIN luôn được hỏi. Cùng lúc,
+       `clear_session_profile` chỉ xoá con trỏ phiên khi nó **vẫn** đang trỏ
+       profile đã mất — tab khác dùng chung refresh session có thể đã chọn profile
+       mới, xoá vô điều kiện sẽ nuốt mất lựa chọn đó.
      Không cần migration: `refresh_tokens.profile_id` đã `nullable` + `ON DELETE
      SET NULL` từ đầu.

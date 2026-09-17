@@ -97,10 +97,6 @@ export function useCurrentProfile(options: { enabled?: boolean } = {}) {
   });
 }
 
-export function useActiveProfileHint() {
-  return useCurrentProfile();
-}
-
 export function useCreateProfile() {
   const queryClient = useQueryClient();
   return useMutation({

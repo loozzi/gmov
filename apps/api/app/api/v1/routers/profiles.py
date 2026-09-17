@@ -129,7 +129,7 @@ async def delete_profile(
     if was_active and ctx.session_jti is not None:
         # No successor profile is handed out: the session goes back to the
         # chooser, so a PIN-locked default is never entered implicitly.
-        await profile_service.repoint_session(db, ctx.session_jti, None)
+        await profile_service.clear_session_profile(db, ctx.session_jti, profile.id)
     return SwitchOut(access_token=None, profile=None)
 
 

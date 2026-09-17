@@ -121,8 +121,10 @@ PIN chỉ có nghĩa khi server enforce trên mọi request.
 - **`pid` vắng mặt = "chưa chọn"**, không phải "dùng mặc định": mọi endpoint gắn
   profile (`/me/profile`, `/me/favorites`, progress, ratings, recommendations…)
   trả `403 PROFILE_REQUIRED` cho tới khi client gọi `POST /me/profiles/{id}/switch`.
-  Riêng `GET /me/profiles`, `POST /switch`, `DELETE` và `PUT .../pin` chạy ở tầng
-  tài khoản (`get_session_context`) để còn đường thoát.
+  Riêng `GET /me/profiles`, `POST /switch` và `DELETE` chạy ở tầng tài khoản
+  (`get_session_context`, profile có thể `None`) để còn đường thoát; nhóm quản lý
+  profile (`POST /profiles`, `PATCH /profiles/{id}`, `PUT .../pin`) chỉ cần
+  `get_current_user` vì không phụ thuộc profile đang chọn.
 - **`refresh_tokens`** có cột `profile_id` UUID FK `profiles.id` `ON DELETE SET
   NULL`. Mỗi row = một phiên/thiết bị → **mỗi thiết bị nhớ profile riêng**;
   không dùng localStorage.

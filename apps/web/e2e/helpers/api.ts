@@ -211,9 +211,9 @@ function pinChoices(known: PinCandidates | undefined): string[] {
   return Array.isArray(known) ? known : [known];
 }
 
-/** Delete every non-default profile of the account (clearing PINs first) and
- * leave the session on the default profile. Used by the profile specs to make
- * runs idempotent on the shared account WITHOUT registering new ones.
+/** Delete every non-default profile of the account (clearing PINs first), using
+ * a throwaway unselected session. Used by the profile specs to make runs
+ * idempotent on the shared account WITHOUT registering new ones.
  * `knownPins` may map a profile to either one PIN or a list of candidates; the
  * list covers a test that aborted between changing and re-recording the PIN. */
 export async function resetProfiles(
