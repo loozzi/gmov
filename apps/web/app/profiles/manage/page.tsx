@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronLeft, KeyRound, Lock, Pencil, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  ChevronLeft,
+  KeyRound,
+  Lock,
+  Pencil,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
@@ -21,6 +29,7 @@ import {
   useProfiles,
   type ProfileListItem,
 } from "@/lib/profiles";
+import { useResetPreferences } from "@/lib/recommendations";
 
 type PinMode = "set" | "clear";
 
@@ -40,9 +49,11 @@ function deleteErrorMessage(error: unknown): string {
 
 export default function ManageProfilesPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const router = useRouter();
   const toast = useToast();
   const { data, isLoading, isError, error } = useProfiles();
   const deleteProfile = useDeleteProfile();
+  const resetPreferences = useResetPreferences();
 
   const [editProfile, setEditProfile] = useState<ProfileListItem | null>(null);
   const [pinTarget, setPinTarget] = useState<PinTarget | null>(null);
@@ -88,6 +99,28 @@ export default function ManageProfilesPage() {
         onError: (err: unknown) => setDeleteError(pinErrorMessage(err)),
       },
     );
+  };
+
+  const handleRetune = (item: ProfileListItem) => {
+    if (!item.is_current) {
+      toast(
+        `Hãy chuyển sang profile ${item.name} trước khi làm lại sở thích.`,
+        "error",
+      );
+      return;
+    }
+    if (
+      !window.confirm(
+        `Làm lại sở thích cho profile "${item.name}"? Gu hiện tại của profile này sẽ được đặt lại.`,
+      )
+    ) {
+      return;
+    }
+    resetPreferences.mutate(undefined, {
+      onSuccess: () => router.push("/onboarding?again=1"),
+      onError: (err: unknown) =>
+        toast(toVietnameseMessage(err), "error"),
+    });
   };
 
   if (authLoading) {
@@ -195,6 +228,15 @@ export default function ManageProfilesPage() {
                     Xoá PIN
                   </Button>
                 )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  aria-label={`Làm lại sở thích ${p.name}`}
+                  onClick={() => handleRetune(p)}
+                  disabled={resetPreferences.isPending}
+                >
+                  <RefreshCw /> Làm lại sở thích
+                </Button>
                 {!p.is_default && (
                   <Button
                     size="sm"

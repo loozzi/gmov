@@ -59,3 +59,18 @@ async def summary(db: AsyncSession, movie_slug: str) -> tuple[float | None, int]
     if not count:
         return None, 0
     return round(float(avg_val), 1), int(count)
+
+
+async def top_rated(
+    db: AsyncSession, *, min_count: int, limit: int
+) -> list[tuple[str, float, int]]:
+    avg = func.avg(Rating.stars)
+    stmt = (
+        select(Rating.movie_slug, avg, func.count())
+        .group_by(Rating.movie_slug)
+        .having(func.count() >= min_count)
+        .order_by(avg.desc(), Rating.movie_slug)
+        .limit(limit)
+    )
+    rows = (await db.execute(stmt)).all()
+    return [(slug, round(float(value), 2), int(count)) for slug, value, count in rows]

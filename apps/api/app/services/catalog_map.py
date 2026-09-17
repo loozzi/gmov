@@ -65,6 +65,8 @@ def _normalize(label: str) -> str:
     return " ".join(label.split()).casefold()
 
 
+GENRE_LABELS: dict[str, str] = {slug: label for label, slug in GENRE_SLUGS.items()}
+
 _GENRE_LOOKUP = {_normalize(k): v for k, v in GENRE_SLUGS.items()}
 _COUNTRY_LOOKUP = {_normalize(k): v for k, v in COUNTRY_SLUGS.items()}
 
@@ -75,3 +77,7 @@ def genre_slug(label: str) -> str | None:
 
 def country_slug(label: str) -> str | None:
     return _COUNTRY_LOOKUP.get(_normalize(label))
+
+
+def genre_label(slug: str) -> str:
+    return GENRE_LABELS.get(slug, slug)

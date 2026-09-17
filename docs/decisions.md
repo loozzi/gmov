@@ -575,3 +575,64 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      Ngân sách cạn trả `429 RATE_LIMITED` trước cả khi so PIN. Bộ đếm + key
      đặt/đổi PIN nằm trong namespace `ratelimit:*` để E2E reset được giữa các
      lần chạy.
+
+## Onboarding & gợi ý (M2) — 2026-09-17
+
+117. **R1 — Quiz lấy lựa chọn từ web tĩnh.** Upstream **không có endpoint menu**
+     thể loại/quốc gia; `apps/web/lib/catalog.ts` (`GENRES`/`COUNTRIES`) là
+     nguồn duy nhất cho onboarding. Client gửi **slug** (`onboarding-genre-*`,
+     `onboarding-country-*`) khớp `catalog_map`, không thêm endpoint menu.
+     Đánh đổi: vài thể loại ít gặp (vd `phim-18`) không có trong quiz — chấp nhận.
+118. **R2 — Bỏ cột `catalog_items.kind`.** `MovieCard` upstream không có
+     `kind`/`type`; suy từ loại listing là mong manh và engine không dùng →
+     YAGNI, không tạo cột. Bảng chỉ có `source` (`"<kind>:<key>"`) để truy vết.
+119. **R3 — Refresh snapshot bằng APScheduler, không `BackgroundTasks`.** Repo
+     chưa từng dùng `BackgroundTasks`; mẫu sẵn có là `token_cleanup`
+     (`run_with_lock` qua Redis `SET NX EX`, `start_scheduler()` trong lifespan).
+     Dùng job interval `CATALOG_REFRESH_INTERVAL_MINUTES` chỉ chạy khi snapshot
+     cũ hơn `CATALOG_TTL_HOURS`, warm-up một lần lúc startup **nếu kho rỗng**, và
+     CLI `python -m app.cli refresh-catalog`. Lock `catalog:refresh:lock` TTL
+     300s chống chạy trùng giữa worker.
+120. **R4 — Rail gợi ý là client component.** Home page fetch server-side không
+     kèm auth, mà recs cần access token trong memory → `RecommendationsRail`
+     theo mẫu `continue-watching-rail` (`"use client"` + `useAuth()` + TanStack
+     Query), trả `null` khi chưa đăng nhập/rỗng. Không cần auth-aware server
+     fetch.
+121. **R5 — Cache recs dùng `services/cache.py` với key `recs:`.** Key
+     `recs:{profile_id}:{prefs_ver}` (`prefs_ver` = epoch `updated_at` của
+     `profile_preferences`) truyền thẳng vào `cached_fetch(key, ttl, model,
+     fetcher)` — **không** dùng `cache_key()` vì nó gắn prefix `nguonc:`. TTL
+     `RECS_CACHE_TTL=900` cho personal, 300s cho fallback.
+122. **Thang rating 1..5 → ngưỡng hành vi `stars >= 4` / `stars <= 2`.** Spec
+     ban đầu viết `rating ≥8 / ≤4` (giả định thang 10 điểm) là **sai**: schema
+     `RatingUpsert.stars` là `ge=1, le=5`. Hành vi: favorite +1.0,
+     `stars >= 4` +1.5, `stars <= 2` −1.5, xem ≥90% +0.5.
+123. **Số hạng trung bình nội bộ là `1 × avg`, không phải bonus cố định**: phim
+     có avg cao (và `count >= POPULAR_MIN_RATINGS`) nhích lên theo chính avg, tối
+     đa ~5 điểm thang 5. Lấy qua `rating_service.top_rated`.
+124. **"Làm lại sở thích" cho profile không hoạt động chỉ hiện thông báo, không
+     tự switch.** Spec nói "switch trước (kèm PIN dialog nếu khoá)"; thực tế UI
+     báo `Hãy chuyển sang profile <name> trước khi làm lại sở thích.` và dừng —
+     index/active profile nằm trong phiên nên tự switch ngầm sẽ khó đoán và vướng
+     PIN. Đây là deviation có chủ đích, đã ghi vào `docs/api-profiles.md`.
+125. **Ẩn rail khi `source === "newest"` + `MovieRail` thêm prop optional
+     `reasons`.** Rail `newest` trùng rail tĩnh "Mới cập nhật" trên home nên
+     `RecommendationsRail` trả `null`; lý do gợi ý hiển thị bằng dòng text dưới
+     card qua prop additive `reasons` (không phá các caller cũ của `MovieRail`).
+126. **`POST /me/preferences/posters` nhận `skipped` nhưng không lưu.** Bảng
+     `profile_preferences` không có cột cho poster bỏ qua; field được chấp nhận
+     để hợp đồng API ổn định và client gửi lên không lỗi, nhưng bị bỏ qua (không
+     ảnh hưởng trọng số). Ghi nợ: `docs/todo.md`.
+127. **Loại `phim-18` khỏi crawl mặc định** (`EXCLUDED_GENRE_SLUGS` trong
+     `catalog_service`) để phim 18+ (thường mang thêm thể loại phổ thông) không
+     lọt vào "Gợi ý cho bạn". Quiz R1 không có lựa chọn 18+ nên không profile nào
+     biểu đạt hay tắt được thể loại này, tức không có age gate thật. Chỉ áp cho
+     danh sách mặc định; `refresh(kinds=[...])` và `--kinds phim-18` vẫn crawl
+     tường minh được. Cờ tuổi/kid mode đúng nghĩa là việc tương lai — upstream
+     không có nhãn độ tuổi.
+128. **`reason` chỉ đặt khi thể loại khớp mạnh nhất có trọng số dương**: profile
+     có rating thấp (vd 1★ phim Kinh Dị → `-1.5`) trước đây vẫn được bảo "Vì bạn
+     thích Kinh Dị"; nay trọng số ≤ 0 → `reason = null`.
+129. **Giới hạn input sở thích**: `PosterFeedbackIn.liked/skipped` tối đa 200
+     slug (tránh `IN (...)` phình to), `PreferencesIn.genres/countries` tối đa
+     100 khoá và trọng số hữu hạn trong `[-10, 10]`; vi phạm → 422.

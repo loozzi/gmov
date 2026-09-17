@@ -10,9 +10,11 @@ interface Props {
   movies: MovieCardType[];
   /** When set, the section renders even with no movies, showing this hint. */
   emptyHint?: string;
+  /** Optional per-movie reason, keyed by movie slug. */
+  reasons?: Record<string, string>;
 }
 
-export function MovieRail({ title, href, movies, emptyHint }: Props) {
+export function MovieRail({ title, href, movies, emptyHint, reasons }: Props) {
   if (movies.length === 0 && !emptyHint) return null;
   return (
     <section className="group/rail space-y-2">
@@ -36,6 +38,11 @@ export function MovieRail({ title, href, movies, emptyHint }: Props) {
           {movies.map((m) => (
             <div key={m.slug} className="w-36 shrink-0 sm:w-44">
               <MovieCard movie={m} />
+              {reasons?.[m.slug] && (
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                  {reasons[m.slug]}
+                </p>
+              )}
             </div>
           ))}
         </div>
