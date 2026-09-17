@@ -2,6 +2,7 @@
 
 import hashlib
 import ipaddress
+import uuid
 
 from fastapi import Request
 from redis.exceptions import RedisError
@@ -62,11 +63,22 @@ async def check_rate_limit(key: str, limit: int, window_seconds: int) -> None:
         if count == 1:
             await client.expire(key, window_seconds)
         if count > limit:
-            raise AppException("Too many requests", "RATE_LIMITED", 429)
+            ttl = await client.ttl(key)
+            raise AppException(
+                "Too many requests",
+                "RATE_LIMITED",
+                429,
+                headers=_retry_after(ttl),
+            )
     except AppException:
         raise
-    except (RedisError, OSError):
+    except (RedisError, OSError, ValueError):
         pass
+
+
+def pin_attempt_key(profile_id: uuid.UUID, ip: str) -> str:
+    """Counter shared by every PIN check (switch + delete) of a profile."""
+    return f"profile-pin:{profile_id}:{ip}"
 
 
 def _username_digest(username: str) -> str:

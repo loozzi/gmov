@@ -6,14 +6,19 @@ from typing import TYPE_CHECKING
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import ratelimit, security
+from app.core.config import settings
 from app.core.exceptions import AppException
 from app.db.models.profile import FALLBACK_AVATAR, Profile
+from app.db.models.refresh_token import RefreshToken
 from app.db.models.user import User
 
 if TYPE_CHECKING:
     from app.core.deps import ActiveProfile
 
-MAX_PROFILES = 5
+MAX_PROFILES = settings.max_profiles
+PIN_MAX_ATTEMPTS = settings.pin_max_attempts
+PIN_WINDOW = settings.pin_window
 DEFAULT_PROFILE_NAME = "Mặc định"
 
 
@@ -119,3 +124,55 @@ async def set_pin_hash(
     await db.commit()
     await db.refresh(profile)
     return profile
+
+
+async def _rate_limit_pin(profile_id: uuid.UUID, ip: str) -> None:
+    await ratelimit.check_rate_limit(
+        ratelimit.pin_attempt_key(profile_id, ip),
+        PIN_MAX_ATTEMPTS,
+        PIN_WINDOW,
+    )
+
+
+async def verify_pin(
+    db: AsyncSession, profile: Profile, pin: str | None, ip: str = "unknown"
+) -> None:
+    """No-op for unlocked profiles; otherwise demand the profile PIN."""
+    if profile.pin_hash is None:
+        return
+    if not pin:
+        raise AppException("PIN required", "PIN_REQUIRED", 403)
+    await _rate_limit_pin(profile.id, ip)
+    if not security.verify_password(pin, profile.pin_hash):
+        raise AppException("Invalid PIN", "INVALID_PIN", 401)
+
+
+async def set_pin(
+    db: AsyncSession, profile: Profile, password: str, pin: str | None
+) -> Profile:
+    """Set, change or clear a PIN, gated by the owning account's password."""
+    user = await db.get(User, profile.user_id)
+    if user is None or not security.verify_password(password, user.hashed_password):
+        raise AppException("Invalid password", "INVALID_PASSWORD", 400)
+    profile.pin_hash = security.hash_password(pin) if pin is not None else None
+    await db.commit()
+    await db.refresh(profile)
+    return profile
+
+
+async def activate_session(
+    db: AsyncSession, session_jti: str, profile_id: uuid.UUID
+) -> None:
+    """Point the refresh session at the profile it now operates as."""
+    stmt = select(RefreshToken).where(RefreshToken.jti == session_jti)
+    row = (await db.execute(stmt)).scalar_one_or_none()
+    if row is None:
+        raise AppException("Session outdated", "SESSION_STALE", 401)
+    row.profile_id = profile_id
+    await db.commit()
+
+
+async def delete(db: AsyncSession, profile: Profile) -> None:
+    """Hard delete; the profile's rows cascade via their FK."""
+    await db.delete(profile)
+    await db.commit()

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.db.models.profile import AVATAR_KEYS, Profile
 
 MAX_NAME_LENGTH = 32
+PIN_PATTERN = r"^\d{4}$"
 
 
 def _clean_name(value: str) -> str:
@@ -97,3 +98,17 @@ class ProfilePatchIn(BaseModel):
         if value is None:
             return None
         return _known_avatar(value)
+
+
+class ProfileSwitchIn(BaseModel):
+    pin: str | None = Field(default=None, pattern=PIN_PATTERN)
+
+
+class ProfilePinIn(BaseModel):
+    password: str = Field(min_length=1)
+    pin: str | None = Field(default=None, pattern=PIN_PATTERN)
+
+
+class SwitchOut(BaseModel):
+    access_token: str | None
+    profile: ProfileOut | None
