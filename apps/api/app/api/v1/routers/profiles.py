@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.deps import ActiveProfile, get_active_profile, get_current_user
 from app.core.exceptions import AppException
 from app.db.models.user import User
 from app.db.session import get_db
@@ -23,23 +23,23 @@ router = APIRouter(prefix="/me", tags=["profiles"])
 
 @router.get("/profile", response_model=ProfileOut)
 async def read_current_profile(
-    current: User = Depends(get_current_user),
+    active: ActiveProfile = Depends(get_active_profile),
     db: AsyncSession = Depends(get_db),
 ) -> ProfileOut:
-    profile = await profile_service.current_profile_for(db, current)
+    profile = await profile_service.current_profile_for(db, active.user, active)
     return ProfileOut.from_profile(profile)
 
 
 @router.get("/profiles", response_model=ProfileListOut)
 async def list_profiles(
-    current: User = Depends(get_current_user),
+    active: ActiveProfile = Depends(get_active_profile),
     db: AsyncSession = Depends(get_db),
 ) -> ProfileListOut:
-    profiles = await profile_service.list_for_user(db, current.id)
-    active = await profile_service.current_profile_for(db, current)
+    profiles = await profile_service.list_for_user(db, active.user.id)
+    current = await profile_service.current_profile_for(db, active.user, active)
     return ProfileListOut(
         items=[
-            ProfileListItemOut.from_profile(p, is_current=p.id == active.id)
+            ProfileListItemOut.from_profile(p, is_current=p.id == current.id)
             for p in profiles
         ],
         max=profile_service.MAX_PROFILES,

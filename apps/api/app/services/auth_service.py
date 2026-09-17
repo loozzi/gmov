@@ -13,15 +13,15 @@ from app.core.exceptions import AppException
 from app.db.models.refresh_token import RefreshToken
 from app.db.models.user import User
 from app.schemas.auth import RegisterIn, TokenPair
-from app.services import user_service
+from app.services import profile_service, user_service
 
 
 def _build_pair(
-    user_id: uuid.UUID, family_id: uuid.UUID
+    user_id: uuid.UUID, family_id: uuid.UUID, profile_id: uuid.UUID
 ) -> tuple[TokenPair, RefreshToken]:
     """Create tokens + the (unsaved) refresh row. Caller commits."""
-    access = security.create_access_token(user_id)
     refresh, jti = security.create_refresh_token(user_id)
+    access = security.create_access_token(user_id, jti, profile_id)
     expires_at = datetime.now(UTC) + timedelta(
         days=settings.refresh_token_expire_days
     )
@@ -31,13 +31,16 @@ def _build_pair(
             user_id=user_id,
             jti=jti,
             family_id=family_id,
+            profile_id=profile_id,
             expires_at=expires_at,
         ),
     )
 
 
-async def _issue_pair(db: AsyncSession, user: User) -> TokenPair:
-    pair, row = _build_pair(user.id, uuid.uuid4())
+async def _issue_pair(
+    db: AsyncSession, user: User, profile_id: uuid.UUID
+) -> TokenPair:
+    pair, row = _build_pair(user.id, uuid.uuid4(), profile_id)
     db.add(row)
     await db.commit()
     return pair
@@ -59,7 +62,8 @@ async def login(db: AsyncSession, login: str, password: str) -> TokenPair:
         raise AppException("Account is disabled", "ACCOUNT_DISABLED", 403)
     if user.banned_at is not None:
         raise AppException("Account banned", "ACCOUNT_BANNED", 403)
-    return await _issue_pair(db, user)
+    profile = await profile_service.default_for(db, user.id)
+    return await _issue_pair(db, user, profile.id)
 
 
 def _decode_refresh(token: str) -> dict:
@@ -161,7 +165,13 @@ async def refresh(db: AsyncSession, token: str) -> TokenPair:
             raise AppException(
                 "Invalid refresh token", "INVALID_REFRESH_TOKEN", 401
             )
-        pair, new_row = _build_pair(user.id, presented.family_id)
+        profile_id = presented.profile_id
+        if (
+            profile_id is None
+            or await profile_service.get_owned(db, user.id, profile_id) is None
+        ):
+            profile_id = (await profile_service.default_for(db, user.id)).id
+        pair, new_row = _build_pair(user.id, presented.family_id, profile_id)
         db.add(new_row)
         await db.commit()
         return pair
