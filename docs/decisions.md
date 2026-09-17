@@ -652,3 +652,28 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      PIN thì bỏ qua `current_pin` (đặt lần đầu hoặc "xoá" khi chưa có PIN không
      cần). Bỏ rate limit riêng `ratelimit:pin-set:{ip}` (vốn đếm cả lần thành
      công) để nhất quán với nguyên tắc "chỉ lần thất bại tiêu ngân sách".
+132. **Chọn profile là một TRANG, không phải modal, và đăng nhập luôn đáp xuống
+     đó.** Bỏ hẳn `ProfilePickerGate` + `lib/profile-picker` (cờ ý định trong
+     tab): `login`/`register` giờ `router.replace("/profiles")` (kèm `next` đã
+     lọc qua `safeNextPath`), chọn xong thì rời trang tới `next` hoặc `/`. Lý do:
+     modal chồng lên trang gây nháy scrollbar và không "bắt buộc chọn" được; một
+     route riêng thì deep-link được, back/forward đúng, và test bằng URL thay vì
+     testid. `/profiles` chạy immersive: `AppShell` (client, đọc `usePathname`)
+     ẩn header/footer cho đúng route này — đổi nhỏ hơn nhiều so với việc dời 18
+     thư mục route sang route group. Không có nút "Để sau": chọn profile là bước
+     bắt buộc (người dùng vẫn tự điều hướng URL được, không thêm middleware chặn
+     cứng vì sẽ nhốt cả tab mới).
+133. **PIN không bao giờ hiển thị: dialog full-screen + `type="password"`.**
+     Form nhập PIN dùng ô `type="password"` (hiện dấu chấm) thay vì text, và
+     `DialogContent` có thêm biến thể `fullScreen` (phủ kín viewport, nền tối,
+     không bo góc) cho `ProfilePinDialog`. Chỉ dialog nhập PIN để mở khoá/chuyển
+     profile dùng full-screen; form "Đặt/Đổi PIN" trong `/profiles/manage` vẫn là
+     dialog thường vì là form nhiều trường (mật khẩu + PIN mới), không phải bàn
+     phím PIN.
+134. **Menu header dùng `modal={false}` để không khoá scroll trang.** Radix
+     `DropdownMenu` mặc định `modal` → đặt `body[data-scroll-locked]` +
+     `overflow: hidden` khi mở; trang vẫn scroll được nên scrollbar viewport bị
+     bỏ và **nháy** mỗi lần mở/đóng. Menu profile + menu tài khoản chuyển sang
+     `modal={false}` (menu thể loại ở `SiteHeader` đã vậy từ trước). Có test E2E
+     chống tái phát: mở cả hai menu → `data-scroll-locked` phải vắng và
+     `overflow` không được `hidden`.

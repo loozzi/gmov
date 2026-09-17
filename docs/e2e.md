@@ -30,8 +30,10 @@ pnpm --filter gmov-web exec playwright show-report
 - `e2e/global-teardown.ts`: xóa progress + favorites + watchlist của account test (user row
   ở lại vì chưa có API xóa account).
 - Mỗi spec tự login trên context riêng. Hầu hết dùng `loginViaApi()` (POST
-  `/api/auth/login`); riêng `moderation.spec` login qua UI (`loginViaUi`) ở cả
-  hai context. KHÔNG dùng storageState chung: refresh rotation đốt cookie ngay
+  `/api/auth/login`); riêng `moderation.spec` login qua UI. `loginViaUi()` (form)
+  phải **đi tiếp qua trang chọn profile** vì đăng nhập luôn đáp xuống `/profiles`
+  immersive — helper `continuePastChooser()` chọn profile đang xem rồi tới đích.
+  KHÔNG dùng storageState chung: refresh rotation đốt cookie ngay
   lần dùng đầu tiên nên file cookie tĩnh chỉ đúng cho đúng 1 test.
 - `app/e2e/player`: trang harness CHỈ tồn tại ở dev (`notFound()` khi
   production), dựng MovieDetail giả với m3u8 mẫu công khai để test đường HLS
@@ -94,26 +96,50 @@ cascade xoá report) + hạ account nền về `user`.
 
 ## Spec profiles (`profiles.spec.ts`)
 
-4 test phủ M1, **chỉ dùng account nền** — KHÔNG đăng ký account nào (register
-bị throttle `3 tài khoản/giờ/IP`, đã từng dính). Cách ly được chứng minh bằng
-các profile tạo/xoá bên trong từng test; không cần data upstream (favorites
-nhận slug tuỳ ý) nên spec này không skip khi CDN chặn. Timeout 120s/test.
+10 test phủ M1 + luồng chọn profile, **chỉ dùng account nền** — KHÔNG đăng ký
+account nào (register bị throttle `3 tài khoản/giờ/IP`, đã từng dính). Cách ly
+được chứng minh bằng các profile tạo/xoá bên trong từng test; không cần data
+upstream (favorites nhận slug tuỳ ý) nên spec này không skip khi CDN chặn.
+Timeout 120s/test.
 
 1. `second profile keeps its own My list...` — tạo profile thứ hai → My list
-   tách biệt → switch qua UI `/profiles` → data khác → quay lại profile đầu
+   tách biệt → switch qua trang `/profiles` (chọn card xong trang **rời sang
+   `/`**, verify bằng chip profile ở header) → data khác → quay lại profile đầu
    thấy nguyên vẹn; xoá profile đã tạo qua `/profiles/manage` (không PIN →
    `window.confirm`).
-2. `a locked profile asks for its PIN` — đặt PIN → switch từ UI đòi PIN; PIN sai
-   hiện `alert` "PIN không đúng"; PIN đúng thì switch thành công.
+2. `a locked profile asks for its PIN` — đặt PIN → chọn card từ `/profiles` mở
+   `ProfilePinDialog` full-screen (input `type=password`); PIN sai hiện `alert`
+   "PIN không đúng"; PIN đúng thì switch thành công rồi rời trang.
 3. `the default profile cannot be deleted and the sixth is rejected` — hàng
    profile mặc định không có nút xoá; tạo tới `max` rồi profile thứ 6 bị
    server từ chối `409 PROFILE_LIMIT_REACHED`.
 4. `deleting a profile removes only its data` — xoá profile có PIN (dialog nhập
    PIN): data của profile đó mất, profile khác nguyên vẹn, và scope của profile
    đã xoá trả `404 PROFILE_NOT_FOUND`.
+5. `creating a profile from the manage page adds a row` — nút "Thêm profile" ở
+   `/profiles/manage` mở form và thêm hàng mới.
+6. `changing a PIN requires the current PIN` — đổi PIN qua manage đòi
+   `current_pin`; sai → lỗi, đúng → lưu.
+7. `logging in lands on the full-screen chooser and enforces the PIN` — đăng nhập
+   **qua form** (để `AuthProvider.login` chạy trong tab) → URL `/profiles`, thấy
+   `profile-chooser`, **không có header** và không có nút bỏ qua → chọn profile
+   khoá mở modal PIN phủ kín viewport (assert theo bounding box = viewport) với
+   `type=password` → PIN sai/đúng → rời trang về `/` và chip header đổi tên.
+8. `a chooser handoff respects the ?next target` — `/login?next=/me/favorites` →
+   sau khi chọn profile, URL phải là `/me/favorites` (không mất đích).
+9. `a stale has_pin reveals the current-PIN field on PIN_REQUIRED` — cache
+   `has_pin=false` trong khi server đã có PIN → dialog đổi PIN phải hiện ô "PIN
+   hiện tại" theo `PIN_REQUIRED`.
+10. `the profile menu never locks page scroll` — mở menu profile **và** menu tài
+    khoản: `data-scroll-locked` phải vắng, `overflow` không `hidden`, trang vẫn
+    scroll được (chống tái phát lỗi nháy scrollbar).
 
-Cleanup dùng helper `resetProfiles` (xoá PIN + xoá mọi profile non-default) và
-xoá favorites đã thêm, best-effort để trả account về profile mặc định.
+Helper dùng chung ở `helpers/auth.ts`: `loginViaApi` (đăng nhập bằng route
+handler, vào thẳng `/`), `loginViaUi` (đăng nhập qua form rồi **đi tiếp qua
+trang chọn** — cần thiết vì login luôn đáp xuống `/profiles`), và
+`continuePastChooser` (chọn profile đang xem rồi tới đích, mặc định `/`).
+Cleanup dùng `resetProfiles` (xoá PIN + xoá mọi profile non-default) và xoá
+favorites đã thêm, best-effort để trả account về profile mặc định.
 
 ## Spec onboarding & gợi ý (`onboarding.spec.ts`)
 
