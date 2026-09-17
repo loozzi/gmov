@@ -81,9 +81,13 @@ Brought forward — none blocks current functionality.
 24. **Migration backfill `refresh_tokens.family_id`** — `UPDATE ... SET
     family_id = id` quét toàn bảng dưới ACCESS EXCLUSIVE; ổn ở scale hiện tại,
     batch nếu bảng lớn.
-25. **`Comment.is_hidden` dùng `server_default="false"`** — SQLite đọc
-    `bool('false') = True` (latent, chỉ ảnh hưởng test; Postgres đúng). Nếu
-    chạm tới, đổi sang `sa.false()` như `RefreshToken.compromised`.
+25. ~~**`Comment.is_hidden` dùng `server_default="false"`**~~ — DONE
+    (2026-09-17: model đổi sang `false()` + migration `c41d7e9b2a05`
+    (`alter_column server_default=sa.false()`). Xác nhận lại bug: DDL SQLite là
+    `DEFAULT 'false'` → lưu **text** `'false'` → `bool()` = True; test mới
+    `tests/test_comment_hidden_default.py` (upgrade migration rồi INSERT raw
+    không set `is_hidden`) đỏ trước / xanh sau. Postgres đã verify: default là
+    boolean `false`, raw insert trả `f`).
 26. **E2E fixture bypass throttle** — `global-setup` xóa key `ratelimit:*` thay
     vì nâng cap; chỉ trong test env, chấp nhận.
 27. ~~**`player.spec` đã fail sẵn trong môi trường này**~~ — DONE (2026-09-17).
@@ -98,11 +102,18 @@ Brought forward — none blocks current functionality.
     ngay tới ~t1, còn resume hỏng phát lại từ 0 nên chỉ đạt 2s sau ~2s và bị
     bound ±5s bắt. Verify: 3/3 pass (`--repeat-each=3`) + mutation test (ép
     `target = 0`) fail đúng "got 2.05".
-28. **Pool cho "Phim liên quan" chỉ lấy 3 trang mới nhất mỗi list** — nên phim
-    cũ/ít tín hiệu có thể ra rail "cùng thời" thay vì cùng người, và match
-    người chỉ đến từ các phim nằm trong cửa sổ thể loại/quốc gia/năm đó
-    (upstream không có search theo người — xem decisions #100). Muốn tốt hơn:
-    tăng số trang (tốn thêm call upstream) hoặc tự lập chỉ mục cast/director.
+28. **Pool "Phim liên quan" bị giới hạn bởi dữ liệu upstream (đã ĐO, đừng
+    tăng page mù quáng)** — đo 2026-09-17 trên 4 phim (`de-che-dai-han-phan-1`,
+    `luc-luong-lanterns-phan-1`, `giac-quan-thu-sau-mat-trai`, `tay-co-bac`):
+    mọi listing (genre/country/year) trả **10 item/trang**, xếp mới-nhất-trước;
+    match cùng người **chỉ xuất hiện ở trang 1**, các trang sâu hơn 0 hit
+    (year list 7 trang: 0 unique; genre list #3+ chỉ lặp lại hit đã có ở #1) và
+    2/4 phim không có match cùng người nào dù quét hết genre+country+year. Kết
+    luận: `CANDIDATE_PAGES=3`/`MAX_GENRE_LISTS=2` **không phải** nút thắt — tăng
+    độ sâu chỉ tốn thêm call upstream mà ~0 giá trị. Fix thật sự duy nhất là
+    **index cast/director riêng** (crawl toàn catalog để tra "phim khác của
+    người này"), ngoài scope v1; đường ống hiện tại đã lấy hết tín hiệu mà
+    upstream cho phép (chi tiết + số đo: decisions #107).
 29. ~~**`/related` chưa có rate limit theo IP**~~ — DONE (2026-09-17: 60
     req/phút/IP qua `check_rate_limit`, tính cả cache HIT; chỉ endpoint catalog
     này bị giới hạn vì mỗi cache miss fan-out ~10 call upstream).

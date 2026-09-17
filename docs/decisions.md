@@ -506,3 +506,13 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      hạn (nhất quán với việc chúng không có limit từ trước). Đếm cả cache HIT
      (mục đích là chặn hammering), dùng `ratelimit.client_ip` — chỉ tin
      `X-Forwarded-For` khi peer là trusted proxy, như auth.
+
+107. **Chấp nhận pool "Phim liên quan" như hiện tại — đã đo, không tối ưu độ
+     sâu**: thử nghiệm 2026-09-17 (4 phim, ~90 call listing) cho thấy upstream
+     trả 10 item/trang và xếp mới-nhất-trước, match cùng người chỉ nằm ở trang 1;
+     tăng `CANDIDATE_PAGES`/`MAX_GENRE_LISTS` không thêm match unique nào (các
+     list #3+ chỉ lặp lại hit của #1) nhưng tăng số call upstream ~2×. Vì vậy giữ
+     nguyên thiết kế (3 trang × ≤2 genre + country + year + search phần gốc) và
+     coi "index cast/director riêng" là hướng nâng cấp thật sự (cần crawl toàn
+     catalog — để sau, xem todo #28). Tín hiệu người càng ít thì rail càng
+     nghiêng về "cùng năm/thể loại/quốc gia" — chấp nhận, vì đó vẫn là gợi ý hợp lý.

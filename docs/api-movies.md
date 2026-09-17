@@ -45,6 +45,10 @@ Cache: pool được tính ở `MAX_LIMIT` và cache dưới key **không chứa
 (`nguonc:related:{slug}:{hash}`), response cắt theo `limit` — nên `limit=6` rồi
 `limit=12` chỉ tốn một lần fan-out. TTL 30 phút + bản `:stale`.
 
+Giới hạn chất lượng đã đo (2026-09-17): mỗi listing upstream trả **10 item/trang**,
+xếp mới-nhất-trước, và match cùng người **chỉ nằm ở trang 1** — nên tăng độ sâu
+hay số thể loại không thêm kết quả mà chỉ tốn call (chi tiết: decisions #107).
+
 **Rate limit**: `60 request/phút/IP` (`ratelimit:related:{ip}`, tính cả cache
 HIT) — đây là endpoint catalog duy nhất bị giới hạn vì mỗi cache miss fan-out
 ~10 call upstream; các endpoint khác chỉ 1 call.
