@@ -535,3 +535,73 @@ test("a stale has_pin reveals the current-PIN field on PIN_REQUIRED", async ({
     );
   }
 });
+
+test("the profile menu never locks page scroll (no scrollbar flicker)", async ({
+  page,
+}) => {
+  const account = await loadAccount();
+  const name = `Scroll ${stamp()}`;
+  let spareId = "";
+
+  try {
+    await resetProfiles(account);
+    const token = (await loginUser(account)).access_token;
+    spareId = (await createProfile(token, name, "ghost")).id;
+
+    // Two profiles so the picker fires on login; dismiss it to reach the header.
+    await loginViaUi(page, account);
+    await page.getByTestId("profile-picker-dismiss").click();
+    await expect(page.getByTestId("profile-picker")).toBeHidden();
+
+    const scrollState = () =>
+      page.evaluate(() => ({
+        locked: document.body.getAttribute("data-scroll-locked"),
+        bodyOverflow: getComputedStyle(document.body).overflow,
+        pageHasScroll:
+          document.documentElement.scrollHeight >
+          document.documentElement.clientHeight,
+      }));
+
+    const before = await scrollState();
+    expect(before.locked).toBeNull();
+    // The page must actually be scrollable, otherwise "no lock" is trivially
+    // true and the regression this guards (a hiding scrollbar) can't happen.
+    expect(before.pageHasScroll).toBe(true);
+
+    await page.getByRole("button", { name: "Chọn profile" }).click();
+    await expect(
+      page.getByRole("menuitem", { name: /Quản lý profile/ }),
+    ).toBeVisible();
+
+    // A transient menu must not lock the page scroll: hiding the viewport
+    // scrollbar while the menu is open is what made it flicker on open/close.
+    const during = await scrollState();
+    expect(during.locked).toBeNull();
+    expect(during.bodyOverflow).not.toBe("hidden");
+    expect(during.pageHasScroll).toBe(true);
+
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("menuitem", { name: /Quản lý profile/ }),
+    ).toBeHidden();
+
+    // The account menu lives in the same header and had the same default.
+    await page.getByRole("button", { name: "Tài khoản" }).click();
+    await expect(page.getByRole("menuitem", { name: /Trang cá nhân/ })).toBeVisible();
+    const accountDuring = await scrollState();
+    expect(accountDuring.locked).toBeNull();
+    expect(accountDuring.bodyOverflow).not.toBe("hidden");
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("menuitem", { name: /Trang cá nhân/ }),
+    ).toBeHidden();
+
+    const after = await scrollState();
+    expect(after.locked).toBeNull();
+    expect(after.bodyOverflow).not.toBe("hidden");
+  } finally {
+    await cleanup(account, [], spareId ? { [spareId]: [] } : {});
+    await restoreDefault(account);
+  }
+});
+

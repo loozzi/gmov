@@ -85,7 +85,11 @@ export function ProfileMenu() {
 
   return (
     <>
-      <DropdownMenu>
+      {/* modal={false}: a transient menu must not lock the page scroll.
+          Radix's default modal mode hides the viewport scrollbar while open,
+          which makes the whole page flicker on open/close. The nav menu in
+          SiteHeader does the same. */}
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"

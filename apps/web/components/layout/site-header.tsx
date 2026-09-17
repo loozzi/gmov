@@ -138,7 +138,9 @@ function AccountMenu() {
   return (
     <div className="flex items-center gap-1">
       <ProfileMenu />
-      <DropdownMenu>
+      {/* modal={false}: same reason as the nav menu — a transient menu must not
+          hide the viewport scrollbar (it made the page flicker). */}
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <button
             className="bg-brand text-brand-foreground flex size-9 cursor-pointer items-center justify-center rounded-full text-sm font-bold"
