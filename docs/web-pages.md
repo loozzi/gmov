@@ -50,7 +50,7 @@
   (query param, đã lọc open-redirect ở `lib/nav.ts`) hoặc `/`; profile khoá mở
   `ProfilePinDialog`. Nút "Thêm profile" (`ProfileFormDialog`) chỉ hiện khi chưa
   đủ `max`. Không có nút bỏ qua (bắt buộc chọn) và không có header để thoát ra;
-  khách chưa đăng nhập thấy lời nhắc + link `/login?next=/profiles`.
+  khách chưa đăng nhập thấy lời nhắc + link `/login`.
   **Đăng nhập/đăng ký luôn đáp xuống đây** (`router.replace("/profiles")`), kể cả
   tài khoản một profile.
 - **`/profiles/manage`**: mỗi profile một hàng — đổi tên & avatar, đặt/đổi/xoá

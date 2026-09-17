@@ -80,10 +80,10 @@ function ProfilesChooser() {
   // Always leave the chooser after a profile is picked (choosing is required).
   const leave = () => {
     const next = safeNextPath(searchParams.get("next"));
-    // A `next` pointing back at the chooser would demand a second pick.
-    const self =
-      next === "/profiles" || next?.startsWith("/profiles?") === true;
-    router.push(next && !self ? next : "/");
+    // A `next` pointing back at the chooser (with any query, hash or trailing
+    // slash) would demand a second pick.
+    const path = next?.split(/[?#]/)[0].replace(/\/+$/, "");
+    router.push(next && path !== "/profiles" ? next : "/");
   };
 
   const handleSelect = (item: ProfileListItem) => {
