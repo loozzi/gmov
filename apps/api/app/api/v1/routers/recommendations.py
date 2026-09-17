@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import ActiveProfile, get_active_profile
 from app.db.session import get_db
 from app.schemas.preference import (
@@ -10,7 +11,8 @@ from app.schemas.preference import (
     PreferencesIn,
     PreferencesOut,
 )
-from app.services import preference_service
+from app.schemas.recommendation import RecommendationsOut
+from app.services import preference_service, recommendation_service
 
 router = APIRouter(prefix="/me", tags=["recommendations"])
 
@@ -61,3 +63,12 @@ async def reset_preferences(
 ) -> Response:
     await preference_service.reset(db, active.profile.id)
     return Response(status_code=204)
+
+
+@router.get("/recommendations", response_model=RecommendationsOut)
+async def read_recommendations(
+    limit: int = settings.recs_limit,
+    active: ActiveProfile = Depends(get_active_profile),
+    db: AsyncSession = Depends(get_db),
+) -> RecommendationsOut:
+    return await recommendation_service.recommend(db, active.profile.id, limit)
