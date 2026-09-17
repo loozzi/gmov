@@ -139,6 +139,30 @@ Notes (observed 2026-09-15, re-probed):
 - Unknown slug → HTTP 404 `{"status":"error","message":"Movie doesn't exist"}`.
 - Timestamps are `YYYY-MM-DDTHH:mm:ss.ffffffZ` strings.
 
+### Search & listing fields (re-probed 2026-09-17, for "related movies")
+
+- **`/films/search` matches TITLES ONLY.** Searching a known actor or director
+  ("Hyun Bin", "Woo Min Ho", "Hoắc Kiến Hoa") returns **0 items**; searching a
+  film title returns that film (and remakes/同名). Không có cách tìm theo người
+  từ upstream.
+- **List items carry people**: every `items[]` entry of endpoints 2/4/5/6/7 (and
+  search) includes `casts`, `director`, `year` — the same fields as the detail.
+  This is what makes content-based "related" possible without N detail calls.
+  (Our public `MovieCard` intentionally drops them; the related scorer uses an
+  internal model.)
+- **`)` search items have NO `year`** (`year: null`) while the browse lists DO.
+- Hậu tố phần trong tên: "Đế Chế Đại Hàn (Phần 2)" → searching the root
+  "Đế Chế Đại Hàn" returns both parts (each with its own `casts`/`director`).
+- Cùng một người được viết khác nhau giữa các phim: "Woo Min-ho" vs
+  "Woo Min Ho", "Jung Woo-sung" vs "Jung Woo Sung" → phải chuẩn hoá khi so khớp.
+- Nhãn của `/films/the-loai/{slug}` trong `cat.name` **không khớp** nhãn trong
+  detail của chính các phim đó: list nói "Hài"/"Nhạc", detail nói
+  "Phim Hài"/"Phim Nhạc"; và `cat.name` của `/films/quoc-gia/{slug}` là **tiếng
+  Anh** ("South Korea") trong khi detail dùng tiếng Việt ("Hàn Quốc"). Bản đồ
+  nhãn→slug vì vậy phải lấy theo nhãn **trong detail**
+  (`apps/api/app/services/catalog_map.py`, đã xác minh 22/22 genre, 16/16 quốc gia).
+
+
 ## Mapping to our internal models (proposal for later phases)
 
 - `FilmListItem` ← list `items[]`: `slug` (PK/stable id), `name`, `original_name`,

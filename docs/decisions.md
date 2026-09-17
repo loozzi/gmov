@@ -466,3 +466,36 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     khớp header `h-16`/`z-40` (`z-30` cho chip), nguồn chip suy ra từ `BrowseSource`
     (`browseChips`) nên không cần state client; điều hướng bằng `<Link>` để server
     page render lại như bình thường.
+
+## Phim liên quan trên trang chi tiết — 2026-09-17
+
+100. **Related do backend tự tính, không có endpoint upstream**: probe xác nhận
+     upstream không có related và search **chỉ khớp title** (tìm tên diễn
+     viên/đạo diễn trả 0 kết quả). Vì mọi item listing đều kèm `casts`,
+     `director`, `year`, backend gom ứng viên từ chính các list thể loại/quốc
+     gia/năm của phim rồi chấm điểm — **không fetch chi tiết từng ứng viên** (N
+     request sẽ quá đắt). API: `GET /api/v1/movies/{slug}/related?limit=12`,
+     cache `nguonc:related:{slug}` TTL 30 phút (dùng lại `cached_fetch`, kèm
+     bản `:stale`).
+101. **Bản đồ nhãn→slug khoá theo nhãn trong DETAIL** (`services/catalog_map.py`):
+     nhãn thể loại/quốc gia trong detail khác `cat.name` của chính list đó
+     ("Phim Hài" vs "Hài"; quốc gia list là tiếng Anh "South Korea" còn detail
+     là "Hàn Quốc"). Đã xác minh 22/22 genre và 16/16 country trước khi hardcode;
+     nhãn lạ → bỏ qua list đó (fallback) thay vì trộn sai category.
+102. **Chấm điểm + phạt khoảng cách năm (trần −4)**: đạo diễn +6, diễn viên +3
+     (tối đa 3 tên), trúng phần gốc tên +5, cùng năm +2, mỗi list thể loại +2,
+     cùng quốc gia +1; trừ `min(|Δnăm|, 4)`. Không có phạt này thì rail của phim
+     2015 toàn phim 2026 cùng quốc gia (listing xếp mới nhất trước); trần −4 giữ
+     cho match người/thể loại vẫn thắng ở mọi khoảng cách. Sắp xếp `(-điểm, slug)`
+     để cache giữ nguyên thứ tự.
+103. **Chuẩn hoá tên người theo alphanumeric**: "Woo Min-ho" ≡ "Woo Min Ho",
+     "Jung Woo-sung" ≡ "Jung Woo Sung" — nếu so khớp thô thì phần tiếp theo của
+     cùng bộ phim không nhận ra nhau.
+104. **Search title dùng cho hậu tố phần**: tên có "(Phần N)/(Season N)/(Tập N)"
+     thì search thêm phần gốc của tên rồi cộng +5 cho ứng viên khớp. Đây là cách
+     duy nhất chắc chắn với tới các phần khác (search chỉ khớp title). Không có
+     hậu tố thì không search (chỉ trả về chính phim đó, tốn 1 call vô ích).
+105. **`CandidateCard`/`CandidatePage` là model nội bộ, không trả ra public**:
+     chúng chỉ thêm `director`/`casts` cho scorer; response `/related` vẫn là
+     `MovieCard` nên không leak field, và không làm phình response của các list
+     endpoint hiện có (đổi `MovieCard` sẽ ảnh hưởng mọi list + test shape).
