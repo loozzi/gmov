@@ -46,3 +46,26 @@ class PaginatedMovies(BaseModel):
     total_page: int
     total_items: int
     per_page: int
+
+
+class CandidateCard(MovieCard):
+    """INTERNAL list item: the card plus the people fields the related scorer
+    needs. Upstream list responses carry `casts`/`director`, but the public
+    MovieCard deliberately drops them — never return this model from a public
+    endpoint.
+    """
+
+    director: str | None = None
+    casts: str | None = None
+
+
+class CandidatePage(BaseModel):
+    """INTERNAL candidate page (see CandidateCard)."""
+
+    items: list[CandidateCard] = Field(default_factory=list)
+    current_page: int = 1
+    total_page: int = 1
+
+
+class RelatedMovies(BaseModel):
+    items: list[MovieCard] = Field(default_factory=list)
