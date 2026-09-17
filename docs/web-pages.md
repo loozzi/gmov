@@ -27,6 +27,28 @@
   History reuses continue-watching data (no separate table, see decisions #17).
 - `MovieCard` — client component with blur placeholder + error fallback icon.
 
+## Tiến độ xem cho khách (chưa đăng nhập)
+
+- **Lưu ở `localStorage`** (`gmov:progress:v1`, tối đa 50 phim mới nhất) trong
+  `lib/guest-progress.ts`. Đây là writer duy nhất của store; React đọc qua
+  `useSyncExternalStore` (SSR trả store rỗng, hydrate sau mount nên không lệch
+  hydration). Dữ liệu hỏng/private mode/quota đều degrade thành "rỗng", không ném lỗi.
+- **Hook nguồn-aware:** `useProgress`, `useContinueWatching`, `useDeleteProgress`
+  (`lib/me.ts`) tự chọn server hay local theo `isAuthenticated`, nên component
+  tiêu thụ không cần biết dữ liệu nằm ở đâu. Nhờ đó rail "Xem tiếp", `ResumeButton`
+  ("Xem tiếp tập X từ MM:SS") và toast resume chạy được cho cả khách; link "Lịch
+  sử xem" chỉ hiện khi đã đăng nhập (trang `/me/history` vẫn yêu cầu đăng nhập).
+- **Ghi:** heartbeat 15s, lúc pause và lúc rời trang trong `watch-view.tsx` đi qua
+  một hàm `persist` duy nhất — khách ghi local (đồng bộ), tài khoản dùng
+  `keepalive` như cũ. Chế độ embed (không có m3u8) với khách cũng ghi entry vị trí
+  `0` để "Xem tiếp" đi theo tập vừa mở.
+- **Gộp khi đăng nhập:** `GuestProgressMerge` (mount trong `providers.tsx`) đẩy
+  entry local lên server nếu server chưa có phim đó hoặc bản local mới hơn; xoá
+  entry sau khi ghi thành công; gặp 429/lỗi mạng thì dừng và để phần còn lại thử
+  lại ở lần đăng nhập sau. Log out KHÔNG khôi phục lại local (đúng nghĩa "gộp").
+- **Chưa hỗ trợ:** dấu ✓ "đã xem" theo tập cho khách — v1 chỉ lưu progress; các
+  dấu này tự sinh lại sau khi đăng nhập và xem tiếp.
+
 ## Chuyển động (motion)
 
 - **CSS-first, không thêm thư viện.** Token easing + `@keyframes` nằm trong

@@ -418,3 +418,26 @@ Log ambiguous decisions here (Phase 0+). Newest last.
 90. **`toaster` thêm trạng thái `closing`**: toast giữ mounted thêm ~180ms để
     chạy `toast-out` rồi mới xoá (kèm `onAnimationEnd` làm lưới an toàn), thay
     vì biến mất tức thì.
+
+## Tiến độ xem cho khách (localStorage) — 2026-09-17
+
+91. **Local là store một-writer, `useSyncExternalStore` là cầu nối React**:
+    `lib/guest-progress.ts` giữ cache module-level (snapshot ổn định — bắt buộc
+    để không lặp render vô hạn) và chỉ nó được ghi `localStorage`; component
+    không bao giờ chạm localStorage trực tiếp. Key có version (`gmov:progress:v1`)
+    để đổi shape không cần migrate; cap 50 entry mới nhất theo `updated_at` và
+    mọi lỗi (JSON hỏng, private mode, quota) degrade thành store rỗng.
+92. **Gộp một chiều khi đăng nhập, server thắng khi mới hơn hoặc bằng**: entry
+    local chỉ được PUT khi server chưa có phim đó hoặc `updated_at` local mới
+    hơn; xoá local SAU khi ghi thành công; gặp 429/lỗi mạng thì dừng vòng lặp
+    (giữ phần còn lại cho lần sau) thay vì đốt rate limit 20/phút. Log out không
+    khôi phục local — đây là hành vi "gộp", không phải hai store song song.
+    Gộp chạy ở module-level promise (`GuestProgressMerge`) để StrictMode remount
+    không ghi hai lần.
+93. **Không lưu "watched markers" theo tập cho khách ở v1**: chỉ progress
+    (position/duration/last episode). Dấu ✓ trong EpisodeGrid là trạng thái
+    server-only; guest đăng nhập rồi xem tiếp thì các dấu tự sinh lại. Giữ phạm
+    vi store ở một khái niệm duy nhất, tránh merge phức tạp cho giá trị nhỏ.
+94. **Eslint bỏ qua `playwright-report/**` + `test-results/**`**: đây là artifact
+    sinh bởi Playwright (đã gitignore) nhưng `eslint .` vẫn quét và báo hàng nghìn
+    lỗi trên file minified, làm `pnpm lint` fail sau mỗi lần chạy E2E.
