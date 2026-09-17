@@ -106,6 +106,7 @@ class ProfileSwitchIn(BaseModel):
 
 class ProfilePinIn(BaseModel):
     password: str = Field(min_length=1)
+    current_pin: str | None = Field(default=None, pattern=PIN_PATTERN)
     pin: str | None = Field(default=None, pattern=PIN_PATTERN)
 
 

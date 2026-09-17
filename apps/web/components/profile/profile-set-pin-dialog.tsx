@@ -18,6 +18,8 @@ function setPinErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === "INVALID_PASSWORD")
       return "Mật khẩu tài khoản không đúng.";
+    if (error.code === "PIN_REQUIRED") return "Profile này cần PIN hiện tại.";
+    if (error.code === "INVALID_PIN") return "PIN hiện tại không đúng.";
     if (error.code === "PROFILE_NOT_FOUND") return "Không tìm thấy profile.";
   }
   return toVietnameseMessage(error);
@@ -39,40 +41,55 @@ export function ProfileSetPinDialog({
   const toast = useToast();
   const setPin = useSetProfilePin();
   const [password, setPassword] = useState("");
+  const [currentPin, setCurrentPin] = useState("");
   const [pin, setPinValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // The stored `has_pin` can be stale (the PIN was set from another device);
+  // the server then answers PIN_REQUIRED while the field is hidden. Reveal the
+  // field as soon as that happens so the user is never stuck.
+  const [currentPinRequired, setCurrentPinRequired] = useState(false);
 
   const isClear = mode === "clear";
+  const requiresCurrent = profile?.has_pin === true || currentPinRequired;
   const title = isClear
     ? "Xoá PIN"
-    : profile?.has_pin
+    : requiresCurrent
       ? "Đổi PIN"
       : "Đặt PIN";
 
   useEffect(() => {
     if (open) return;
     setPassword("");
+    setCurrentPin("");
     setPinValue("");
     setError(null);
+    setCurrentPinRequired(false);
   }, [open]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!profile || setPin.isPending) return;
     if (!isClear && pin.length !== 4) return;
+    if (requiresCurrent && currentPin.length !== 4) return;
 
     setPin.mutate(
       {
         id: profile.id,
         password,
         pin: isClear ? null : pin,
+        ...(requiresCurrent ? { currentPin } : {}),
       },
       {
         onSuccess: () => {
           toast(isClear ? "Đã xoá PIN." : "Đã lưu PIN.", "success");
           onOpenChange(false);
         },
-        onError: (err: unknown) => setError(setPinErrorMessage(err)),
+        onError: (err: unknown) => {
+          if (err instanceof ApiError && err.code === "PIN_REQUIRED") {
+            setCurrentPinRequired(true);
+          }
+          setError(setPinErrorMessage(err));
+        },
       },
     );
   };
@@ -83,10 +100,39 @@ export function ProfileSetPinDialog({
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>
           {isClear
-            ? "Nhập mật khẩu tài khoản để xoá PIN của profile này."
-            : "Nhập mật khẩu tài khoản và mã PIN 4 chữ số cho profile này."}
+            ? requiresCurrent
+              ? "Nhập PIN hiện tại và mật khẩu tài khoản để xoá PIN của profile này."
+              : "Nhập mật khẩu tài khoản để xoá PIN của profile này."
+            : requiresCurrent
+              ? "Nhập PIN hiện tại, mật khẩu tài khoản và mã PIN 4 chữ số mới cho profile này."
+              : "Nhập mật khẩu tài khoản và mã PIN 4 chữ số cho profile này."}
         </DialogDescription>
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+          {requiresCurrent && (
+            <div className="space-y-1.5">
+              <label
+                htmlFor="current-profile-pin"
+                className="text-sm font-medium"
+              >
+                PIN hiện tại
+              </label>
+              <Input
+                id="current-profile-pin"
+                aria-label="PIN hiện tại"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                value={currentPin}
+                onChange={(event) =>
+                  setCurrentPin(
+                    event.target.value.replace(/\D/g, "").slice(0, 4),
+                  )
+                }
+                placeholder="••••"
+                className="text-center text-lg tracking-[0.5em]"
+              />
+            </div>
+          )}
           <div className="space-y-1.5">
             <label htmlFor="account-password" className="text-sm font-medium">
               Mật khẩu tài khoản
@@ -139,6 +185,7 @@ export function ProfileSetPinDialog({
               disabled={
                 setPin.isPending ||
                 password.length === 0 ||
+                (requiresCurrent && currentPin.length !== 4) ||
                 (!isClear && pin.length !== 4)
               }
             >

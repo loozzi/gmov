@@ -147,11 +147,16 @@ export function setProfilePin(
   id: string,
   password: string,
   pin: string | null,
+  currentPin?: string,
 ): Promise<ApiProfile> {
   return api(`/api/v1/me/profiles/${id}/pin`, {
     method: "PUT",
     headers: authHeaders(token),
-    body: JSON.stringify({ password, pin }),
+    body: JSON.stringify({
+      password,
+      pin,
+      ...(currentPin ? { current_pin: currentPin } : {}),
+    }),
   });
 }
 
@@ -181,25 +186,55 @@ export async function removeFavorite(
   });
 }
 
+/** One or more PINs that might currently lock a profile. Cleanup tries each so
+ * a test that failed midway and left an older PIN in place can still clean up. */
+export type PinCandidates = string | string[];
+
+function pinChoices(known: PinCandidates | undefined): string[] {
+  if (!known) return [];
+  return Array.isArray(known) ? known : [known];
+}
+
 /** Delete every non-default profile of the account (clearing PINs first) and
  * leave the session on the default profile. Used by the profile specs to make
- * runs idempotent on the shared account WITHOUT registering new ones. */
+ * runs idempotent on the shared account WITHOUT registering new ones.
+ * `knownPins` may map a profile to either one PIN or a list of candidates; the
+ * list covers a test that aborted between changing and re-recording the PIN. */
 export async function resetProfiles(
   account: TestAccount,
-  knownPins: Record<string, string> = {},
+  knownPins: Record<string, PinCandidates> = {},
 ): Promise<void> {
   let token = (await loginUser(account)).access_token;
   for (const profile of (await listProfiles(token)).items) {
     if (profile.is_default) continue;
+    const candidates = pinChoices(knownPins[profile.id]);
     try {
-      // Prefer deleting a locked profile with its PIN the test set: clearing
-      // the PIN first costs an extra `profile-pin-set` token, whose counter is
-      // shared per IP and is NOT covered by the `ratelimit:*` setup reset.
-      const knownPin = knownPins[profile.id];
-      if (profile.has_pin && !knownPin) {
-        await setProfilePin(token, profile.id, account.password, null);
+      let result: SwitchResponse | null = null;
+      if (!profile.has_pin) {
+        result = await deleteProfile(token, profile.id);
+      } else {
+        // Changing/clearing a PIN now needs the current PIN, so try every
+        // candidate: clear with the first that works, then delete. If the
+        // clear fails, fall back to deleting with the candidate directly.
+        // Unknown/absent candidates are left for the leftover log below.
+        for (const candidate of candidates) {
+          try {
+            await setProfilePin(token, profile.id, account.password, null, candidate);
+            result = await deleteProfile(token, profile.id);
+            break;
+          } catch {
+            try {
+              result = await deleteProfile(token, profile.id, candidate);
+              break;
+            } catch {
+              // try the next candidate
+            }
+          }
+        }
+        if (!result) {
+          throw new Error("no known PIN could unlock or delete this profile");
+        }
       }
-      const result = await deleteProfile(token, profile.id, knownPin);
       if (result.access_token) token = result.access_token;
     } catch (e) {
       console.log(

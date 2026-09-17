@@ -81,11 +81,6 @@ def pin_attempt_key(profile_id: uuid.UUID, ip: str) -> str:
     return f"ratelimit:pin:{profile_id}:{ip}"
 
 
-def pin_set_key(ip: str) -> str:
-    """Per-IP budget for setting/changing/clearing a PIN."""
-    return f"ratelimit:pin-set:{ip}"
-
-
 async def check_pin_attempt_allowed(
     profile_id: uuid.UUID, ip: str, limit: int, window_seconds: int
 ) -> None:

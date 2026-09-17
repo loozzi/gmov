@@ -49,7 +49,7 @@
   PIN (dialog riêng, cần **mật khẩu tài khoản**), và nút xoá. Profile mặc định
   **không có nút xoá**. Xoá profile có PIN → dialog nhập PIN + cảnh báo; xoá
   profile không PIN → `window.confirm`. Xoá chỉ mất dữ liệu của profile đó.
-  Sau switch/xoá profile đang dùng: `setAccessToken` mới + `queryClient.clear()`
+  Sau switch/xoá profile đang dùng: `setAccessToken` mới + `queryClient.resetQueries()`
   (data per-profile nằm rải ở nhiều query key). Không dùng localStorage —
   profile nhớ theo phiên/thiết bị qua refresh cookie.
 - **Header switcher** (`ProfileMenu`, cạnh avatar): dropdown liệt kê profile

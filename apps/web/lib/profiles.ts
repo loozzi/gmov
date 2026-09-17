@@ -69,6 +69,7 @@ export interface SetProfilePinInput {
   id: string;
   password: string;
   pin: string | null;
+  currentPin?: string;
 }
 
 export const PROFILE_KEYS = {
@@ -137,7 +138,11 @@ export function useDeleteProfile() {
     onSuccess: (data) => {
       if (data.access_token) {
         setAccessToken(data.access_token);
-        queryClient.clear();
+        // Deleting the active profile moves the session to the default, so
+        // every profile-scoped cache entry is stale for the same reason as a
+        // switch: reset (drop data + refetch active observers) instead of
+        // `clear()`, which would leave the header on the deleted profile.
+        void queryClient.resetQueries();
         return;
       }
       void queryClient.invalidateQueries({ queryKey: PROFILE_KEYS.all });
@@ -156,7 +161,11 @@ export function useSwitchProfile() {
       }),
     onSuccess: (data) => {
       if (data.access_token) setAccessToken(data.access_token);
-      queryClient.clear();
+      // Drop every profile-scoped cache entry (favorites, progress, current
+      // profile) and refetch the active ones. `clear()` would remove queries
+      // without refetching their active observers, leaving the header on the
+      // previous profile after an in-place switch.
+      void queryClient.resetQueries();
     },
   });
 }
@@ -164,10 +173,14 @@ export function useSwitchProfile() {
 export function useSetProfilePin() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, password, pin }: SetProfilePinInput) =>
+    mutationFn: ({ id, password, pin, currentPin }: SetProfilePinInput) =>
       apiFetch<Profile>(`/api/v1/me/profiles/${id}/pin`, {
         method: "PUT",
-        body: JSON.stringify({ password, pin }),
+        body: JSON.stringify({
+          password,
+          pin,
+          ...(currentPin ? { current_pin: currentPin } : {}),
+        }),
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: PROFILE_KEYS.all });

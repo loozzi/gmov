@@ -40,6 +40,13 @@ async def get_owned(
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
+async def get_by_id(
+    db: AsyncSession, profile_id: uuid.UUID
+) -> Profile | None:
+    """Unscoped lookup, used to tell a deleted profile from a foreign one."""
+    return await db.get(Profile, profile_id)
+
+
 async def default_for(db: AsyncSession, user_id: uuid.UUID) -> Profile:
     stmt = select(Profile).where(
         Profile.user_id == user_id, Profile.is_default.is_(True)
@@ -150,9 +157,17 @@ async def verify_pin(
 
 
 async def set_pin(
-    db: AsyncSession, profile: Profile, password: str, pin: str | None
+    db: AsyncSession,
+    profile: Profile,
+    password: str,
+    pin: str | None,
+    current_pin: str | None = None,
+    ip: str = "unknown",
 ) -> Profile:
-    """Set, change or clear a PIN, gated by the owning account's password."""
+    """Set, change or clear a PIN. A profile that already has a PIN must
+    present it as `current_pin` first (same throttle as switch/delete); the
+    owning account's password is always required."""
+    await verify_pin(db, profile, current_pin, ip)
     user = await db.get(User, profile.user_id)
     if user is None or not security.verify_password(password, user.hashed_password):
         raise AppException("Invalid password", "INVALID_PASSWORD", 400)
@@ -162,14 +177,32 @@ async def set_pin(
     return profile
 
 
+async def _session_row(
+    db: AsyncSession, session_jti: str
+) -> RefreshToken | None:
+    stmt = select(RefreshToken).where(RefreshToken.jti == session_jti)
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
 async def activate_session(
     db: AsyncSession, session_jti: str, profile_id: uuid.UUID
 ) -> None:
     """Point the refresh session at the profile it now operates as."""
-    stmt = select(RefreshToken).where(RefreshToken.jti == session_jti)
-    row = (await db.execute(stmt)).scalar_one_or_none()
+    row = await _session_row(db, session_jti)
     if row is None:
         raise AppException("Session outdated", "SESSION_STALE", 401)
+    row.profile_id = profile_id
+    await db.commit()
+
+
+async def repoint_session(
+    db: AsyncSession, session_jti: str, profile_id: uuid.UUID
+) -> None:
+    """Best-effort session repair after a token's profile vanished. A
+    missing row (e.g. the session was logged out) is not an error."""
+    row = await _session_row(db, session_jti)
+    if row is None:
+        return
     row.profile_id = profile_id
     await db.commit()
 

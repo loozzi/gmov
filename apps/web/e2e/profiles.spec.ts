@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
 import {
@@ -16,6 +16,7 @@ import {
   switchProfile,
   type ApiProfile,
   type ApiProfileListItem,
+  type PinCandidates,
   type TestAccount,
 } from "./helpers/api";
 import { loginViaApi } from "./helpers/auth";
@@ -49,7 +50,7 @@ const slugsOf = (page: { items: { movie_slug: string }[] }) =>
 async function cleanup(
   account: TestAccount,
   favoriteSlugs: string[] = [],
-  knownPins: Record<string, string> = {},
+  knownPins: Record<string, PinCandidates> = {},
 ): Promise<void> {
   try {
     const token = (await loginUser(account)).access_token;
@@ -63,6 +64,29 @@ async function cleanup(
     await resetProfiles(account, knownPins);
   } catch (e) {
     console.log(`[profiles] reset skipped: ${String(e).slice(0, 140)}`);
+  }
+}
+
+/** Log in through the actual form so AuthProvider.login() runs in THIS tab.
+ * Needed by the picker spec: the picker only appears when the user logged in
+ * inside that tab (the module-level intent is not persisted across reloads). */
+async function loginViaUi(page: Page, account: TestAccount): Promise<void> {
+  await page.goto("/login");
+  await page.getByLabel(/email hoặc tên đăng nhập/i).fill(account.username);
+  await page.getByLabel(/^mật khẩu$/i).fill(account.password);
+  await page.getByRole("button", { name: /^đăng nhập$/i }).click();
+  await page.waitForURL((url) => url.pathname !== "/login", {
+    timeout: 30_000,
+  });
+}
+
+/** Leave a fresh session on the default profile after a test switched away. */
+async function restoreDefault(account: TestAccount): Promise<void> {
+  try {
+    const token = (await loginUser(account)).access_token;
+    await switchProfile(token, (await defaultProfile(token)).id);
+  } catch (e) {
+    console.log(`[profiles] default restore skipped: ${String(e).slice(0, 140)}`);
   }
 }
 
@@ -264,14 +288,196 @@ test("deleting a profile removes only its data", async ({ page }) => {
     const defaultSlugs = slugsOf(await listFavorites(token));
     expect(defaultSlugs).toContain(keepSlug);
     expect(defaultSlugs).not.toContain(doomedSlug);
-    // ...and the deleted profile's scope no longer resolves at all.
+    // ...and the deleted profile's scope self-heals to the default profile
+    // (`pid` of a removed profile falls back instead of 404-ing) without ever
+    // leaking the dead profile's favorites.
     const stale = await rawApi("/api/v1/me/favorites", {
       headers: authHeaders(doomedToken),
     });
-    expect(stale.status).toBe(404);
-    const staleBody = (await stale.json()) as { code?: string };
-    expect(staleBody.code).toBe("PROFILE_NOT_FOUND");
+    expect(stale.status).toBe(200);
+    const staleSlugs = slugsOf(
+      (await stale.json()) as { items: { movie_slug: string }[] },
+    );
+    expect(staleSlugs).toContain(keepSlug);
+    expect(staleSlugs).not.toContain(doomedSlug);
   } finally {
     await cleanup(account, [keepSlug], doomedId ? { [doomedId]: "1357" } : {});
+  }
+});
+
+test("creating a profile from the manage page adds a row", async ({ page }) => {
+  const account = await loadAccount();
+  const name = `Moi ${stamp()}`;
+
+  try {
+    await resetProfiles(account);
+    // Spare-capacity guarantee: resetProfiles deleted every non-default
+    // profile, so the account is back to a single used slot. The manage
+    // page only renders the add control while items.length < max; asserting
+    // it here (before any UI) makes the precondition explicit instead of
+    // hoping the control is there.
+    const token = (await loginUser(account)).access_token;
+    const before = await listProfiles(token);
+    expect(before.items.length).toBeLessThan(before.max);
+
+    await loginViaApi(page);
+    await page.goto("/profiles/manage");
+    await page.getByTestId("profile-add").click();
+
+    const dialog = page.getByRole("dialog", { name: "Thêm profile" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel("Tên profile").fill(name);
+    await dialog.getByRole("button", { name: "Tạo profile" }).click();
+    await expect(dialog).toBeHidden();
+
+    const row = page
+      .locator('[data-testid^="profile-row-"]')
+      .filter({ hasText: name });
+    await expect(row).toBeVisible();
+
+    // Tidy up through the UI: non-default profiles delete with a confirm().
+    page.on("dialog", (confirm) => void confirm.accept());
+    await row.getByRole("button", { name: `Xoá profile ${name}` }).click();
+    await expect(row).toHaveCount(0);
+  } finally {
+    await cleanup(account);
+  }
+});
+
+test("changing a PIN requires the current PIN", async ({ page }) => {
+  const account = await loadAccount();
+  const name = `Pin ${stamp()}`;
+  let profileId = "";
+
+  try {
+    await resetProfiles(account);
+    const token = (await loginUser(account)).access_token;
+    const profile = await createProfile(token, name, "robot");
+    profileId = profile.id;
+    // First PIN only needs the account password.
+    await setProfilePin(token, profileId, account.password, "1111");
+
+    await loginViaApi(page);
+    await page.goto("/profiles/manage");
+    const row = page.getByTestId(`profile-row-${profileId}`);
+    await row.getByRole("button", { name: `Đổi PIN ${name}` }).click();
+
+    const dialog = page.getByRole("dialog", { name: "Đổi PIN" });
+    await expect(dialog).toBeVisible();
+
+    // Wrong current PIN is rejected: the dialog stays open with the error.
+    await dialog.getByLabel("PIN hiện tại").fill("0000");
+    await dialog.getByLabel("Mật khẩu tài khoản").fill(account.password);
+    await dialog.getByLabel("PIN mới").fill("2222");
+    await dialog.getByRole("button", { name: /^lưu$/i }).click();
+    await expect(dialog.getByRole("alert")).toHaveText(
+      /PIN hiện tại không đúng/i,
+    );
+
+    // Correct current PIN goes through; the stored PIN is now 2222.
+    await dialog.getByLabel("PIN hiện tại").fill("1111");
+    await dialog.getByRole("button", { name: /^lưu$/i }).click();
+    await expect(dialog).toBeHidden();
+  } finally {
+    await cleanup(account, [], profileId ? { [profileId]: "2222" } : {});
+  }
+});
+
+test("the picker appears after login and enforces the PIN", async ({
+  page,
+}) => {
+  const account = await loadAccount();
+  const name = `Chon ${stamp()}`;
+  let spareId = "";
+
+  try {
+    await resetProfiles(account);
+    const token = (await loginUser(account)).access_token;
+    const spare = await createProfile(token, name, "ghost");
+    spareId = spare.id;
+    await setProfilePin(token, spareId, account.password, "4321");
+
+    // Log in through the form in THIS tab: only then does the picker fire.
+    await loginViaUi(page, account);
+
+    const picker = page.getByTestId("profile-picker");
+    await expect(picker).toBeVisible();
+
+    // A locked profile prompts for its PIN before switching.
+    await page.getByTestId(`profile-picker-option-${spareId}`).click();
+    const pinDialog = page.getByRole("dialog", {
+      name: `Nhập PIN cho ${name}`,
+    });
+    await expect(pinDialog).toBeVisible();
+
+    await pinDialog.getByLabel("Mã PIN").fill("0000");
+    await pinDialog.getByRole("button", { name: /^xác nhận$/i }).click();
+    await expect(pinDialog.getByRole("alert")).toHaveText(/PIN không đúng/i);
+
+    await pinDialog.getByLabel("Mã PIN").fill("4321");
+    await pinDialog.getByRole("button", { name: /^xác nhận$/i }).click();
+
+    await expect(picker).toBeHidden();
+    await expect(
+      page.locator("header").getByRole("button", { name: /chọn profile/i }),
+    ).toContainText(name);
+  } finally {
+    await cleanup(account, [], spareId ? { [spareId]: "4321" } : {});
+    await restoreDefault(account);
+  }
+});
+
+test("a stale has_pin reveals the current-PIN field on PIN_REQUIRED", async ({
+  page,
+}) => {
+  const account = await loadAccount();
+  const name = `Stale ${stamp()}`;
+  let profileId = "";
+
+  try {
+    await resetProfiles(account);
+    const token = (await loginUser(account)).access_token;
+    const profile = await createProfile(token, name, "clover");
+    profileId = profile.id;
+
+    // Load the manage page while the profile is still unlocked, so the client
+    // caches has_pin === false.
+    await loginViaApi(page);
+    await page.goto("/profiles/manage");
+    const row = page.getByTestId(`profile-row-${profileId}`);
+    await expect(
+      row.getByRole("button", { name: `Đặt PIN ${name}` }),
+    ).toBeVisible();
+
+    // Set the PIN behind the client's back; the cached list still says the
+    // profile is unlocked (no reload, so has_pin stays stale).
+    await setProfilePin(token, profileId, account.password, "1357");
+
+    await row.getByRole("button", { name: `Đặt PIN ${name}` }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    // The stale cache hides the current-PIN field at this point.
+    await expect(dialog.getByLabel("PIN hiện tại")).toHaveCount(0);
+
+    await dialog.getByLabel("Mật khẩu tài khoản").fill(account.password);
+    await dialog.getByLabel("PIN mới").fill("2468");
+    await dialog.getByRole("button", { name: /^lưu$/i }).click();
+
+    // The server answers PIN_REQUIRED; the dialog must reveal the field (and
+    // switch its title to "Đổi PIN") instead of leaving the user stuck.
+    await expect(dialog.getByLabel("PIN hiện tại")).toBeVisible();
+    await expect(dialog.getByRole("alert")).toHaveText(/cần PIN hiện tại/i);
+
+    await dialog.getByLabel("PIN hiện tại").fill("1357");
+    await dialog.getByRole("button", { name: /^lưu$/i }).click();
+    await expect(dialog).toBeHidden();
+  } finally {
+    // The PIN change may not have completed if the reveal assertion failed, so
+    // accept either the new or the original PIN; cleanup tries both.
+    await cleanup(
+      account,
+      [],
+      profileId ? { [profileId]: ["2468", "1357"] } : {},
+    );
   }
 });

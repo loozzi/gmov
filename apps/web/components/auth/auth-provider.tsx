@@ -12,6 +12,7 @@ import {
 
 import { apiFetch, setAccessToken } from "@/lib/api";
 import { ApiError } from "@/lib/errors";
+import { requestProfilePicker } from "@/lib/profile-picker";
 import type { User } from "@/lib/types";
 
 interface AuthContextValue {
@@ -101,6 +102,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = (await res.json()) as { access_token: string };
     setAccessToken(data.access_token);
     setUser(await fetchMe());
+    // Ask the picker to appear once per login/register in this tab. The gate
+    // self-gates on >=2 profiles; this only carries the intent.
+    requestProfilePicker();
   }, []);
 
   const register = useCallback(

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Lock, Plus, Settings } from "lucide-react";
+import { Lock, Plus, RefreshCw, Settings } from "lucide-react";
 import { useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
-import { toVietnameseMessage } from "@/lib/errors";
+import { ApiError, toVietnameseMessage } from "@/lib/errors";
 import {
   useProfiles,
   useSwitchProfile,
@@ -65,7 +65,8 @@ function ProfileCard({ item, disabled, onSelect }: ProfileCardProps) {
 export default function ProfilesPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const toast = useToast();
-  const { data, isLoading, isError, error } = useProfiles();
+  const { data, isLoading, isError, error, refetch, isFetching } =
+    useProfiles();
   const switchProfile = useSwitchProfile();
   const [locked, setLocked] = useState<ProfileListItem | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
@@ -85,8 +86,17 @@ export default function ProfilesPage() {
       { id: item.id },
       {
         onSuccess: () => toast(`Đã chuyển sang ${item.name}.`, "success"),
-        onError: (err: unknown) =>
-          setSwitchError(toVietnameseMessage(err)),
+        onError: (err: unknown) => {
+          // Stale `has_pin` (PIN set on another device): the server replies
+          // PIN_REQUIRED, so collect the PIN here instead of showing raw text.
+          if (err instanceof ApiError && err.code === "PIN_REQUIRED") {
+            setSwitchError(null);
+            setPinError(null);
+            setLocked(item);
+            return;
+          }
+          setSwitchError(toVietnameseMessage(err));
+        },
       },
     );
   };
@@ -149,9 +159,20 @@ export default function ProfilesPage() {
           ))}
         </div>
       ) : isError || !data ? (
-        <p className="mx-auto mt-10 max-w-md rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          {toVietnameseMessage(error)}
-        </p>
+        <div className="mx-auto mt-10 flex max-w-md flex-col items-center gap-3 rounded-xl border border-border bg-card p-8 text-center">
+          <p className="font-medium">Không tải được danh sách profile.</p>
+          <p className="text-sm text-muted-foreground">
+            {toVietnameseMessage(error)}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isFetching}
+            onClick={() => void refetch()}
+          >
+            <RefreshCw /> Thử lại
+          </Button>
+        </div>
       ) : (
         <>
           {switchError && (

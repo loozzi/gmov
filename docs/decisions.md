@@ -636,3 +636,19 @@ Log ambiguous decisions here (Phase 0+). Newest last.
 129. **Giới hạn input sở thích**: `PosterFeedbackIn.liked/skipped` tối đa 200
      slug (tránh `IN (...)` phình to), `PreferencesIn.genres/countries` tối đa
      100 khoá và trọng số hữu hạn trong `[-10, 10]`; vi phạm → 422.
+130. **`pid` trỏ profile đã xoá → tự fallback về profile mặc định, không `404`.**
+     `deps._profile_from_claims` phân biệt "đã xoá" với "của user khác": profile
+     không còn tồn tại → dùng profile mặc định và (khi token có `sid`) ghi lại
+     `refresh_tokens.profile_id` bằng helper best-effort `repoint_session`; profile
+     tồn tại nhưng thuộc user khác → vẫn `404 PROFILE_NOT_FOUND` để không lộ sự
+     tồn tại. Không tái dùng `activate_session` vì nó raise `401 SESSION_STALE`
+     khi row vắng (phiên đã logout), sẽ biến self-heal thành lỗi. Nhờ vậy
+     `GET /me/profiles` không còn kẹt `404` khi profile đang dùng bị xoá ở thiết
+     bị khác.
+131. **Đổi/xoá PIN phải nhập `current_pin` khi profile đã có PIN.** `ProfilePinIn`
+     thêm `current_pin` (cùng regex 4 chữ số). `set_pin` gọi `verify_pin` trước
+     nên dùng **chung** bộ đếm `(profile_id, IP)` với switch/delete (chỉ lần
+     thất bại bị đếm); sau đó mới kiểm mật khẩu tài khoản như cũ. Profile chưa có
+     PIN thì bỏ qua `current_pin` (đặt lần đầu hoặc "xoá" khi chưa có PIN không
+     cần). Bỏ rate limit riêng `ratelimit:pin-set:{ip}` (vốn đếm cả lần thành
+     công) để nhất quán với nguyên tắc "chỉ lần thất bại tiêu ngân sách".

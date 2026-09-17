@@ -7,6 +7,7 @@ import {
   KeyRound,
   Lock,
   Pencil,
+  Plus,
   RefreshCw,
   Trash2,
 } from "lucide-react";
@@ -56,6 +57,7 @@ export default function ManageProfilesPage() {
   const resetPreferences = useResetPreferences();
 
   const [editProfile, setEditProfile] = useState<ProfileListItem | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [pinTarget, setPinTarget] = useState<PinTarget | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProfileListItem | null>(
     null,
@@ -154,7 +156,19 @@ export default function ManageProfilesPage() {
             <ChevronLeft /> Ai đang xem?
           </Link>
         </Button>
-        <h1 className="text-2xl font-bold">Quản lý profile</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold">Quản lý profile</h1>
+          {data && data.items.length < data.max && (
+            <Button
+              size="sm"
+              aria-label="Thêm profile"
+              data-testid="profile-add"
+              onClick={() => setFormOpen(true)}
+            >
+              <Plus /> Thêm profile
+            </Button>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground">
           Đổi tên, ảnh đại diện, đặt PIN hoặc xoá profile.
         </p>
@@ -255,9 +269,12 @@ export default function ManageProfilesPage() {
       )}
 
       <ProfileFormDialog
-        open={editProfile !== null}
+        open={formOpen || editProfile !== null}
         onOpenChange={(open) => {
-          if (!open) setEditProfile(null);
+          if (!open) {
+            setFormOpen(false);
+            setEditProfile(null);
+          }
         }}
         profile={editProfile}
       />
