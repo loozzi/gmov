@@ -157,9 +157,17 @@ async def verify_pin(
 
 
 async def set_pin(
-    db: AsyncSession, profile: Profile, password: str, pin: str | None
+    db: AsyncSession,
+    profile: Profile,
+    password: str,
+    pin: str | None,
+    current_pin: str | None = None,
+    ip: str = "unknown",
 ) -> Profile:
-    """Set, change or clear a PIN, gated by the owning account's password."""
+    """Set, change or clear a PIN. A profile that already has a PIN must
+    present it as `current_pin` first (same throttle as switch/delete); the
+    owning account's password is always required."""
+    await verify_pin(db, profile, current_pin, ip)
     user = await db.get(User, profile.user_id)
     if user is None or not security.verify_password(password, user.hashed_password):
         raise AppException("Invalid password", "INVALID_PASSWORD", 400)

@@ -95,11 +95,15 @@ async def _set_pin(
     profile_id: str,
     password: str = PASSWORD,
     pin: str | None = "1234",
+    current_pin: str | None = None,
 ):
+    body: dict = {"password": password, "pin": pin}
+    if current_pin is not None:
+        body["current_pin"] = current_pin
     return await env.client.put(
         f"{ME}/profiles/{profile_id}/pin",
         headers=headers,
-        json={"password": password, "pin": pin},
+        json=body,
     )
 
 
@@ -278,12 +282,122 @@ async def test_set_pin_needs_account_password(client_env):
     assert set_ok.status_code == 200, set_ok.text
     assert set_ok.json()["has_pin"] is True
 
-    clear = await _set_pin(client_env, headers, profile["id"], pin=None)
+    clear = await _set_pin(
+        client_env, headers, profile["id"], pin=None, current_pin="1234"
+    )
     assert clear.status_code == 200, clear.text
     assert clear.json()["has_pin"] is False
 
     invalid = await _set_pin(client_env, headers, profile["id"], pin="12")
     assert invalid.status_code == 422, invalid.text
+
+
+async def test_set_first_pin_needs_no_current_pin(client_env):
+    tokens = await _register_login(client_env, "chg0@gmov.dev", "chg0")
+    headers = _bearer(tokens["access_token"])
+    profile = await _create(client_env, headers, "Kid")
+
+    r = await _set_pin(client_env, headers, profile["id"], pin="1234")
+    assert r.status_code == 200, r.text
+    assert r.json()["has_pin"] is True
+
+
+async def test_change_pin_requires_current_pin(client_env):
+    tokens = await _register_login(client_env, "chg1@gmov.dev", "chg1")
+    headers = _bearer(tokens["access_token"])
+    profile = await _create(client_env, headers, "Kid")
+    assert (
+        await _set_pin(client_env, headers, profile["id"], pin="1234")
+    ).status_code == 200
+
+    missing = await _set_pin(client_env, headers, profile["id"], pin="5678")
+    assert missing.status_code == 403, missing.text
+    assert missing.json()["code"] == "PIN_REQUIRED"
+
+    wrong = await _set_pin(
+        client_env, headers, profile["id"], pin="5678", current_pin="0000"
+    )
+    assert wrong.status_code == 401, wrong.text
+    assert wrong.json()["code"] == "INVALID_PIN"
+
+    # The account password is still checked after a correct current PIN.
+    bad_password = await _set_pin(
+        client_env,
+        headers,
+        profile["id"],
+        password="nope",
+        pin="5678",
+        current_pin="1234",
+    )
+    assert bad_password.status_code == 400, bad_password.text
+    assert bad_password.json()["code"] == "INVALID_PASSWORD"
+
+    changed = await _set_pin(
+        client_env, headers, profile["id"], pin="5678", current_pin="1234"
+    )
+    assert changed.status_code == 200, changed.text
+
+    old = await _switch(client_env, headers, profile["id"], pin="1234")
+    assert old.status_code == 401, old.text
+    new = await _switch(client_env, headers, profile["id"], pin="5678")
+    assert new.status_code == 200, new.text
+
+
+async def test_change_pin_wrong_current_pin_is_rate_limited(client_env, monkeypatch):
+    monkeypatch.setattr(profile_service, "PIN_MAX_ATTEMPTS", 2)
+    tokens = await _register_login(client_env, "chg2@gmov.dev", "chg2")
+    headers = _bearer(tokens["access_token"])
+    profile = await _create(client_env, headers, "Kid")
+    assert (
+        await _set_pin(client_env, headers, profile["id"], pin="1234")
+    ).status_code == 200
+
+    for _ in range(2):
+        r = await _set_pin(
+            client_env,
+            headers,
+            profile["id"],
+            pin="5678",
+            current_pin="0000",
+        )
+        assert r.status_code == 401, r.text
+        assert r.json()["code"] == "INVALID_PIN"
+
+    blocked = await _set_pin(
+        client_env, headers, profile["id"], pin="5678", current_pin="1234"
+    )
+    assert blocked.status_code == 429, blocked.text
+    assert blocked.json()["code"] == "RATE_LIMITED"
+    assert "Retry-After" in blocked.headers
+
+
+async def test_clear_pin_requires_current_pin_when_set(client_env):
+    tokens = await _register_login(client_env, "chg3@gmov.dev", "chg3")
+    headers = _bearer(tokens["access_token"])
+    profile = await _create(client_env, headers, "Kid")
+    assert (
+        await _set_pin(client_env, headers, profile["id"], pin="1234")
+    ).status_code == 200
+
+    missing = await _set_pin(client_env, headers, profile["id"], pin=None)
+    assert missing.status_code == 403, missing.text
+    assert missing.json()["code"] == "PIN_REQUIRED"
+
+    cleared = await _set_pin(
+        client_env, headers, profile["id"], pin=None, current_pin="1234"
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["has_pin"] is False
+
+
+async def test_clear_pin_without_existing_pin_is_allowed(client_env):
+    tokens = await _register_login(client_env, "chg4@gmov.dev", "chg4")
+    headers = _bearer(tokens["access_token"])
+    profile = await _create(client_env, headers, "Kid")
+
+    cleared = await _set_pin(client_env, headers, profile["id"], pin=None)
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["has_pin"] is False
 
 
 async def test_delete_default_profile_is_rejected(client_env):
