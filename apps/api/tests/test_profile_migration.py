@@ -141,3 +141,140 @@ def test_backfill_moves_user_data_into_default_profile(tmp_path, monkeypatch):
         assert "uq_profile_user_default" in index_names
     finally:
         con.close()
+
+
+def _seed_one_user(con: sqlite3.Connection, user_id: str, prefix: str) -> None:
+    con.execute(
+        "INSERT INTO users"
+        " (id, email, username, hashed_password, display_name, is_active,"
+        "  created_at, updated_at)"
+        " VALUES (?, ?, ?, 'x', ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        (user_id, f"{prefix}@example.com", f"user{prefix}", prefix.upper()),
+    )
+    movie = f"{prefix}-movie"
+    con.execute(
+        "INSERT INTO favorites"
+        " (id, user_id, movie_slug, movie_name, created_at, updated_at)"
+        " VALUES (?, ?, ?, 'old', '2026-01-01 00:00:00', '2026-01-01 00:00:00')",
+        (uuid.uuid4().hex, user_id, movie),
+    )
+    con.execute(
+        "INSERT INTO watchlist"
+        " (id, user_id, movie_slug, movie_name, created_at, updated_at)"
+        " VALUES (?, ?, ?, 'old', '2026-01-01 00:00:00', '2026-01-01 00:00:00')",
+        (uuid.uuid4().hex, user_id, movie),
+    )
+    con.execute(
+        "INSERT INTO ratings"
+        " (id, user_id, movie_slug, stars, created_at, updated_at)"
+        " VALUES (?, ?, ?, 5, '2026-01-01 00:00:00', '2026-01-01 00:00:00')",
+        (uuid.uuid4().hex, user_id, movie),
+    )
+    con.execute(
+        "INSERT INTO watch_progress"
+        " (id, user_id, movie_slug, movie_name, episode_slug, episode_name,"
+        "  position_seconds, updated_at)"
+        " VALUES (?, ?, ?, ?, 'ep1', 'Ep 1', 1, '2026-01-01 00:00:00')",
+        (uuid.uuid4().hex, user_id, movie, movie),
+    )
+    con.commit()
+
+
+def test_downgrade_dedupes_overlapping_profile_rows(tmp_path, monkeypatch):
+    """A second profile of the same account holding the same unique keys must
+    not abort `downgrade()`: overlapping rows collapse onto the restored
+    per-user constraint, keeping the most recently updated one."""
+    from alembic import command
+
+    cfg, db_path = _alembic_config(
+        tmp_path, monkeypatch, "profile_downgrade.db"
+    )
+    command.upgrade(cfg, PREVIOUS_REVISION)
+
+    con = sqlite3.connect(db_path)
+    try:
+        _seed_one_user(con, USER_A, "a")
+    finally:
+        con.close()
+
+    command.upgrade(cfg, "head")
+
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        movie = "a-movie"
+        second_id = uuid.uuid4().hex
+        con.execute(
+            "INSERT INTO profiles"
+            " (id, user_id, name, avatar, position, is_default,"
+            "  created_at, updated_at)"
+            " VALUES (?, ?, 'Kid', 'cat', 1, 0, CURRENT_TIMESTAMP,"
+            "  CURRENT_TIMESTAMP)",
+            (second_id, USER_A),
+        )
+        newer = "2026-02-01 00:00:00"
+        for table in ("favorites", "watchlist"):
+            con.execute(
+                f"INSERT INTO {table}"
+                " (id, profile_id, movie_slug, movie_name, created_at,"
+                "  updated_at)"
+                " VALUES (?, ?, ?, 'newer', '2026-01-15 00:00:00', ?)",
+                (uuid.uuid4().hex, second_id, movie, newer),
+            )
+        con.execute(
+            "INSERT INTO ratings"
+            " (id, profile_id, movie_slug, stars, created_at, updated_at)"
+            " VALUES (?, ?, ?, 9, '2026-01-15 00:00:00', ?)",
+            (uuid.uuid4().hex, second_id, movie, newer),
+        )
+        for episode, position in (("ep1", 42), ("ep2", 7)):
+            con.execute(
+                "INSERT INTO watch_progress"
+                " (id, profile_id, movie_slug, movie_name, episode_slug,"
+                "  episode_name, position_seconds, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    uuid.uuid4().hex,
+                    second_id,
+                    movie,
+                    movie,
+                    episode,
+                    episode,
+                    position,
+                    newer,
+                ),
+            )
+        con.commit()
+    finally:
+        con.close()
+
+    command.downgrade(cfg, PREVIOUS_REVISION)
+
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        for table, keep in (
+            ("favorites", "movie_name"),
+            ("watchlist", "movie_name"),
+        ):
+            rows = con.execute(f"SELECT * FROM {table}").fetchall()
+            assert len(rows) == 1
+            assert rows[0]["user_id"] == USER_A
+            assert rows[0]["movie_slug"] == "a-movie"
+            assert rows[0][keep] == "newer"
+
+        ratings = con.execute("SELECT * FROM ratings").fetchall()
+        assert len(ratings) == 1
+        assert ratings[0]["user_id"] == USER_A
+        assert ratings[0]["stars"] == 9
+
+        progress = con.execute(
+            "SELECT movie_slug, episode_slug, position_seconds"
+            " FROM watch_progress ORDER BY episode_slug"
+        ).fetchall()
+        assert [
+            (r["movie_slug"], r["episode_slug"], r["position_seconds"])
+            for r in progress
+        ] == [("a-movie", "ep1", 42), ("a-movie", "ep2", 7)]
+    finally:
+        con.close()

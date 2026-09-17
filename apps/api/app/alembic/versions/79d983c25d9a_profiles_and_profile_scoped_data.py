@@ -177,6 +177,26 @@ def _drop_refresh_token_profile() -> None:
         op.drop_column("refresh_tokens", "profile_id")
 
 
+def _dedupe_table(table: str, tail: tuple[str, ...]) -> None:
+    """Collapse rows that the restored per-user unique constraint cannot hold.
+
+    Downgrade merges extra profiles back onto the owning account, so two
+    profiles that shared a `movie_slug` (or `movie_slug` + `episode_slug`)
+    would collide. Keep the most recently updated row (ties broken by id, so
+    the choice is deterministic) and delete the rest. Runs on both SQLite and
+    Postgres: both support `ROW_NUMBER()` and a self-referencing DELETE.
+    """
+    partition = ", ".join(("user_id", *tail))
+    op.execute(
+        f"DELETE FROM {table} WHERE id NOT IN ("
+        f"SELECT kept.id FROM ("
+        f"SELECT id, ROW_NUMBER() OVER ("
+        f"PARTITION BY {partition} ORDER BY updated_at DESC, id DESC"
+        f") AS rank FROM {table}"
+        f") kept WHERE kept.rank = 1)"
+    )
+
+
 def _unkey_table(
     table: str, old_unique: str, new_unique: str, tail: tuple[str, ...],
     old_index: str, new_index: str,
@@ -189,6 +209,7 @@ def _unkey_table(
             f"UPDATE {table} SET user_id = (SELECT p.user_id FROM profiles p"
             f" WHERE p.id = {table}.profile_id)"
         )
+        _dedupe_table(table, tail)
         with op.batch_alter_table(table, schema=None) as batch_op:
             batch_op.alter_column("user_id", existing_type=sa.Uuid(), nullable=False)
             batch_op.create_foreign_key(f"fk_{table}_user", "users", ["user_id"], ["id"], ondelete="CASCADE")
@@ -203,6 +224,7 @@ def _unkey_table(
             f"UPDATE {table} t SET user_id = p.user_id FROM profiles p"
             " WHERE p.id = t.profile_id"
         )
+        _dedupe_table(table, tail)
         op.alter_column(table, "user_id", existing_type=sa.Uuid(), nullable=False)
         op.create_foreign_key(f"fk_{table}_user", table, "users", ["user_id"], ["id"], ondelete="CASCADE")
         op.drop_constraint(f"fk_{table}_profile", table, type_="foreignkey")
