@@ -5,7 +5,7 @@ import uuid
 from datetime import UTC
 from functools import partial
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -25,7 +25,6 @@ GENRE_WEIGHT = 3.0
 COUNTRY_WEIGHT = 1.0
 PEOPLE_WEIGHT = 2.0
 FRESH_YEAR_WEIGHT = 0.5
-POPULAR_BONUS = 1.0
 FRESH_YEAR = 2020
 
 
@@ -65,7 +64,7 @@ def _score(
     genre_weights: dict[str, float],
     countries: dict[str, float],
     people: set[str],
-    popular: set[str],
+    popular_avgs: dict[str, float],
 ) -> tuple[float, str | None]:
     genres = item.genres or []
     matched = [(g, genre_weights[g]) for g in genres if g in genre_weights]
@@ -83,8 +82,7 @@ def _score(
         score += PEOPLE_WEIGHT
     if item.year is not None and item.year >= FRESH_YEAR:
         score += FRESH_YEAR_WEIGHT
-    if item.slug in popular:
-        score += POPULAR_BONUS
+    score += popular_avgs.get(item.slug, 0.0)
     return score, reason_genre
 
 
@@ -128,14 +126,19 @@ async def _personal(
     people = await _loved_people(db, profile_id)
 
     items = await catalog_service.list_items(db)
-    popular: set[str] = set()
+    popular_avgs: dict[str, float] = {}
     if items:
-        popular = {
-            slug
-            for slug, _avg, _count in await rating_service.top_rated(
+        rated_slugs = (
+            await db.execute(
+                select(func.count(func.distinct(Rating.movie_slug)))
+            )
+        ).scalar() or 0
+        popular_avgs = {
+            slug: avg
+            for slug, avg, _count in await rating_service.top_rated(
                 db,
                 min_count=settings.popular_min_ratings,
-                limit=len(items),
+                limit=max(1, int(rated_slugs)),
             )
         }
 
@@ -144,7 +147,7 @@ async def _personal(
         if item.slug in seen:
             continue
         score, reason_genre = _score(
-            item, genre_weights, countries, people, popular
+            item, genre_weights, countries, people, popular_avgs
         )
         scored.append((score, item.slug, reason_genre))
     scored.sort(key=lambda row: (-row[0], row[1]))

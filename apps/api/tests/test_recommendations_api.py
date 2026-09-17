@@ -215,7 +215,7 @@ async def test_excludes_favorites_and_finished_but_keeps_in_progress(client_env)
 async def test_people_overlap_boosts_score(client_env):
     headers, _ = await _register_login(client_env, "rec3@gmov.dev", "rec3")
     pid = await _profile_id(client_env, headers)
-    await _set_prefs(client_env, headers, {"hanh-dong": 1.0})
+    await _set_prefs(client_env, headers, {"hanh-dong": 1.0, "kinh-di": 1.0})
     await _seed_catalog(
         client_env,
         [
@@ -224,10 +224,14 @@ async def test_people_overlap_boosts_score(client_env):
             {"slug": "cand-cast", "genres": ["hanh-dong"], "casts": "Diễn viên A"},
             {
                 "slug": "cand-dir",
-                "genres": ["hanh-dong"],
+                "genres": ["kinh-di"],
                 "director": "Đạo diễn B",
             },
-            {"slug": "stranger", "genres": ["hanh-dong"], "casts": "Diễn viên C"},
+            {
+                "slug": "stranger",
+                "genres": ["hanh-dong", "kinh-di"],
+                "casts": "Diễn viên C",
+            },
         ],
     )
     await _seed_signals(
@@ -239,9 +243,34 @@ async def test_people_overlap_boosts_score(client_env):
 
     r = await client_env.client.get(RECS, headers=headers)
     slugs = [item["movie"]["slug"] for item in r.json()["items"]]
-    assert slugs[:2] == ["cand-cast", "cand-dir"]
+    assert slugs == ["cand-cast", "cand-dir", "stranger", "seed-rated"]
     assert slugs.index("cand-cast") < slugs.index("stranger")
     assert "seed-fav" not in slugs
+
+
+async def test_internal_average_is_proportional(client_env):
+    headers, _ = await _register_login(client_env, "rec10@gmov.dev", "rec10")
+    pid = await _profile_id(client_env, headers)
+    p2 = await _create_profile(client_env, headers, "P2")
+    p3 = await _create_profile(client_env, headers, "P3")
+    await _set_prefs(client_env, headers, {"hanh-dong": 1.0})
+    await _seed_catalog(
+        client_env,
+        [
+            {"slug": "zzz-high", "genres": ["hanh-dong"]},
+            {"slug": "aaa-low", "genres": ["hanh-dong"]},
+        ],
+    )
+    for profile in (pid, p2, p3):
+        await _seed_signals(
+            client_env,
+            profile,
+            ratings=(("zzz-high", 5), ("aaa-low", 3)),
+        )
+
+    r = await client_env.client.get(RECS, headers=headers)
+    slugs = [item["movie"]["slug"] for item in r.json()["items"]]
+    assert slugs == ["zzz-high", "aaa-low"]
 
 
 async def test_not_onboarded_returns_popular(client_env):
