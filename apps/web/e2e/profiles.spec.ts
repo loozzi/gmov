@@ -16,6 +16,7 @@ import {
   switchProfile,
   type ApiProfile,
   type ApiProfileListItem,
+  type PinCandidates,
   type TestAccount,
 } from "./helpers/api";
 import { loginViaApi } from "./helpers/auth";
@@ -49,7 +50,7 @@ const slugsOf = (page: { items: { movie_slug: string }[] }) =>
 async function cleanup(
   account: TestAccount,
   favoriteSlugs: string[] = [],
-  knownPins: Record<string, string> = {},
+  knownPins: Record<string, PinCandidates> = {},
 ): Promise<void> {
   try {
     const token = (await loginUser(account)).access_token;
@@ -471,6 +472,12 @@ test("a stale has_pin reveals the current-PIN field on PIN_REQUIRED", async ({
     await dialog.getByRole("button", { name: /^lưu$/i }).click();
     await expect(dialog).toBeHidden();
   } finally {
-    await cleanup(account, [], profileId ? { [profileId]: "2468" } : {});
+    // The PIN change may not have completed if the reveal assertion failed, so
+    // accept either the new or the original PIN; cleanup tries both.
+    await cleanup(
+      account,
+      [],
+      profileId ? { [profileId]: ["2468", "1357"] } : {},
+    );
   }
 });
