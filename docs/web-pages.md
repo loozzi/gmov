@@ -68,7 +68,7 @@
 - **Bước 2 — "Chọn poster bạn thích"**: 2 hàng × 6 poster lấy từ listing công
   khai (`/movies/latest` + listing của thể loại/quốc gia đầu tiên đã chọn), mỗi
   poster có nút thích/bỏ qua; like gửi `POST /me/preferences/posters`.
-- **Bước 3 — "Sẵn sàng xem!"**: tổng kết + "Bắt đầu xem" → `PUT /me/preferences`.
+- **Bước 3 — "Sẵn sàng xem phim!"**: tổng kết + "Bắt đầu xem" → `PUT /me/preferences`.
 - **"Bỏ qua" ở mọi bước** → `PUT /me/preferences` với `skipped: true` rồi về `/`.
 - **Guard client-side**: nếu profile hiện tại có `onboarding_completed_at` và
   không vào bằng `?again=1` → `router.replace("/")`; chưa đăng nhập → CTA đăng

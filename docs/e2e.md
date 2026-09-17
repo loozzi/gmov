@@ -120,10 +120,19 @@ xoá favorites đã thêm, best-effort để trả account về profile mặc đ
 4 test phủ M2, **chỉ dùng account nền, không đăng ký tài khoản nào**. Mỗi test
 tạo 1–2 profile phụ rồi dọn trong `finally`: reset quyền sở thích bằng
 `DELETE /me/preferences` qua `rawApi`, xoá profile (`resetProfiles`), và đưa
-session trình duyệt về profile mặc định. Spec cần upstream thật (poster ở bước
-2 + snapshot catalog cho engine) nên gọi `skipIfNoUpstream()`; timeout 150s.
-Test chỉ khẳng định **luật** (rail hiện/ẩn, guard), không so nội dung gợi ý —
-tránh flake do cache TTL/thứ tự.
+session trình duyệt về profile mặc định. timeout 150s.
+
+Có **hai guard skip hiện rõ**:
+
+- `skipIfNoUpstream()` — poster ở bước 2 lấy từ listing upstream thật.
+- **Catalog probe** trong `beforeAll`: gọi có xác thực
+  `GET /api/v1/me/recommendations?limit=50` bằng account nền; `items` rỗng ⇒
+  `catalog_items` rỗng ⇒ mỗi test `test.skip(true, "catalog snapshot rỗng — chạy
+  `python -m app.cli refresh-catalog`")`. Seed bằng:
+  `docker compose exec -T api python -m app.cli refresh-catalog --pages 1`.
+
+Test chỉ khẳng định **luật** (rail hiện/ẩn, guard, poster like đã ghi nhận),
+không so nội dung gợi ý — tránh flake do cache TTL/thứ tự.
 
 1. `a new profile onboards and gets a personal rail` — profile mới → switch qua
    UI `/profiles` → `/onboarding` chọn thể loại + thích ≥1 poster → "Bắt đầu
