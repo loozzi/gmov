@@ -135,8 +135,11 @@ score = 3.0 × (Σ w_thể-loại-khớp / √số_thể_loại_của_phim)   # 
 Engine chấm trên `catalog_items`, không gọi upstream mỗi request.
 
 - Nguồn: các listing sẵn có của upstream — mọi slug trong `catalog_map.GENRE_SLUGS`
-  (`/films/the-loai/{slug}`), `COUNTRY_SLUGS` (`/films/quoc-gia/{slug}`) và các
-  năm `2016..2026` (`/films/nam-phat-hanh/{year}`), mặc định **1 trang/listing**.
+  (`/films/the-loai/{slug}`) **trừ `phim-18`** (`EXCLUDED_GENRE_SLUGS`, xem
+  `docs/decisions.md`), `COUNTRY_SLUGS` (`/films/quoc-gia/{slug}`) và các năm
+  `2016..2026` (`/films/nam-phat-hanh/{year}`), mặc định **1 trang/listing**.
+  Vẫn crawl `phim-18` được khi chỉ định tường minh (`refresh(..., kinds=[...])`
+  hoặc `python -m app.cli refresh-catalog --kinds phim-18`).
 - Gom `CandidateCard` (có `casts`/`director`), dedupe theo `slug` trong một lần
   chạy, union genres, upsert (cập nhật `fetched_at` + metadata). Một listing lỗi
   chỉ log + đếm (`listings_failed`), không làm hỏng cả lần refresh.
@@ -164,6 +167,10 @@ Engine chấm trên `catalog_items`, không gọi upstream mỗi request.
   upstream mà không thêm giá trị. Đây là lý do tín hiệu thể loại/quốc gia/năm
   chiếm ưu thế trong thực tế.
 - **Không có nhãn độ tuổi** ở upstream → không có kid mode / lọc theo tuổi.
+  Vì quiz (R1) không có lựa chọn 18+ nên không profile nào biểu đạt hay tắt
+  được thể loại `phim-18`; nó bị loại khỏi crawl mặc định (`EXCLUDED_GENRE_SLUGS`)
+  để phim 18+ (thường kèm thể loại phổ thông) không lọt vào "Gợi ý cho bạn".
+  Cờ tuổi/kid mode đúng nghĩa là việc tương lai (xem `docs/todo.md`).
 - **Không có tag/keyword/điểm cộng đồng** → không thể collaborative filtering /
   embedding; gợi ý chỉ từ gu của chính profile + metadata thô.
 - Chất lượng gợi ý **có hạn theo thiết kế**; rail chỉ đảm bảo *luật* (loại trừ,

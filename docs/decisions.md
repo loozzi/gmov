@@ -623,3 +623,16 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      `profile_preferences` không có cột cho poster bỏ qua; field được chấp nhận
      để hợp đồng API ổn định và client gửi lên không lỗi, nhưng bị bỏ qua (không
      ảnh hưởng trọng số). Ghi nợ: `docs/todo.md`.
+127. **Loại `phim-18` khỏi crawl mặc định** (`EXCLUDED_GENRE_SLUGS` trong
+     `catalog_service`) để phim 18+ (thường mang thêm thể loại phổ thông) không
+     lọt vào "Gợi ý cho bạn". Quiz R1 không có lựa chọn 18+ nên không profile nào
+     biểu đạt hay tắt được thể loại này, tức không có age gate thật. Chỉ áp cho
+     danh sách mặc định; `refresh(kinds=[...])` và `--kinds phim-18` vẫn crawl
+     tường minh được. Cờ tuổi/kid mode đúng nghĩa là việc tương lai — upstream
+     không có nhãn độ tuổi.
+128. **`reason` chỉ đặt khi thể loại khớp mạnh nhất có trọng số dương**: profile
+     có rating thấp (vd 1★ phim Kinh Dị → `-1.5`) trước đây vẫn được bảo "Vì bạn
+     thích Kinh Dị"; nay trọng số ≤ 0 → `reason = null`.
+129. **Giới hạn input sở thích**: `PosterFeedbackIn.liked/skipped` tối đa 200
+     slug (tránh `IN (...)` phình to), `PreferencesIn.genres/countries` tối đa
+     100 khoá và trọng số hữu hạn trong `[-10, 10]`; vi phạm → 422.

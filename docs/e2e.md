@@ -127,8 +127,7 @@ Có **hai guard skip hiện rõ**:
 - `skipIfNoUpstream()` — poster ở bước 2 lấy từ listing upstream thật.
 - **Catalog probe** trong `beforeAll`: gọi có xác thực
   `GET /api/v1/me/recommendations?limit=50` bằng account nền; `items` rỗng ⇒
-  `catalog_items` rỗng ⇒ mỗi test `test.skip(true, "catalog snapshot rỗng — chạy
-  `python -m app.cli refresh-catalog`")`. Seed bằng:
+  `catalog_items` rỗng ⇒ mỗi test ``test.skip(true, "catalog snapshot rỗng — chạy `python -m app.cli refresh-catalog`")``. Seed bằng:
   `docker compose exec -T api python -m app.cli refresh-catalog --pages 1`.
 
 Test chỉ khẳng định **luật** (rail hiện/ẩn, guard, poster like đã ghi nhận),
