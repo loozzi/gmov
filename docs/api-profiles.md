@@ -58,7 +58,7 @@ Thiết kế/động cơ: `docs/superpowers/specs/2026-09-17-profiles-and-recomm
   "profile": null}`; phiên hiện tại không đổi.
 - Xoá **profile đang dùng** → phiên tự fallback về profile mặc định và response
   mang access token mới trỏ profile mặc định kèm `ProfileOut` của nó, để client
-  thay token ngay (`setAccessToken` + `queryClient.clear()`).
+  thay token ngay (`setAccessToken` + `queryClient.resetQueries()`).
 
 Hard delete: dữ liệu của profile mất theo qua FK `ON DELETE CASCADE`
 (`favorites`, `watchlist`, `watch_progress`, `ratings`).
@@ -75,7 +75,7 @@ Hard delete: dữ liệu của profile mất theo qua FK `ON DELETE CASCADE`
 | `INVALID_PIN` | 401 | `pin` / `current_pin` sai |
 | `INVALID_PASSWORD` | 400 | Mật khẩu tài khoản sai khi đặt/đổi/xoá PIN |
 | `SESSION_STALE` | 401 | Switch khi access token thiếu claim `sid` |
-| `RATE_LIMITED` | 429 | Vượt ngân sách PIN set hoặc PIN attempt (kèm `Retry-After`) |
+| `RATE_LIMITED` | 429 | Vượt ngân sách PIN attempt dùng chung theo `(profile, IP)` (kèm `Retry-After`) |
 | `VALIDATION_ERROR` | 422 | `avatar` ngoài allowlist, `pin` không đúng 4 chữ số, `name` sai độ dài |
 
 ## PIN rules
