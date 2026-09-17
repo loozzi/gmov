@@ -100,24 +100,31 @@
   }
   /* Dialog content is centred with translate utilities, so the keyframes have
      to carry that translate or the zoom would cancel the centring. */
+  /* Dialog surfaces are centred with the `translate` utility. The keyframes
+     animate only `opacity`/`scale` on purpose: a `transform: translate(-50%,
+     -50%)` here would stack on top of the utility (Tailwind v4 renders
+     `-translate-x-1/2` as the standalone `translate` property), doubling the
+     offset and pushing the dialog into the top-left quadrant. Full-screen
+     dialogs have no translate at all, so the same keyframe shifted them by
+     half a viewport. */
   @keyframes dialog-in {
     from {
       opacity: 0;
-      transform: translate(-50%, -50%) scale(0.96);
+      scale: 0.96;
     }
     to {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
+      scale: 1;
     }
   }
   @keyframes dialog-out {
     from {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
+      scale: 1;
     }
     to {
       opacity: 0;
-      transform: translate(-50%, -50%) scale(0.96);
+      scale: 0.96;
     }
   }
   @keyframes sheet-in-left {

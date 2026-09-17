@@ -678,3 +678,15 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      `modal={false}` (menu thể loại ở `SiteHeader` đã vậy từ trước). Có test E2E
      chống tái phát: mở cả hai menu → `data-scroll-locked` phải vắng và
      `overflow` không được `hidden`.
+135. **Keyframes của dialog chỉ animate `opacity`/`scale`, KHÔNG `transform`.** Bug
+     (có trước M3, phát hiện khi làm trang chọn profile): `@keyframes dialog-in/out`
+     đặt `transform: translate(-50%, -50%) scale(...)`, nhưng Tailwind v4 render
+     `-translate-x-1/2` bằng **thuộc tính `translate` độc lập**, nên hai phép dịch
+     cộng dồn → mọi dialog lệch hẳn vào 1/4 trên-trái (đo được: `translate: -50%
+     -50%` + `transform: matrix(…, -224, -149)` với dialog 448×298 trên viewport
+     1280×800 → x=192 thay vì 416). Dialog full-screen (`inset-0`, không có
+     translate) còn bị đẩy đi nửa viewport. Vì keyframe có `fill-mode: both`, giá
+     trị `transform` cuối vẫn dính sau khi animation kết thúc. Fix: bỏ translate
+     khỏi keyframe (việc căn giữa đã do utility `top-1/2 left-1/2 -translate-x-1/2
+     -translate-y-1/2` lo); E2E giờ assert dialog thường căn giữa đúng ≤2px và
+     dialog full-screen khớp viewport tại `(0,0)`.

@@ -370,6 +370,14 @@ test("changing a PIN requires the current PIN", async ({ page }) => {
     const dialog = page.getByRole("dialog", { name: "Đổi PIN" });
     await expect(dialog).toBeVisible();
 
+    // Regression: the open animation used to apply its own translate on top of
+    // the centring utility, parking every dialog in the top-left quadrant.
+    const viewport = page.viewportSize();
+    const box = await dialog.boundingBox();
+    expect(box).not.toBeNull();
+    expect(Math.abs((box?.x ?? 0) + (box?.width ?? 0) / 2 - (viewport?.width ?? 0) / 2)).toBeLessThan(2);
+    expect(Math.abs((box?.y ?? 0) + (box?.height ?? 0) / 2 - (viewport?.height ?? 0) / 2)).toBeLessThan(2);
+
     // Wrong current PIN is rejected: the dialog stays open with the error.
     await dialog.getByLabel("PIN hiện tại").fill("0000");
     await dialog.getByLabel("Mật khẩu tài khoản").fill(account.password);
@@ -421,17 +429,22 @@ test("logging in lands on the full-screen chooser and enforces the PIN", async (
       "password",
     );
     const viewport = page.viewportSize();
-    // The open animation scales the surface, so poll until it covers the whole
-    // viewport (this is what makes it a full-screen modal).
+    // The open animation scales the surface, so poll until it is exactly the
+    // viewport — at (0,0), the size the old keyframe translate broke.
     await expect
       .poll(
         async () => {
           const b = await pinDialog.boundingBox();
-          return { w: Math.round(b?.width ?? 0), h: Math.round(b?.height ?? 0) };
+          return {
+            x: Math.round(b?.x ?? -1),
+            y: Math.round(b?.y ?? -1),
+            w: Math.round(b?.width ?? 0),
+            h: Math.round(b?.height ?? 0),
+          };
         },
         { timeout: 5_000 },
       )
-      .toEqual({ w: viewport?.width, h: viewport?.height });
+      .toEqual({ x: 0, y: 0, w: viewport?.width, h: viewport?.height });
 
     await pinDialog.getByLabel("Mã PIN").fill("0000");
     await pinDialog.getByRole("button", { name: /^xác nhận$/i }).click();
