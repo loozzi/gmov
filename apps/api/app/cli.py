@@ -1,4 +1,4 @@
-"""Admin CLI: python -m app.cli set-role <username> <role>"""
+"""Admin CLI: python -m app.cli <command>."""
 
 import argparse
 import asyncio
@@ -7,8 +7,10 @@ from collections.abc import Sequence
 
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.db.models.user import User, UserRole
 from app.db.session import engine, session_factory
+from app.services import catalog_service
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -18,6 +20,11 @@ def _build_parser() -> argparse.ArgumentParser:
     set_role = subparsers.add_parser("set-role", help="set a user's role")
     set_role.add_argument("username")
     set_role.add_argument("role", choices=[role.value for role in UserRole])
+
+    refresh = subparsers.add_parser(
+        "refresh-catalog", help="crawl the upstream catalog snapshot"
+    )
+    refresh.add_argument("--pages", type=int, default=settings.catalog_refresh_pages)
     return parser
 
 
@@ -35,10 +42,24 @@ async def _set_role(username: str, role: UserRole) -> int:
     return 0
 
 
+async def _refresh_catalog(pages: int) -> int:
+    async with session_factory() as session:
+        stats = await catalog_service.refresh(session, pages=max(1, pages))
+    print(
+        f"catalog refreshed: {stats.items_upserted} items "
+        f"({stats.listings_ok} listings ok, {stats.listings_failed} failed)"
+    )
+    return 0
+
+
 async def main(argv: Sequence[str] | None = None) -> int:
     try:
         args = _build_parser().parse_args(argv)
-        return await _set_role(args.username, UserRole(args.role))
+        if args.command == "set-role":
+            return await _set_role(args.username, UserRole(args.role))
+        if args.command == "refresh-catalog":
+            return await _refresh_catalog(args.pages)
+        return 2
     finally:
         await engine.dispose()
 

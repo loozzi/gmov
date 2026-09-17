@@ -11,6 +11,7 @@ from app.api.v1 import api_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.db.session import close_connections, engine, get_redis_client
+from app.services.catalog_service import schedule_catalog_jobs
 from app.services.nguonc import aclose_client as aclose_nguonc_client
 from app.services.token_cleanup import start_scheduler
 
@@ -23,6 +24,7 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     scheduler = start_scheduler()
+    schedule_catalog_jobs(scheduler)
     yield
     scheduler.shutdown(wait=False)
     await aclose_nguonc_client()
