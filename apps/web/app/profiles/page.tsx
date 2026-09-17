@@ -88,10 +88,9 @@ function ProfilesChooser() {
 
   const handleSelect = (item: ProfileListItem) => {
     setSwitchError(null);
-    if (item.is_current) {
-      leave();
-      return;
-    }
+    // Every pick goes through the server, the current profile included: the
+    // session has no active profile until `switch` verifies the PIN, so
+    // `is_current` must never short-circuit the check.
     if (item.has_pin) {
       setPinError(null);
       setLocked(item);

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { ProfileGate } from "@/components/profile/profile-gate";
 
 /** Routes that render their own full-screen chrome-less surface. The profile
  * chooser is one: it hides the header/footer so picking a profile is the only
@@ -21,7 +22,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <>
       <SiteHeader />
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
-        {children}
+        <ProfileGate>{children}</ProfileGate>
       </main>
       <SiteFooter />
     </>

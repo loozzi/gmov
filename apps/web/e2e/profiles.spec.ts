@@ -19,7 +19,11 @@ import {
   type PinCandidates,
   type TestAccount,
 } from "./helpers/api";
-import { loginViaApi, loginViaUi } from "./helpers/auth";
+import {
+  continuePastChooser,
+  loginViaApi,
+  loginViaUi,
+} from "./helpers/auth";
 
 // These specs MUST NOT register accounts: register is throttled 3/hour/IP and
 // the base account from global-setup is the only one used. Isolation is proven
@@ -293,18 +297,16 @@ test("deleting a profile removes only its data", async ({ page }) => {
     const defaultSlugs = slugsOf(await listFavorites(token));
     expect(defaultSlugs).toContain(keepSlug);
     expect(defaultSlugs).not.toContain(doomedSlug);
-    // ...and the deleted profile's scope self-heals to the default profile
-    // (`pid` of a removed profile falls back instead of 404-ing) without ever
-    // leaking the dead profile's favorites.
+    // ...and a token still holding the deleted profile's `pid` is answered
+    // with PROFILE_REQUIRED (the session goes back to the chooser) instead of
+    // being silently moved to the default profile, whose data would then leak.
     const stale = await rawApi("/api/v1/me/favorites", {
       headers: authHeaders(doomedToken),
     });
-    expect(stale.status).toBe(200);
-    const staleSlugs = slugsOf(
-      (await stale.json()) as { items: { movie_slug: string }[] },
+    expect(stale.status).toBe(403);
+    expect(((await stale.json()) as { code: string }).code).toBe(
+      "PROFILE_REQUIRED",
     );
-    expect(staleSlugs).toContain(keepSlug);
-    expect(staleSlugs).not.toContain(doomedSlug);
   } finally {
     await cleanup(account, [keepSlug], doomedId ? { [doomedId]: "1357" } : {});
   }
@@ -465,6 +467,67 @@ test("logging in lands on the full-screen chooser and enforces the PIN", async (
   }
 });
 
+test("an unselected session is sent to the chooser before it can browse", async ({
+  page,
+}) => {
+  const account = await loadAccount();
+
+  try {
+    await resetProfiles(account);
+    // Login selects no profile (the backend answers PROFILE_REQUIRED for
+    // profile-scoped data), so "/" must hand off to the immersive chooser.
+    await loginViaApi(page, { skipChooser: true });
+    await expect(page).toHaveURL(/\/profiles\?next=%2F$/, { timeout: 20_000 });
+    await expect(page.getByTestId("profile-chooser")).toBeVisible();
+    await expect(page.locator("header")).toHaveCount(0);
+
+    // Picking resumes at the original target.
+    await continuePastChooser(page, "/");
+  } finally {
+    await cleanup(account);
+  }
+});
+
+test("picking the profile already on screen still asks for its PIN", async ({
+  page,
+}) => {
+  const account = await loadAccount();
+  const name = `Lai ${stamp()}`;
+  let spareId = "";
+
+  try {
+    await resetProfiles(account);
+    const token = (await loginUser(account)).access_token;
+    const spare = await createProfile(token, name, "ninja");
+    spareId = spare.id;
+    await setProfilePin(token, spareId, account.password, "2468");
+
+    // Bind this tab to the locked profile through the chooser first.
+    await loginViaApi(page, { skipChooser: true });
+    await expect(page.getByTestId("profile-chooser")).toBeVisible();
+    await page.getByTestId(`profile-card-${spareId}`).click();
+    const pinDialog = page.getByTestId("profile-pin-dialog");
+    await expect(pinDialog).toBeVisible();
+    await pinDialog.getByLabel("Mã PIN").fill("2468");
+    await pinDialog.getByRole("button", { name: /^xác nhận$/i }).click();
+    await expect(pinDialog).toBeHidden();
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+
+    // Now the same profile is the current one ("đang xem"): picking it again
+    // must still verify the PIN — the old `is_current` shortcut walked in.
+    await page.goto("/profiles");
+    await page.getByTestId(`profile-card-${spareId}`).click();
+    await expect(pinDialog).toBeVisible();
+    await pinDialog.getByLabel("Mã PIN").fill("2468");
+    await pinDialog.getByRole("button", { name: /^xác nhận$/i }).click();
+    await expect(pinDialog).toBeHidden();
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+  } finally {
+    await cleanup(account, [], spareId ? { [spareId]: "2468" } : {});
+    await restoreDefault(account);
+  }
+});
+
 test("a chooser handoff respects the ?next target", async ({ page }) => {
   const account = await loadAccount();
 
@@ -481,13 +544,9 @@ test("a chooser handoff respects the ?next target", async ({ page }) => {
       { timeout: 30_000 },
     );
 
-    await expect(page.getByTestId("profile-chooser")).toBeVisible();
-    await page
-      .locator('[data-testid^="profile-card-"][aria-label*="(đang xem)"]')
-      .click();
-    await page.waitForURL((url) => url.pathname === "/me/favorites", {
-      timeout: 20_000,
-    });
+    // No profile is current until one is picked: any card works, the first
+    // one (the default) has no PIN.
+    await continuePastChooser(page, "/me/favorites");
   } finally {
     await cleanup(account);
     await restoreDefault(account);
@@ -511,11 +570,7 @@ test("a chooser handoff ignores a next that points back at the chooser", async (
       timeout: 30_000,
     });
 
-    await expect(page.getByTestId("profile-chooser")).toBeVisible();
-    await page
-      .locator('[data-testid^="profile-card-"][aria-label*="(đang xem)"]')
-      .click();
-    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+    await continuePastChooser(page, "/");
     await expect(page.getByTestId("profile-chooser")).toHaveCount(0);
   } finally {
     await cleanup(account);
@@ -644,11 +699,14 @@ test("the profile menu never locks page scroll (no scrollbar flicker)", async ({
           document.documentElement.clientHeight,
       }));
 
+    // Wait for the profile gate to resolve and the home content to render: the
+    // page must actually be scrollable, otherwise "no lock" is trivially true
+    // and the regression this guards (a hiding scrollbar) can't happen.
+    await expect
+      .poll(async () => (await scrollState()).pageHasScroll, { timeout: 20_000 })
+      .toBe(true);
     const before = await scrollState();
     expect(before.locked).toBeNull();
-    // The page must actually be scrollable, otherwise "no lock" is trivially
-    // true and the regression this guards (a hiding scrollbar) can't happen.
-    expect(before.pageHasScroll).toBe(true);
 
     await page.getByRole("button", { name: "Chọn profile" }).click();
     await expect(

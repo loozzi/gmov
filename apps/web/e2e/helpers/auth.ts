@@ -12,7 +12,10 @@ export interface UiAccount {
   password: string;
 }
 
-export async function loginViaApi(page: Page): Promise<void> {
+export async function loginViaApi(
+  page: Page,
+  options: { skipChooser?: boolean } = {},
+): Promise<void> {
   const account = JSON.parse(await readFile(LAST_USER_FILE, "utf8"));
   const res = await page.request.post("/api/auth/login", {
     data: { username: account.username, password: account.password },
@@ -22,14 +25,14 @@ export async function loginViaApi(page: Page): Promise<void> {
     `test login via /api/auth/login must succeed, got ${res.status()}`,
   ).toBeTruthy();
   await page.goto("/");
-  await expect(page.getByRole("button", { name: /tài khoản/i })).toBeVisible({
-    timeout: 20_000,
-  });
+  // Login selects no profile, so "/" bounces to the chooser: every caller but
+  // the gate test wants a usable app session, which means picking one.
+  if (!options.skipChooser) await continuePastChooser(page, "/");
 }
 
-/** Pick the profile that is already active and leave the immersive chooser.
- *  Specs that need the app chrome (header/footer) must call this: logging in
- *  always lands on /profiles, which shows no header. */
+/** Pick the default profile on the immersive chooser and leave. Specs that
+ *  need the app chrome (header/footer) must call this: a fresh login always
+ *  lands on /profiles, which shows no header. */
 export async function continuePastChooser(
   page: Page,
   target = "/",
@@ -38,9 +41,14 @@ export async function continuePastChooser(
     timeout: 20_000,
   });
   await page
-    .locator('[data-testid^="profile-card-"][aria-label*="(đang xem)"]')
+    .getByTestId("profile-chooser")
+    .locator('[data-testid^="profile-card-"]')
+    .first()
     .click();
   await page.waitForURL((url) => url.pathname === target, {
+    timeout: 20_000,
+  });
+  await expect(page.getByRole("button", { name: /tài khoản/i })).toBeVisible({
     timeout: 20_000,
   });
 }

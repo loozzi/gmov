@@ -40,7 +40,7 @@ export async function registerUser(acc: TestAccount): Promise<void> {
   });
 }
 
-export async function loginUser(acc: TestAccount): Promise<{
+export async function loginUnselected(acc: TestAccount): Promise<{
   access_token: string;
   refresh_token: string;
 }> {
@@ -53,6 +53,22 @@ export async function loginUser(acc: TestAccount): Promise<{
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: form,
   });
+}
+
+/** Login + select the account's default profile: every seeding helper below
+ *  is profile-scoped, and login no longer selects a profile by itself. */
+export async function loginUser(acc: TestAccount): Promise<{
+  access_token: string;
+  refresh_token: string;
+}> {
+  const tokens = await loginUnselected(acc);
+  const list = await listProfiles(tokens.access_token);
+  const def = list.items.find((profile) => profile.is_default);
+  if (def) {
+    const switched = await switchProfile(tokens.access_token, def.id);
+    if (switched.access_token) tokens.access_token = switched.access_token;
+  }
+  return tokens;
 }
 
 export function authHeaders(token: string): Record<string, string> {
@@ -204,7 +220,7 @@ export async function resetProfiles(
   account: TestAccount,
   knownPins: Record<string, PinCandidates> = {},
 ): Promise<void> {
-  let token = (await loginUser(account)).access_token;
+  let token = (await loginUnselected(account)).access_token;
   for (const profile of (await listProfiles(token)).items) {
     if (profile.is_default) continue;
     const candidates = pinChoices(knownPins[profile.id]);
