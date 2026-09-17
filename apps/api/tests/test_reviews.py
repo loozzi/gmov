@@ -9,6 +9,7 @@ from app.core import ratelimit
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from tests.session_helpers import select_default
 
 ME = "/api/v1/me"
 
@@ -54,7 +55,7 @@ async def _register_login(client, email: str, username: str) -> dict:
         data={"username": username, "password": "password123"},
     )
     assert r.status_code == 200, r.text
-    token = r.json()["access_token"]
+    token = await select_default(client, r.json()["access_token"])
     return {"Authorization": f"Bearer {token}"}
 
 

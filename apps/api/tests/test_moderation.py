@@ -15,6 +15,7 @@ from app.db.models.comment_report import CommentReport, ReportStatus
 from app.db.models.user import User, UserRole
 from app.db.session import get_db
 from app.main import app
+from tests.session_helpers import select_default
 
 ME = "/api/v1/me"
 ADMIN = "/api/v1/admin"
@@ -66,7 +67,7 @@ async def _register_login(env: Env, email: str, username: str) -> dict:
         data={"username": username, "password": "password123"},
     )
     assert r.status_code == 200, r.text
-    token = r.json()["access_token"]
+    token = await select_default(env.client, r.json()["access_token"])
     return {"Authorization": f"Bearer {token}"}
 
 

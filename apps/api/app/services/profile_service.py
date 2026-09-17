@@ -1,7 +1,6 @@
 """Profile business logic: CRUD bounded by the per-account limit."""
 
 import uuid
-from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,9 +11,6 @@ from app.core.exceptions import AppException
 from app.db.models.profile import FALLBACK_AVATAR, Profile
 from app.db.models.refresh_token import RefreshToken
 from app.db.models.user import User
-
-if TYPE_CHECKING:
-    from app.core.deps import ActiveProfile
 
 MAX_PROFILES = settings.max_profiles
 PIN_MAX_ATTEMPTS = settings.pin_max_attempts
@@ -52,16 +48,6 @@ async def default_for(db: AsyncSession, user_id: uuid.UUID) -> Profile:
         Profile.user_id == user_id, Profile.is_default.is_(True)
     )
     return (await db.execute(stmt)).scalar_one()
-
-
-async def current_profile_for(
-    db: AsyncSession, user: User, active: "ActiveProfile | None" = None
-) -> Profile:
-    """Active profile of a request: the session claim when present, else the
-    account's default (old tokens issued before `pid` existed)."""
-    if active is not None:
-        return active.profile
-    return await default_for(db, user.id)
 
 
 async def _name_taken(
@@ -196,10 +182,11 @@ async def activate_session(
 
 
 async def repoint_session(
-    db: AsyncSession, session_jti: str, profile_id: uuid.UUID
+    db: AsyncSession, session_jti: str, profile_id: uuid.UUID | None
 ) -> None:
-    """Best-effort session repair after a token's profile vanished. A
-    missing row (e.g. the session was logged out) is not an error."""
+    """Best-effort session repair after a token's profile vanished (None
+    leaves the session unselected, i.e. back to the chooser). A missing row
+    (e.g. the session was logged out) is not an error."""
     row = await _session_row(db, session_jti)
     if row is None:
         return

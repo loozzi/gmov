@@ -15,6 +15,7 @@ from app.db.models.profile import Profile
 from app.db.session import get_db
 from app.main import app
 from app.services import profile_service
+from tests.session_helpers import select_default
 
 AUTH = "/api/v1/auth"
 ME = "/api/v1/me"
@@ -78,7 +79,9 @@ async def _register_login(env: Env, email: str, username: str) -> dict:
         f"{AUTH}/login", data={"username": username, "password": PASSWORD}
     )
     assert r.status_code == 200, r.text
-    return r.json()
+    tokens = r.json()
+    tokens["access_token"] = await select_default(env.client, tokens["access_token"])
+    return tokens
 
 
 async def _create(env: Env, headers: dict, name: str, avatar: str = "cat") -> dict:
@@ -450,12 +453,11 @@ async def test_delete_locked_profile_requires_its_pin(client_env):
     assert list(rows) == []
 
 
-async def test_delete_active_profile_returns_new_token_for_default(client_env):
+async def test_delete_active_profile_leaves_session_unselected(client_env):
+    """Deleting the profile you are watching must not hand out the (possibly
+    PIN-locked) default profile: the session goes back to the chooser."""
     tokens = await _register_login(client_env, "del3@gmov.dev", "del3")
     headers = _bearer(tokens["access_token"])
-    default_id = (
-        await client_env.client.get(f"{ME}/profile", headers=headers)
-    ).json()["id"]
     second = await _create(client_env, headers, "Kid")
 
     switched = await _switch(client_env, headers, second["id"])
@@ -465,15 +467,18 @@ async def test_delete_active_profile_returns_new_token_for_default(client_env):
     r = await _delete(client_env, active_headers, second["id"])
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["profile"]["id"] == default_id
-    assert body["profile"]["is_default"] is True
-    assert body["access_token"]
+    assert body["access_token"] is None
+    assert body["profile"] is None
 
     current = await client_env.client.get(
-        f"{ME}/profile", headers=_bearer(body["access_token"])
+        f"{ME}/profile", headers=active_headers
     )
-    assert current.status_code == 200, current.text
-    assert current.json()["id"] == default_id
+    assert current.status_code == 403, current.text
+    assert current.json()["code"] == "PROFILE_REQUIRED"
+
+    listing = await client_env.client.get(f"{ME}/profiles", headers=active_headers)
+    assert listing.status_code == 200, listing.text
+    assert all(not item["is_current"] for item in listing.json()["items"])
 
 
 async def test_pin_hash_is_not_plaintext(client_env):

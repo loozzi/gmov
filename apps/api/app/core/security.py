@@ -42,13 +42,20 @@ def _encode(
 
 
 def create_access_token(
-    user_id: uuid.UUID, session_jti: str, profile_id: uuid.UUID
+    user_id: uuid.UUID, session_jti: str, profile_id: uuid.UUID | None = None
 ) -> str:
+    """Mint an access token. `pid` is the session's selected profile and is
+    omitted entirely until the user picks one (see `POST /me/profiles/{id}
+    /switch`), so an unselected token can never be mistaken for "the default
+    profile": profile-scoped endpoints answer PROFILE_REQUIRED instead."""
+    extra = {"sid": session_jti}
+    if profile_id is not None:
+        extra["pid"] = str(profile_id)
     return _encode(
         str(user_id),
         ACCESS_TOKEN_TYPE,
         timedelta(minutes=settings.access_token_expire_minutes),
-        {"sid": session_jti, "pid": str(profile_id)},
+        extra,
     )
 
 

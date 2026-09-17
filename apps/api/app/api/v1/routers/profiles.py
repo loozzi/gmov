@@ -6,7 +6,13 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import ratelimit, security
-from app.core.deps import ActiveProfile, get_active_profile, get_current_user
+from app.core.deps import (
+    ActiveProfile,
+    SessionContext,
+    get_active_profile,
+    get_current_user,
+    get_session_context,
+)
 from app.core.exceptions import AppException
 from app.db.models.user import User
 from app.db.session import get_db
@@ -28,22 +34,21 @@ router = APIRouter(prefix="/me", tags=["profiles"])
 @router.get("/profile", response_model=ProfileOut)
 async def read_current_profile(
     active: ActiveProfile = Depends(get_active_profile),
-    db: AsyncSession = Depends(get_db),
 ) -> ProfileOut:
-    profile = await profile_service.current_profile_for(db, active.user, active)
-    return ProfileOut.from_profile(profile)
+    return ProfileOut.from_profile(active.profile)
 
 
 @router.get("/profiles", response_model=ProfileListOut)
 async def list_profiles(
-    active: ActiveProfile = Depends(get_active_profile),
+    ctx: SessionContext = Depends(get_session_context),
     db: AsyncSession = Depends(get_db),
 ) -> ProfileListOut:
-    profiles = await profile_service.list_for_user(db, active.user.id)
-    current = await profile_service.current_profile_for(db, active.user, active)
+    profiles = await profile_service.list_for_user(db, ctx.user.id)
     return ProfileListOut(
         items=[
-            ProfileListItemOut.from_profile(p, is_current=p.id == current.id)
+            ProfileListItemOut.from_profile(
+                p, is_current=ctx.profile is not None and p.id == ctx.profile.id
+            )
             for p in profiles
         ],
         max=profile_service.MAX_PROFILES,
@@ -79,20 +84,22 @@ async def switch_profile(
     profile_id: uuid.UUID,
     data: ProfileSwitchIn,
     request: Request,
-    active: ActiveProfile = Depends(get_active_profile),
+    ctx: SessionContext = Depends(get_session_context),
     db: AsyncSession = Depends(get_db),
 ) -> SwitchOut:
-    profile = await profile_service.get_owned(db, active.user.id, profile_id)
+    """The only way to get a profile-bound token: verifies the PIN first, then
+    points this session (and the new access token) at the profile."""
+    profile = await profile_service.get_owned(db, ctx.user.id, profile_id)
     if profile is None:
         raise AppException("Profile not found", "PROFILE_NOT_FOUND", 404)
     await profile_service.verify_pin(
         db, profile, data.pin, ratelimit.client_ip(request)
     )
-    if active.session_jti is None:
+    if ctx.session_jti is None:
         raise AppException("Session outdated", "SESSION_STALE", 401)
-    await profile_service.activate_session(db, active.session_jti, profile.id)
+    await profile_service.activate_session(db, ctx.session_jti, profile.id)
     token = security.create_access_token(
-        active.user.id, active.session_jti, profile.id
+        ctx.user.id, ctx.session_jti, profile.id
     )
     return SwitchOut(
         access_token=token, profile=ProfileOut.from_profile(profile)
@@ -104,10 +111,10 @@ async def delete_profile(
     profile_id: uuid.UUID,
     data: ProfileSwitchIn,
     request: Request,
-    active: ActiveProfile = Depends(get_active_profile),
+    ctx: SessionContext = Depends(get_session_context),
     db: AsyncSession = Depends(get_db),
 ) -> SwitchOut:
-    profile = await profile_service.get_owned(db, active.user.id, profile_id)
+    profile = await profile_service.get_owned(db, ctx.user.id, profile_id)
     if profile is None:
         raise AppException("Profile not found", "PROFILE_NOT_FOUND", 404)
     if profile.is_default:
@@ -117,19 +124,13 @@ async def delete_profile(
     await profile_service.verify_pin(
         db, profile, data.pin, ratelimit.client_ip(request)
     )
-    was_active = profile.id == active.profile.id
+    was_active = ctx.profile is not None and profile.id == ctx.profile.id
     await profile_service.delete(db, profile)
-    if not was_active:
-        return SwitchOut(access_token=None, profile=None)
-    default = await profile_service.default_for(db, active.user.id)
-    token = None
-    if active.session_jti is not None:
-        token = security.create_access_token(
-            active.user.id, active.session_jti, default.id
-        )
-    return SwitchOut(
-        access_token=token, profile=ProfileOut.from_profile(default)
-    )
+    if was_active and ctx.session_jti is not None:
+        # No successor profile is handed out: the session goes back to the
+        # chooser, so a PIN-locked default is never entered implicitly.
+        await profile_service.repoint_session(db, ctx.session_jti, None)
+    return SwitchOut(access_token=None, profile=None)
 
 
 @router.put("/profiles/{profile_id}/pin", response_model=ProfileOut)
