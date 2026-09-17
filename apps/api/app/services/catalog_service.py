@@ -153,7 +153,7 @@ async def _upsert(db: AsyncSession, staged: dict[str, _Staged]) -> int:
         row.original_name = data.original_name
         row.poster_url = data.poster_url
         row.thumb_url = data.thumb_url
-        row.genres = sorted(data.genres)
+        row.genres = sorted(set(row.genres or []) | set(data.genres))
         row.source = data.source
         row.fetched_at = now
         if data.year is not None:

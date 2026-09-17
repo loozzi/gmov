@@ -139,6 +139,28 @@ async def test_refresh_dedupes_by_slug_and_unions_genres(db_env):
 
 
 @respx.mock
+async def test_refresh_keeps_old_genres_when_listing_fails(db_env):
+    ok = httpx.Response(200, json=payload([card("shared")]))
+    dead = httpx.Response(500, json={})
+    respx.get(
+        f"{BASE}/films/the-loai/hanh-dong", params={"page": 1}
+    ).mock(side_effect=[ok, dead, dead, dead])
+    mock_listing("/films/the-loai/phim-hai", [card("shared")])
+
+    async with db_env.factory() as db:
+        await catalog_service.refresh(db, kinds=["hanh-dong", "phim-hai"])
+        before = (await catalog_service.by_slugs(db, ["shared"]))[0]
+        assert before.genres == ["hanh-dong", "phim-hai"]
+
+        stats = await catalog_service.refresh(db, kinds=["hanh-dong", "phim-hai"])
+        assert stats.listings_failed == 1
+        assert stats.listings_ok == 1
+
+        after = (await catalog_service.by_slugs(db, ["shared"]))[0]
+        assert after.genres == ["hanh-dong", "phim-hai"]
+
+
+@respx.mock
 async def test_one_dead_listing_does_not_stop_refresh(db_env):
     mock_listing("/films/the-loai/hanh-dong", status=500)
     mock_listing("/films/the-loai/phim-hai", [card("survivor")])
