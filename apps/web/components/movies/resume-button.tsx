@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { History, Play } from "lucide-react";
 
-import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
 import { useProgress } from "@/lib/me";
 import { progressLabel } from "@/lib/progress";
@@ -24,8 +23,7 @@ interface Props {
 }
 
 export function ResumeButton({ movieSlug, firstEpisode }: Props) {
-  const { isAuthenticated } = useAuth();
-  const { data: progress } = useProgress(movieSlug, isAuthenticated);
+  const { data: progress } = useProgress(movieSlug);
 
   // Any history row means the movie is in progress: continue at the episode
   // that was last recorded. Embed mode stores no playtime (0s/0s registration

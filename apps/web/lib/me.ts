@@ -6,7 +6,15 @@ import {
   useQueryClient,
   keepPreviousData,
 } from "@tanstack/react-query";
+
+import { useAuth } from "@/components/auth/auth-provider";
 import { apiFetch } from "@/lib/api";
+import {
+  removeGuestProgress,
+  useGuestProgressEntry,
+  useGuestProgressList,
+  type GuestProgressEntry,
+} from "@/lib/guest-progress";
 
 export interface Progress {
   id: string;
@@ -30,6 +38,23 @@ export interface PaginatedProgress {
   total_items: number;
 }
 
+/** A local entry carries every server field except the row id. */
+function entryToProgress(entry: GuestProgressEntry): Progress {
+  return { id: entry.movie_slug, ...entry };
+}
+
+export interface ProgressResult {
+  data: Progress | null;
+  isFetched: boolean;
+}
+
+export interface ContinueWatchingResult {
+  data: PaginatedProgress | null;
+  isLoading: boolean;
+  isError: boolean;
+  error: unknown;
+}
+
 export interface Favorite {
   id: string;
   movie_slug: string;
@@ -45,25 +70,66 @@ export interface PaginatedFavorites {
   total_items: number;
 }
 
-export function useContinueWatching(page = 1) {
-  return useQuery({
+/**
+ * Server progress for logged-in users, localStorage progress for guests, so
+ * every consumer (player resume, detail "Xem tiếp", history) stays unaware of
+ * where the row lives.
+ */
+export function useContinueWatching(page = 1): ContinueWatchingResult {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const query = useQuery({
     queryKey: ["me", "continue-watching", page],
     queryFn: () =>
       apiFetch<PaginatedProgress>(
         `/api/v1/me/continue-watching?page=${page}&per_page=20`,
       ),
     placeholderData: keepPreviousData,
+    enabled: isAuthenticated,
   });
+  const guest = useGuestProgressList();
+
+  if (isAuthenticated) {
+    return {
+      data: query.data ?? null,
+      isLoading: query.isLoading,
+      isError: query.isError,
+      error: query.error,
+    };
+  }
+
+  const items = guest.map(entryToProgress);
+  return {
+    data: {
+      items,
+      page: 1,
+      per_page: Math.max(items.length, 1),
+      total_items: items.length,
+    },
+    isLoading: authLoading,
+    isError: false,
+    error: null,
+  };
 }
 
-export function useProgress(movieSlug: string, enabled = true) {
-  return useQuery({
+export function useProgress(movieSlug: string): ProgressResult {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const query = useQuery({
     queryKey: ["me", "progress", movieSlug],
     queryFn: () => apiFetch<Progress>(`/api/v1/me/progress/${movieSlug}`),
-    enabled,
+    enabled: isAuthenticated,
     retry: false,
     staleTime: 30_000,
   });
+  const guest = useGuestProgressEntry(movieSlug);
+
+  if (isAuthenticated) {
+    return { data: query.data ?? null, isFetched: query.isFetched };
+  }
+  // Guest rows are already local and synchronous: settled once auth resolved.
+  return {
+    data: guest ? entryToProgress(guest) : null,
+    isFetched: !authLoading,
+  };
 }
 
 export function useFavorites(page = 1) {
@@ -259,9 +325,12 @@ export function useRemoveWatchlist() {
 
 export function useDeleteProgress() {
   const queryClient = useQueryClient();
+  const { isAuthenticated } = useAuth();
   return useMutation({
     mutationFn: (movieSlug: string) =>
-      apiFetch(`/api/v1/me/progress/${movieSlug}`, { method: "DELETE" }),
+      isAuthenticated
+        ? apiFetch(`/api/v1/me/progress/${movieSlug}`, { method: "DELETE" })
+        : Promise.resolve(removeGuestProgress(movieSlug)),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["me"] });
     },
@@ -330,9 +399,7 @@ export function useWatched(movieSlug: string, enabled = true) {
   return useQuery({
     queryKey: ["me", "watched", movieSlug],
     queryFn: () =>
-      apiFetch<{ episode_slugs: string[] }>(
-        `/api/v1/me/watched/${movieSlug}`,
-      ),
+      apiFetch<{ episode_slugs: string[] }>(`/api/v1/me/watched/${movieSlug}`),
     enabled,
     retry: false,
     staleTime: 30_000,

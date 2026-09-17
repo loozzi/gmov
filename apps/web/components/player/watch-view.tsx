@@ -19,6 +19,7 @@ import { VideoPlayer, formatClock } from "@/components/player/video-player";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toaster";
 import { getAccessToken } from "@/lib/api";
+import { saveGuestProgress } from "@/lib/guest-progress";
 import {
   sendProgressKeepalive,
   useMarkWatched,
@@ -72,13 +73,16 @@ export function WatchView({ detail, episodeSlug }: Props) {
     servers.find((s) => s.name === serverName) ?? servers[0] ?? null;
   const episodes = useMemo(() => server?.episodes ?? [], [server]);
   const currentEp =
-    episodes.find((e) => (e.slug ?? e.name) === episodeSlug) ?? episodes[0] ?? null;
+    episodes.find((e) => (e.slug ?? e.name) === episodeSlug) ??
+    episodes[0] ??
+    null;
   const currentKey = currentEp ? (currentEp.slug ?? currentEp.name) : "";
 
   // Series position within the selected server (not the cross-server flat
   // list): "tập N/M" for the history/rail/detail UI.
   const seriesPosition = useMemo(() => {
-    const idx = episodes.findIndex((e) => (e.slug ?? e.name) === currentKey) + 1;
+    const idx =
+      episodes.findIndex((e) => (e.slug ?? e.name) === currentKey) + 1;
     return {
       episode_index: idx > 0 ? idx : null,
       total_episodes: episodes.length > 0 ? episodes.length : null,
@@ -90,7 +94,6 @@ export function WatchView({ detail, episodeSlug }: Props) {
 
   const { data: savedProgress, isFetched: progressFetched } = useProgress(
     detail.slug,
-    isAuthenticated,
   );
   const { data: watchedData } = useWatched(detail.slug, isAuthenticated);
   const [localWatched, setLocalWatched] = useState<Set<string>>(new Set());
@@ -114,6 +117,16 @@ export function WatchView({ detail, episodeSlug }: Props) {
       ...seriesPosition,
     }),
     [detail, episodeSlug, currentEp, server, poster, seriesPosition],
+  );
+
+  // Single write path: logged-in viewers save to the server, guests to
+  // localStorage. Callers below never branch on auth themselves.
+  const persist = useCallback(
+    (payload: ProgressUpsert) => {
+      if (isAuthenticated) upsert.mutate(payload);
+      else saveGuestProgress(payload);
+    },
+    [isAuthenticated, upsert],
   );
 
   // Reset per-episode transient state. Client components persist across
@@ -157,29 +170,31 @@ export function WatchView({ detail, episodeSlug }: Props) {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  // Heartbeat while playing (HLS + logged in).
+  // Heartbeat while playing (HLS). Guests write to localStorage instead.
   useEffect(() => {
-    if (!isAuthenticated || !isHls) return;
+    if (!isHls) return;
     const timer = setInterval(() => {
       if (playingRef.current && posRef.current.d > 0) {
-        upsert.mutate(buildPayload(posRef.current.t, posRef.current.d));
+        persist(buildPayload(posRef.current.t, posRef.current.d));
       }
     }, HEARTBEAT_MS);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, isHls, episodeSlug, serverName]);
 
-  // Flush on tab close.
+  // Flush on tab close. Guests write synchronously; only the server path
+  // needs keepalive to survive unload.
   useEffect(() => {
-    if (!isAuthenticated || !isHls) return;
+    if (!isHls) return;
     const flush = () => {
-      const token = getAccessToken();
-      if (token && posRef.current.d > 0) {
-        sendProgressKeepalive(
-          buildPayload(posRef.current.t, posRef.current.d),
-          token,
-        );
+      if (posRef.current.d <= 0) return;
+      const payload = buildPayload(posRef.current.t, posRef.current.d);
+      if (!isAuthenticated) {
+        saveGuestProgress(payload);
+        return;
       }
+      const token = getAccessToken();
+      if (token) sendProgressKeepalive(payload, token);
     };
     window.addEventListener("beforeunload", flush);
     return () => {
@@ -193,15 +208,15 @@ export function WatchView({ detail, episodeSlug }: Props) {
   // position — but we CAN record which episode was opened last, so "Xem tiếp"
   // follows the viewer. Register the CURRENT episode unless it is already the
   // movie's latest row, or it carries a completed marker (1s/1s), which we
-  // must never clobber with a 0s/0s row. The watched list is required for
-  // that check, so never register while it is still unknown.
+  // must never clobber with a 0s/0s row. Guests have no server watched list,
+  // so they register unconditionally.
   useEffect(() => {
-    if (!isAuthenticated || isHls || !progressFetched || !currentEp) return;
+    if (isHls || !progressFetched || !currentEp) return;
     if (embedRegisteredRef.current) return;
     if (savedProgress?.episode_slug === episodeSlug) return;
-    if (!watchedData || watched.has(currentKey)) return;
+    if (isAuthenticated && (!watchedData || watched.has(currentKey))) return;
     embedRegisteredRef.current = true;
-    upsert.mutate(buildPayload(0, 0));
+    persist(buildPayload(0, 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isAuthenticated,
@@ -216,11 +231,15 @@ export function WatchView({ detail, episodeSlug }: Props) {
   ]);
 
   const flatEpisodes = useMemo(
-    () => servers.flatMap((s) => s.episodes.map((e) => ({ server: s.name, ep: e }))),
+    () =>
+      servers.flatMap((s) =>
+        s.episodes.map((e) => ({ server: s.name, ep: e })),
+      ),
     [servers],
   );
   const currentFlatIdx = flatEpisodes.findIndex(
-    ({ server: sn, ep }) => sn === server?.name && (ep.slug ?? ep.name) === currentKey,
+    ({ server: sn, ep }) =>
+      sn === server?.name && (ep.slug ?? ep.name) === currentKey,
   );
   const nextFlat = flatEpisodes[currentFlatIdx + 1] ?? null;
 
@@ -230,7 +249,9 @@ export function WatchView({ detail, episodeSlug }: Props) {
     if (countdown <= 0) {
       setCountdown(null);
       if (nextFlat) {
-        router.push(`/xem/${detail.slug}/${nextFlat.ep.slug ?? nextFlat.ep.name}`);
+        router.push(
+          `/xem/${detail.slug}/${nextFlat.ep.slug ?? nextFlat.ep.name}`,
+        );
       }
       return;
     }
@@ -256,22 +277,19 @@ export function WatchView({ detail, episodeSlug }: Props) {
   );
 
   const handlePause = useCallback(() => {
-    if (isAuthenticated && posRef.current.d > 0) {
-      upsert.mutate(buildPayload(posRef.current.t, posRef.current.d));
+    if (posRef.current.d > 0) {
+      persist(buildPayload(posRef.current.t, posRef.current.d));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, episodeSlug, serverName]);
 
-  const switchServer = useCallback(
-    (name: string) => {
-      setServerName(name);
-      setStartAt(posRef.current.t);
-      setFatal(null);
-      setCountdown(null);
-      setPlayKey((k) => k + 1);
-    },
-    [],
-  );
+  const switchServer = useCallback((name: string) => {
+    setServerName(name);
+    setStartAt(posRef.current.t);
+    setFatal(null);
+    setCountdown(null);
+    setPlayKey((k) => k + 1);
+  }, []);
 
   const cycleServer = useCallback(() => {
     if (servers.length < 2) return;
@@ -281,9 +299,12 @@ export function WatchView({ detail, episodeSlug }: Props) {
 
   if (!server || !currentEp) {
     return (
-      <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+      <div className="border-border bg-card text-muted-foreground rounded-xl border p-8 text-center text-sm">
         Tập phim này chưa có nguồn phát.{" "}
-        <Link href={`/phim/${detail.slug}`} className="text-brand hover:underline">
+        <Link
+          href={`/phim/${detail.slug}`}
+          className="text-brand hover:underline"
+        >
           Quay lại chi tiết phim
         </Link>
       </div>
@@ -325,7 +346,7 @@ export function WatchView({ detail, episodeSlug }: Props) {
         ) : currentEp.embed_url ? (
           <EmbedPlayer src={currentEp.embed_url} title={currentEp.name} />
         ) : (
-          <div className="flex aspect-video flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card text-sm text-muted-foreground">
+          <div className="border-border bg-card text-muted-foreground flex aspect-video flex-col items-center justify-center gap-2 rounded-xl border text-sm">
             <ServerCrash className="size-8" />
             Tập này chưa có link phát.
           </div>
@@ -368,7 +389,11 @@ export function WatchView({ detail, episodeSlug }: Props) {
               >
                 Xem ngay
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => setCountdown(null)}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setCountdown(null)}
+              >
                 <X /> Hủy
               </Button>
             </div>
@@ -377,7 +402,7 @@ export function WatchView({ detail, episodeSlug }: Props) {
       </div>
 
       {toast !== null && !toastGone && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand/40 bg-brand/10 px-4 py-3 text-sm">
+        <div className="border-brand/40 bg-brand/10 flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 text-sm">
           <p>
             Đã tiếp tục từ <strong>{formatClock(toast)}</strong>
           </p>
@@ -424,8 +449,10 @@ export function WatchView({ detail, episodeSlug }: Props) {
                   ...seriesPosition,
                 },
                 {
-                  onSuccess: () => notify("Đã đánh dấu tập này là đã xem.", "success"),
-                  onError: () => notify("Đánh dấu thất bại. Thử lại nhé.", "error"),
+                  onSuccess: () =>
+                    notify("Đã đánh dấu tập này là đã xem.", "success"),
+                  onError: () =>
+                    notify("Đánh dấu thất bại. Thử lại nhé.", "error"),
                 },
               )
             }
@@ -435,9 +462,9 @@ export function WatchView({ detail, episodeSlug }: Props) {
           </Button>
         )}
         {!isHls && (
-          <p className="w-full text-xs text-muted-foreground">
-            Nguồn phát nhúng từ nhà cung cấp — nếu đứng hình, hãy thử server khác
-            bên dưới.
+          <p className="text-muted-foreground w-full text-xs">
+            Nguồn phát nhúng từ nhà cung cấp — nếu đứng hình, hãy thử server
+            khác bên dưới.
           </p>
         )}
       </div>

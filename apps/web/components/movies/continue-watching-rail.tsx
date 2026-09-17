@@ -28,7 +28,7 @@ export function ContinueWatchingRail() {
       </div>
     );
   }
-  if (!isAuthenticated || isLoading || !data || data.items.length === 0) {
+  if (isLoading || !data || data.items.length === 0) {
     return null;
   }
 
@@ -36,12 +36,14 @@ export function ContinueWatchingRail() {
     <section className="group/rail space-y-2">
       <div className="flex items-baseline gap-2">
         <h2 className="text-lg font-semibold sm:text-xl">Xem tiếp</h2>
-        <Link
-          href="/me/history"
-          className="text-muted-foreground hover:text-brand flex items-center gap-0.5 text-xs font-medium opacity-100 transition-all duration-200 group-hover/rail:translate-x-1 sm:opacity-0 sm:group-hover/rail:opacity-100"
-        >
-          Lịch sử xem
-        </Link>
+        {isAuthenticated && (
+          <Link
+            href="/me/history"
+            className="text-muted-foreground hover:text-brand flex items-center gap-0.5 text-xs font-medium opacity-100 transition-all duration-200 group-hover/rail:translate-x-1 sm:opacity-0 sm:group-hover/rail:opacity-100"
+          >
+            Lịch sử xem
+          </Link>
+        )}
       </div>
       <div className="rail-scroll -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
         {data.items.slice(0, 10).map((p) => {
