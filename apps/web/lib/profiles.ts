@@ -157,7 +157,11 @@ export function useSwitchProfile() {
       }),
     onSuccess: (data) => {
       if (data.access_token) setAccessToken(data.access_token);
-      queryClient.clear();
+      // Drop every profile-scoped cache entry (favorites, progress, current
+      // profile) and refetch the active ones. `clear()` would remove queries
+      // without refetching their active observers, leaving the header on the
+      // previous profile after an in-place switch.
+      void queryClient.resetQueries();
     },
   });
 }
