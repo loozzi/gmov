@@ -127,10 +127,14 @@ async def related(
     """Computed from the movie's own genre/country/year listings (see
     related_service): upstream neither has a related endpoint nor indexes
     people in search."""
-    return await _cached(
-        response, f"related:{slug}", {"limit": limit}, RELATED_TTL, RelatedMovies,
-        lambda: related_service.related(slug, limit),
+    # Cache the widest pool once and slice per request: `limit` is a view, not a
+    # different computation, so it must not multiply cache entries (nor the ~10
+    # upstream listing calls behind each miss).
+    data = await _cached(
+        response, f"related:{slug}", {}, RELATED_TTL, RelatedMovies,
+        lambda: related_service.related(slug, related_service.MAX_LIMIT),
     )
+    return RelatedMovies(items=data.items[:limit])
 
 
 @router.get("/{movie_slug}/rating", response_model=RatingSummary)

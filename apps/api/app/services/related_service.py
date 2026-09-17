@@ -68,7 +68,7 @@ def _year_of(value: str | None) -> int | None:
 
 
 def base_title(name: str) -> str:
-    """'Đế Chế Đại Hàn (Phần 2)' -> 'Đế Chế Đại Hàn'.
+    """'Đế Chế Đại Hàn (Phần 2)' -> 'Đế Chế Đại Hàn', 'Foo - Tập 12' -> 'Foo'.
 
     Upstream search matches TITLES only, so the franchise root is the one
     reliable way to reach sibling parts. When there is no part marker the
@@ -76,6 +76,7 @@ def base_title(name: str) -> str:
     return the film again).
     """
     stripped = _PART_SUFFIX.sub(" ", name).strip()
+    stripped = stripped.strip(" -–—:|·").strip()
     return stripped if len(stripped) >= 3 else name.strip()
 
 

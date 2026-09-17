@@ -319,3 +319,89 @@ def test_rank_candidates_drops_zero_scores():
 def test_country_slug_normalises_whitespace_and_case():
     assert country_slug("  hàn   quốc ") == "han-quoc"
     assert country_slug("không tồn tại") is None
+
+
+def detail_model(
+    *,
+    name="Mao",
+    genres=("Hoạt Hình", "Giả Tưởng"),
+    countries=("Nhật Bản",),
+    year="2026",
+    director="Satou Teruo",
+    casts="Aoi Yu, Ken Sato",
+):
+    return MovieDetail(
+        slug="mao",
+        name=name,
+        genres=list(genres),
+        countries=list(countries),
+        year=year,
+        director=director,
+        casts=casts,
+    )
+
+
+def test_base_title_strips_part_markers():
+    assert related_service.base_title("Đế Chế Đại Hàn (Phần 2)") == "Đế Chế Đại Hàn"
+    assert related_service.base_title("Foo [Season 3]") == "Foo"
+    assert related_service.base_title("Bar - Tập 12") == "Bar"
+    # A title that is only a marker must not be reduced to nothing, and a plain
+    # title must come back untouched.
+    assert related_service.base_title("Tập 12") == "Tập 12"
+    assert related_service.base_title("Hoa Thiên Cốt") == "Hoa Thiên Cốt"
+
+
+def test_candidate_jobs_search_only_for_part_marked_titles():
+    marked = related_service.candidate_jobs(
+        detail_model(name="Đế Chế Đại Hàn (Phần 2)")
+    )
+    assert ("search", "Đế Chế Đại Hàn", 1) in marked
+    # A sibling search would only return the film itself, so it is skipped.
+    plain = related_service.candidate_jobs(detail_model(name="Hoa Thiên Cốt"))
+    assert [job for job in plain if job[0] == "search"] == []
+
+
+def test_candidate_jobs_skip_unresolvable_labels():
+    jobs = related_service.candidate_jobs(
+        detail_model(genres=("Thể Loại Lạ",), countries=("Xứ Lạ",), year="2026-2027")
+    )
+    assert jobs == []
+
+
+def test_people_match_ignores_punctuation_and_spacing():
+    detail = detail_model(director="Woo Min Ho", casts="Jung Woo Sung")
+    pages = [
+        CandidatePage(
+            items=[
+                CandidateCard(
+                    **candidate(
+                        "hyphenated", director="Woo Min-ho", casts="Jung Woo-sung"
+                    )
+                ),
+                # Same slots, wrong person, long past: must score <= 0 and drop.
+                CandidateCard(**candidate("stranger", year="1990")),
+            ]
+        )
+    ]
+    ranked = related_service.rank_candidates(
+        detail, [("country", "han-quoc", 1)], pages, 5
+    )
+    assert [movie.slug for movie in ranked] == ["hyphenated"]
+
+
+@respx.mock
+async def test_related_slices_one_cached_pool(client):
+    detail_route, _ = register_rich_fixture()
+
+    small = await client.get("/api/v1/movies/mao/related?limit=2")
+    assert small.status_code == 200, small.text
+    assert small.headers["X-Cache"] == "MISS"
+    assert len(small.json()["items"]) == 2
+
+    # A different limit is the same computation: served from the same entry,
+    # without touching upstream again.
+    wider = await client.get("/api/v1/movies/mao/related?limit=4")
+    assert wider.headers["X-Cache"] == "HIT"
+    assert len(wider.json()["items"]) == 4
+    assert wider.json()["items"][:2] == small.json()["items"]
+    assert detail_route.call_count == 1
