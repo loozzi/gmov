@@ -13,10 +13,10 @@ from app.schemas.library import ProgressUpsert
 
 
 async def upsert(
-    db: AsyncSession, user_id: uuid.UUID, data: ProgressUpsert
+    db: AsyncSession, profile_id: uuid.UUID, data: ProgressUpsert
 ) -> WatchProgress:
     stmt = select(WatchProgress).where(
-        WatchProgress.user_id == user_id,
+        WatchProgress.profile_id == profile_id,
         WatchProgress.movie_slug == data.movie_slug,
         WatchProgress.episode_slug == data.episode_slug,
     )
@@ -24,7 +24,7 @@ async def upsert(
     now = datetime.now(UTC)
     if row is None:
         row = WatchProgress(
-            user_id=user_id, **data.model_dump(), updated_at=now
+            profile_id=profile_id, **data.model_dump(), updated_at=now
         )
         db.add(row)
     else:
@@ -34,7 +34,7 @@ async def upsert(
     # Started watching: drop the movie from the watchlist in the same commit.
     await db.execute(
         delete(Watchlist).where(
-            Watchlist.user_id == user_id,
+            Watchlist.profile_id == profile_id,
             Watchlist.movie_slug == data.movie_slug,
         )
     )
@@ -43,7 +43,7 @@ async def upsert(
     return row
 
 
-async def _latest_per_movie_stmt(user_id: uuid.UUID):
+async def _latest_per_movie_stmt(profile_id: uuid.UUID):
     # ROW_NUMBER keeps exactly one row per movie (ties broken by id, latest wins).
     ranked = (
         select(
@@ -55,7 +55,7 @@ async def _latest_per_movie_stmt(user_id: uuid.UUID):
             )
             .label("rn"),
         )
-        .where(WatchProgress.user_id == user_id)
+        .where(WatchProgress.profile_id == profile_id)
         .subquery()
     )
     return (
@@ -67,13 +67,13 @@ async def _latest_per_movie_stmt(user_id: uuid.UUID):
 
 
 async def continue_watching(
-    db: AsyncSession, user_id: uuid.UUID, page: int, per_page: int
+    db: AsyncSession, profile_id: uuid.UUID, page: int, per_page: int
 ) -> tuple[list[WatchProgress], int]:
     count_stmt = select(func.count(func.distinct(WatchProgress.movie_slug))).where(
-        WatchProgress.user_id == user_id
+        WatchProgress.profile_id == profile_id
     )
     total = (await db.execute(count_stmt)).scalar_one()
-    stmt = await _latest_per_movie_stmt(user_id)
+    stmt = await _latest_per_movie_stmt(profile_id)
     rows = (
         (await db.execute(stmt.offset((page - 1) * per_page).limit(per_page)))
         .scalars()
@@ -83,12 +83,12 @@ async def continue_watching(
 
 
 async def get_for_movie(
-    db: AsyncSession, user_id: uuid.UUID, movie_slug: str
+    db: AsyncSession, profile_id: uuid.UUID, movie_slug: str
 ) -> WatchProgress:
     stmt = (
         select(WatchProgress)
         .where(
-            WatchProgress.user_id == user_id,
+            WatchProgress.profile_id == profile_id,
             WatchProgress.movie_slug == movie_slug,
         )
         .order_by(WatchProgress.updated_at.desc())
@@ -101,11 +101,11 @@ async def get_for_movie(
 
 
 async def delete_for_movie(
-    db: AsyncSession, user_id: uuid.UUID, movie_slug: str
+    db: AsyncSession, profile_id: uuid.UUID, movie_slug: str
 ) -> None:
     await db.execute(
         delete(WatchProgress).where(
-            WatchProgress.user_id == user_id,
+            WatchProgress.profile_id == profile_id,
             WatchProgress.movie_slug == movie_slug,
         )
     )
@@ -113,11 +113,11 @@ async def delete_for_movie(
 
 
 async def watched_episodes(
-    db: AsyncSession, user_id: uuid.UUID, movie_slug: str
+    db: AsyncSession, profile_id: uuid.UUID, movie_slug: str
 ) -> list[str]:
     """Episode slugs watched >= 90% of known duration."""
     stmt = select(WatchProgress.episode_slug).where(
-        WatchProgress.user_id == user_id,
+        WatchProgress.profile_id == profile_id,
         WatchProgress.movie_slug == movie_slug,
         WatchProgress.duration_seconds.is_not(None),
         WatchProgress.duration_seconds > 0,
@@ -128,7 +128,7 @@ async def watched_episodes(
 
 async def mark_watched(
     db: AsyncSession,
-    user_id: uuid.UUID,
+    profile_id: uuid.UUID,
     movie_slug: str,
     movie_name: str,
     episode_slug: str,
@@ -146,7 +146,7 @@ async def mark_watched(
 
     return await upsert(
         db,
-        user_id,
+        profile_id,
         ProgressUpsert(
             movie_slug=movie_slug,
             movie_name=movie_name,

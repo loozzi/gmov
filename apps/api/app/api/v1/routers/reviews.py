@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.deps import ActiveProfile, get_active_profile, get_current_user
 from app.core.ratelimit import check_rate_limit
 from app.db.models.user import User
 from app.db.session import get_db
@@ -39,30 +39,30 @@ async def rate_limited_comment_user(
 @router.put("/ratings", response_model=RatingOut)
 async def upsert_rating(
     data: RatingUpsert,
-    current: User = Depends(get_current_user),
+    active: ActiveProfile = Depends(get_active_profile),
     db: AsyncSession = Depends(get_db),
 ) -> RatingOut:
-    row = await rating_service.upsert(db, current.id, data)
+    row = await rating_service.upsert(db, active.profile.id, data)
     return RatingOut(movie_slug=row.movie_slug, stars=row.stars)
 
 
 @router.delete("/ratings/{movie_slug}")
 async def delete_rating(
     movie_slug: str,
-    current: User = Depends(get_current_user),
+    active: ActiveProfile = Depends(get_active_profile),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, bool]:
-    await rating_service.remove(db, current.id, movie_slug)
+    await rating_service.remove(db, active.profile.id, movie_slug)
     return {"ok": True}
 
 
 @router.get("/ratings/{movie_slug}/status", response_model=RatingStatus)
 async def rating_status(
     movie_slug: str,
-    current: User = Depends(get_current_user),
+    active: ActiveProfile = Depends(get_active_profile),
     db: AsyncSession = Depends(get_db),
 ) -> RatingStatus:
-    stars = await rating_service.get_stars(db, current.id, movie_slug)
+    stars = await rating_service.get_stars(db, active.profile.id, movie_slug)
     return RatingStatus(stars=stars)
 
 

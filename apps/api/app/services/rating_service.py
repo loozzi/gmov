@@ -11,16 +11,16 @@ from app.schemas.library import RatingUpsert
 
 
 async def upsert(
-    db: AsyncSession, user_id: uuid.UUID, data: RatingUpsert
+    db: AsyncSession, profile_id: uuid.UUID, data: RatingUpsert
 ) -> Rating:
     stmt = select(Rating).where(
-        Rating.user_id == user_id, Rating.movie_slug == data.movie_slug
+        Rating.profile_id == profile_id, Rating.movie_slug == data.movie_slug
     )
     row = (await db.execute(stmt)).scalar_one_or_none()
     now = datetime.now(UTC)
     if row is None:
         row = Rating(
-            user_id=user_id,
+            profile_id=profile_id,
             movie_slug=data.movie_slug,
             stars=data.stars,
         )
@@ -33,20 +33,20 @@ async def upsert(
     return row
 
 
-async def remove(db: AsyncSession, user_id: uuid.UUID, movie_slug: str) -> None:
+async def remove(db: AsyncSession, profile_id: uuid.UUID, movie_slug: str) -> None:
     await db.execute(
         delete(Rating).where(
-            Rating.user_id == user_id, Rating.movie_slug == movie_slug
+            Rating.profile_id == profile_id, Rating.movie_slug == movie_slug
         )
     )
     await db.commit()
 
 
 async def get_stars(
-    db: AsyncSession, user_id: uuid.UUID, movie_slug: str
+    db: AsyncSession, profile_id: uuid.UUID, movie_slug: str
 ) -> int | None:
     stmt = select(Rating.stars).where(
-        Rating.user_id == user_id, Rating.movie_slug == movie_slug
+        Rating.profile_id == profile_id, Rating.movie_slug == movie_slug
     )
     return (await db.execute(stmt)).scalar_one_or_none()
 
