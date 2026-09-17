@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, ChevronDown, Lock, Settings } from "lucide-react";
+import { Check, ChevronDown, Lock, Settings, Users } from "lucide-react";
 import { useState } from "react";
 
 import { ProfileAvatar } from "@/components/profile/profile-avatar";
@@ -20,6 +20,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
 import { toVietnameseMessage } from "@/lib/errors";
+import { requestProfilePicker } from "@/lib/profile-picker";
 import {
   useCurrentProfile,
   useProfiles,
@@ -93,6 +94,10 @@ export function ProfileMenu() {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>Profile</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => requestProfilePicker()}>
+            <Users /> Đổi profile
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           {list.isLoading && (
             <DropdownMenuItem disabled>Đang tải...</DropdownMenuItem>
           )}

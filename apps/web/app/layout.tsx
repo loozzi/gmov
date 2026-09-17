@@ -4,6 +4,7 @@ import "./globals.css";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { ProfilePickerGate } from "@/components/profile/profile-picker-gate";
 import { Providers } from "@/components/providers";
 import { PwaRegister } from "@/components/pwa-register";
 import { THEME_INIT_SCRIPT } from "@/components/theme-provider";
@@ -38,6 +39,7 @@ export default function RootLayout({
         <PwaRegister />
         <Providers>
           <SiteHeader />
+          <ProfilePickerGate />
           <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
             {children}
           </main>
