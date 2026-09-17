@@ -69,6 +69,7 @@ export interface SetProfilePinInput {
   id: string;
   password: string;
   pin: string | null;
+  currentPin?: string;
 }
 
 export const PROFILE_KEYS = {
@@ -164,10 +165,14 @@ export function useSwitchProfile() {
 export function useSetProfilePin() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, password, pin }: SetProfilePinInput) =>
+    mutationFn: ({ id, password, pin, currentPin }: SetProfilePinInput) =>
       apiFetch<Profile>(`/api/v1/me/profiles/${id}/pin`, {
         method: "PUT",
-        body: JSON.stringify({ password, pin }),
+        body: JSON.stringify({
+          password,
+          pin,
+          ...(currentPin ? { current_pin: currentPin } : {}),
+        }),
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: PROFILE_KEYS.all });

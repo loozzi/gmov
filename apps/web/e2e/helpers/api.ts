@@ -147,11 +147,16 @@ export function setProfilePin(
   id: string,
   password: string,
   pin: string | null,
+  currentPin?: string,
 ): Promise<ApiProfile> {
   return api(`/api/v1/me/profiles/${id}/pin`, {
     method: "PUT",
     headers: authHeaders(token),
-    body: JSON.stringify({ password, pin }),
+    body: JSON.stringify({
+      password,
+      pin,
+      ...(currentPin ? { current_pin: currentPin } : {}),
+    }),
   });
 }
 
@@ -192,12 +197,12 @@ export async function resetProfiles(
   for (const profile of (await listProfiles(token)).items) {
     if (profile.is_default) continue;
     try {
-      // Prefer deleting a locked profile with its PIN the test set: clearing
-      // the PIN first costs an extra `profile-pin-set` token, whose counter is
-      // shared per IP and is NOT covered by the `ratelimit:*` setup reset.
+      // Changing/clearing a PIN now needs the current PIN, so only unlock the
+      // profiles whose PIN the test told us via `knownPins`. Unknown locked
+      // profiles are left for the delete-with-PIN path (or logged below).
       const knownPin = knownPins[profile.id];
-      if (profile.has_pin && !knownPin) {
-        await setProfilePin(token, profile.id, account.password, null);
+      if (profile.has_pin && knownPin) {
+        await setProfilePin(token, profile.id, account.password, null, knownPin);
       }
       const result = await deleteProfile(token, profile.id, knownPin);
       if (result.access_token) token = result.access_token;
