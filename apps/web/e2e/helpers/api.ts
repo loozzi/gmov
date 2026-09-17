@@ -26,6 +26,12 @@ export async function api(path: string, init?: RequestInit) {
   return res.json();
 }
 
+/** Same base URL as `api()`, but returns the raw Response so a test can
+ * assert on error paths (401/403) that `api()` would throw on. */
+export function rawApi(path: string, init?: RequestInit) {
+  return fetch(`${BACKEND}${path}`, init);
+}
+
 export async function registerUser(acc: TestAccount): Promise<void> {
   await api("/api/v1/auth/register", {
     method: "POST",

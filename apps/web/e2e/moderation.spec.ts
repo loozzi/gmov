@@ -7,6 +7,9 @@ import { promisify } from "node:util";
 import {
   LAST_USER_FILE,
   api,
+  authHeaders,
+  loginUser,
+  rawApi,
   registerUser,
   type TestAccount,
 } from "./helpers/api";
@@ -196,6 +199,123 @@ test("report -> hide -> hidden placeholder -> unhide -> cleanup", async ({
       await repCtx.close();
     }
   } finally {
+    await setRole(account.username, "user");
+  }
+});
+
+
+test("ban the comment author from the queue, then unban", async ({
+  browser,
+}) => {
+  const account = JSON.parse(
+    await readFile(LAST_USER_FILE, "utf8"),
+  ) as TestAccount;
+  const promoted = await setRole(account.username, "moderator");
+  if (!promoted) {
+    test.skip(true, "could not promote the base account to moderator via CLI");
+    return;
+  }
+
+  const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3100";
+  const author = freshReporter();
+  let authorToken = "";
+  let slug = "";
+  let firstId = "";
+  let secondId = "";
+
+  try {
+    try {
+      await registerUser(author);
+    } catch (e) {
+      test.skip(
+        true,
+        `registration throttled: ${String(e).slice(0, 120)}`,
+      );
+      return;
+    }
+
+    const latest = (await api("/api/v1/movies/latest?page=1")) as MoviesPage;
+    slug = latest.items[0]?.slug ?? "";
+    if (!slug) {
+      test.skip(true, "upstream returned no movies");
+      return;
+    }
+
+    authorToken = (await loginUser(author)).access_token;
+    // The base (moderator) account files the report: one registration per test
+    // keeps this under the 3-accounts/IP/hour register limit when the whole
+    // file runs.
+    const reporterToken = (await loginUser(account)).access_token;
+    const body = `E2E ban ${Date.now().toString(36)}`;
+    firstId = (
+      (await api("/api/v1/me/comments", {
+        method: "POST",
+        headers: authHeaders(authorToken),
+        body: JSON.stringify({ movie_slug: slug, body }),
+      })) as { id: string }
+    ).id;
+    await api("/api/v1/me/reports", {
+      method: "POST",
+      headers: authHeaders(reporterToken),
+      body: JSON.stringify({ comment_id: firstId, reason: "spam" }),
+    });
+
+    const ctx = await browser.newContext({ baseURL });
+    const page = await ctx.newPage();
+    page.on("dialog", (d) => void d.accept());
+    try {
+      await loginViaUi(page, account);
+      await page.goto("/admin/reports");
+      const row = page
+        .locator("div.rounded-xl")
+        .filter({ hasText: body })
+        .first();
+      await expect(row).toBeVisible({ timeout: 20_000 });
+
+      await row.getByRole("button", { name: /^cấm$/i }).click();
+      await expect(row.getByText("Đã cấm")).toBeVisible({ timeout: 20_000 });
+
+      // The ban lands immediately: the token the account already holds is
+      // refused and it cannot log in again.
+      const blocked = await rawApi("/api/v1/me/comments", {
+        method: "POST",
+        headers: authHeaders(authorToken),
+        body: JSON.stringify({ movie_slug: slug, body: "still spamming" }),
+      });
+      expect(blocked.status).toBe(401);
+      expect((await blocked.json()).code).toBe("ACCOUNT_BANNED");
+      const relogin = await rawApi("/api/v1/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          username: author.username,
+          password: author.password,
+        }),
+      });
+      expect(relogin.status).toBe(403);
+
+      // Unban from the same row: the old token works again, no re-login.
+      await row.getByRole("button", { name: /^bỏ cấm$/i }).click();
+      await expect(row.getByText("Đã cấm")).toBeHidden({ timeout: 20_000 });
+      secondId = (
+        (await api("/api/v1/me/comments", {
+          method: "POST",
+          headers: authHeaders(authorToken),
+          body: JSON.stringify({ movie_slug: slug, body: `${body} restored` }),
+        })) as { id: string }
+      ).id;
+    } finally {
+      await ctx.close();
+    }
+  } finally {
+    for (const id of [firstId, secondId]) {
+      if (id) {
+        await rawApi(`/api/v1/me/comments/${id}`, {
+          method: "DELETE",
+          headers: authHeaders(authorToken),
+        }).catch(() => undefined);
+      }
+    }
     await setRole(account.username, "user");
   }
 });
