@@ -122,18 +122,29 @@ PIN chỉ có nghĩa khi server enforce trên mọi request.
 - **Register** tạo user + profile mặc định (`is_default`) trong **cùng một
   transaction** (`app/services/user_service.py`).
 
+> **Hạn chế đã biết (multi-device, tạm hoãn)**: thiết bị thứ hai còn giữ `pid`
+> của một profile đã bị xoá ở nơi khác sẽ nhận `404 PROFILE_NOT_FOUND` cho đến
+> khi access token của nó hết hạn (≤30 phút); sau đó refresh mới fallback về
+> profile mặc định. Chấp nhận cho v1 — xử lý triệt để cần thông báo realtime
+> hoặc versioning phiên.
+
 ## Migration
 
 `79d983c25d9a_profiles_and_profile_scoped_data.py` tạo bảng `profiles`, thêm
-`profile_id` cho `favorite`/`watchlist`/`rating`/`watch_progress`, backfill mọi
-row cũ về profile mặc định của chủ rồi set `NOT NULL`, đổi unique/index sang
-`profile_id` và bỏ `user_id`; thêm `refresh_tokens.profile_id` (nullable).
+`profile_id` cho `favorites`/`watchlist`/`ratings`/`watch_progress`, backfill
+mọi row cũ về profile mặc định của chủ rồi set `NOT NULL`, đổi unique/index
+sang `profile_id` và bỏ `user_id`; thêm `refresh_tokens.profile_id`
+(nullable).
 
 **Một chiều về dữ liệu**: `downgrade()` tái tạo `user_id` từ
 `profiles.user_id` của profile sở hữu, nên dữ liệu của các profile **phụ** sẽ
-**gộp về user** (schema cũ chỉ có một hàng mỗi user cho mỗi `movie_slug`).
-Đây là lựa chọn chấp nhận: rollback trả về mô hình một-người-một-gu, có thể
-mất tính tách biệt giữa các profile.
+**gộp về user** (schema cũ chỉ có một hàng mỗi user cho mỗi `movie_slug`, và
+một hàng mỗi `movie_slug` + `episode_slug` với `watch_progress`). Trước khi
+tạo lại unique constraint cũ, mỗi bảng được **dedupe**: các hàng trùng khoá
+giữa nhiều profile gộp còn **một hàng cập nhật gần nhất** (theo `updated_at`,
+đồng hạng thì theo `id`), nên rollback không abort vì xung đột dữ liệu. Đây là
+lựa chọn chấp nhận: rollback trả về mô hình một-người-một-gu, có thể mất tính
+tách biệt giữa các profile.
 
 ## Config
 
