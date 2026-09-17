@@ -260,7 +260,7 @@ async def test_reset_keeps_behaviour_weights(client_env):
         client_env, [{"slug": "phim-x", "genres": ["hanh-dong"]}]
     )
     await _seed_signals(
-        client_env, pid, favorites=("phim-x",), ratings=(("phim-x", 9),)
+        client_env, pid, favorites=("phim-x",), ratings=(("phim-x", 5),)
     )
 
     before = await _weights(client_env, pid)
@@ -285,27 +285,39 @@ async def test_behavior_rules_skip_missing_catalog_films(client_env):
         client_env,
         [
             {"slug": "fav", "genres": ["hanh-dong"]},
-            {"slug": "loved", "genres": ["kinh-di"]},
-            {"slug": "hated", "genres": ["tinh-cam"]},
+            {"slug": "five", "genres": ["hanh-dong"]},
+            {"slug": "four", "genres": ["kinh-di"]},
+            {"slug": "three", "genres": ["am-nhac"]},
+            {"slug": "two", "genres": ["tinh-cam"]},
+            {"slug": "one", "genres": ["phieu-luu"]},
             {"slug": "finished", "genres": ["hoat-hinh"]},
-            {"slug": "partial", "genres": ["phieu-luu"]},
+            {"slug": "partial", "genres": ["co-trang"]},
         ],
     )
     await _seed_signals(
         client_env,
         pid,
         favorites=("fav", "missing"),
-        ratings=(("loved", 9), ("hated", 3)),
+        ratings=(
+            ("five", 5),
+            ("four", 4),
+            ("three", 3),
+            ("two", 2),
+            ("one", 1),
+        ),
         progress=(("finished", 90, 100), ("partial", 50, 100)),
     )
 
     weights, seen = await _weights(client_env, pid)
     assert weights == {
-        "hanh-dong": 1.0,
+        "hanh-dong": 2.5,
         "kinh-di": 1.5,
         "tinh-cam": -1.5,
+        "phieu-luu": -1.5,
         "hoat-hinh": 0.5,
     }
+    assert "am-nhac" not in weights
+    assert "co-trang" not in weights
     assert seen == {"fav", "missing", "finished"}
 
 
