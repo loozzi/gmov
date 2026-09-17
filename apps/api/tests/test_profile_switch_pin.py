@@ -182,15 +182,62 @@ async def test_pin_attempts_are_rate_limited(client_env, monkeypatch):
         r = await _switch(client_env, headers, locked["id"], pin="0000")
         assert r.status_code == 401, r.text
 
-    blocked = await _switch(client_env, headers, locked["id"], pin="0000")
+    # Budget exhausted: 429 wins over a comparison, even with the right PIN.
+    blocked = await _switch(client_env, headers, locked["id"], pin="1234")
     assert blocked.status_code == 429, blocked.text
     assert blocked.json()["code"] == "RATE_LIMITED"
     assert "Retry-After" in blocked.headers
+
+    # ...and over the missing-PIN branch too.
+    missing = await _switch(client_env, headers, locked["id"])
+    assert missing.status_code == 429, missing.text
+    assert missing.json()["code"] == "RATE_LIMITED"
 
     # Same (profile, IP) counter is shared with delete.
     deleted = await _delete(client_env, headers, locked["id"], pin="0000")
     assert deleted.status_code == 429, deleted.text
     assert deleted.json()["code"] == "RATE_LIMITED"
+
+
+async def test_only_failed_pin_attempts_consume_budget(client_env, monkeypatch):
+    monkeypatch.setattr(profile_service, "PIN_MAX_ATTEMPTS", 2)
+    tokens = await _register_login(client_env, "rl2@gmov.dev", "rl2")
+    headers = _bearer(tokens["access_token"])
+    locked = await _create(client_env, headers, "Locked")
+    assert (await _set_pin(client_env, headers, locked["id"])).status_code == 200
+
+    assert (
+        await _switch(client_env, headers, locked["id"], pin="0000")
+    ).status_code == 401
+
+    # Correct PINs must never spend the budget, no matter how many.
+    for _ in range(4):
+        ok = await _switch(client_env, headers, locked["id"], pin="1234")
+        assert ok.status_code == 200, ok.text
+
+    # Only now does a second real failure exhaust the limit of 2.
+    assert (
+        await _switch(client_env, headers, locked["id"], pin="0000")
+    ).status_code == 401
+    assert (
+        await _switch(client_env, headers, locked["id"], pin="1234")
+    ).status_code == 429
+
+
+async def test_missing_pin_counts_as_failure(client_env, monkeypatch):
+    monkeypatch.setattr(profile_service, "PIN_MAX_ATTEMPTS", 1)
+    tokens = await _register_login(client_env, "rl3@gmov.dev", "rl3")
+    headers = _bearer(tokens["access_token"])
+    locked = await _create(client_env, headers, "Locked")
+    assert (await _set_pin(client_env, headers, locked["id"])).status_code == 200
+
+    first = await _switch(client_env, headers, locked["id"])
+    assert first.status_code == 403, first.text
+    assert first.json()["code"] == "PIN_REQUIRED"
+
+    second = await _switch(client_env, headers, locked["id"])
+    assert second.status_code == 429, second.text
+    assert second.json()["code"] == "RATE_LIMITED"
 
 
 async def test_set_pin_needs_account_password(client_env):

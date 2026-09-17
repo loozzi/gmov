@@ -81,6 +81,40 @@ def pin_attempt_key(profile_id: uuid.UUID, ip: str) -> str:
     return f"profile-pin:{profile_id}:{ip}"
 
 
+async def check_pin_attempt_allowed(
+    profile_id: uuid.UUID, ip: str, limit: int, window_seconds: int
+) -> None:
+    """Read-only budget check: 429 once `limit` failures are recorded."""
+    try:
+        client = get_redis_client()
+        count, ttl = await _counter(client, pin_attempt_key(profile_id, ip))
+        if count >= limit:
+            raise AppException(
+                "Too many PIN attempts",
+                "RATE_LIMITED",
+                429,
+                headers=_retry_after(ttl),
+            )
+    except AppException:
+        raise
+    except (RedisError, OSError, ValueError):
+        pass
+
+
+async def record_pin_failure(
+    profile_id: uuid.UUID, ip: str, window_seconds: int
+) -> None:
+    """Count one failed PIN attempt; successful ones never get here."""
+    try:
+        client = get_redis_client()
+        key = pin_attempt_key(profile_id, ip)
+        count = await client.incr(key)
+        if count == 1:
+            await client.expire(key, window_seconds)
+    except (RedisError, OSError):
+        pass
+
+
 def _username_digest(username: str) -> str:
     return hashlib.sha256(username.strip().lower().encode()).hexdigest()[:16]
 

@@ -126,24 +126,26 @@ async def set_pin_hash(
     return profile
 
 
-async def _rate_limit_pin(profile_id: uuid.UUID, ip: str) -> None:
-    await ratelimit.check_rate_limit(
-        ratelimit.pin_attempt_key(profile_id, ip),
-        PIN_MAX_ATTEMPTS,
-        PIN_WINDOW,
-    )
+async def _record_pin_failure(profile_id: uuid.UUID, ip: str) -> None:
+    await ratelimit.record_pin_failure(profile_id, ip, PIN_WINDOW)
 
 
 async def verify_pin(
     db: AsyncSession, profile: Profile, pin: str | None, ip: str = "unknown"
 ) -> None:
-    """No-op for unlocked profiles; otherwise demand the profile PIN."""
+    """No-op for unlocked profiles; otherwise demand the profile PIN. Only
+    failed attempts (wrong or missing) consume the shared counter, and an
+    exhausted budget returns 429 before any PIN comparison."""
     if profile.pin_hash is None:
         return
+    await ratelimit.check_pin_attempt_allowed(
+        profile.id, ip, PIN_MAX_ATTEMPTS, PIN_WINDOW
+    )
     if not pin:
+        await _record_pin_failure(profile.id, ip)
         raise AppException("PIN required", "PIN_REQUIRED", 403)
-    await _rate_limit_pin(profile.id, ip)
     if not security.verify_password(pin, profile.pin_hash):
+        await _record_pin_failure(profile.id, ip)
         raise AppException("Invalid PIN", "INVALID_PIN", 401)
 
 
