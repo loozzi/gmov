@@ -11,7 +11,12 @@
   (no backend at Docker build time). SSR HTML is still fully indexable.
   Detail pages keep `revalidate = 1800` (dynamic route + data cache).
 - **Client islands:** hero carousel, continue-watching rail, favorite button
-  (optimistic), resume button, search suggestions, `/me/*` pages.
+  (optimistic), resume button, search suggestions, browse listings
+  (`BrowseGrid` + `BrowseQuickSwitch`, see below), `/me/*` pages.
+- **Browse pages** (`/list/[type]`, `/the-loai`, `/quoc-gia`, `/nam`,
+  `/tim-kiem`) render page 1 on the server and keep appending on scroll; the
+  `source`/`startPage`/`initialData` props are the only contract between the
+  server page and the island (`lib/browse.ts`).
 
 ## Pages
 
@@ -26,6 +31,26 @@
 - `/me`, `/me/favorites`, `/me/watchlist`, `/me/history` — auth pages (middleware-guarded).
   History reuses continue-watching data (no separate table, see decisions #17).
 - `MovieCard` — client component with blur placeholder + error fallback icon.
+
+## Duyệt phim: cuộn vô tận + chuyển nhanh
+
+- **Trang 1 vẫn SSR** (giữ indexable + paint đầu như cũ): mỗi `page.tsx` fetch
+  trang bắt đầu rồi truyền `source` + `startPage` + `initialData` xuống client
+  island `BrowseGrid`; island dùng `useInfiniteQuery` (`lib/movies.ts`) với
+  `initialData` nên không refetch lại trang 1.
+- **`?page=N` vẫn hoạt động**: vào thẳng trang N (deep-link/back-forward không
+  vỡ) rồi cuộn tiếp từ N+1. Nút "Xem thêm" luôn render dạng `<a href="?page=N+1">`
+  — no-JS và crawler vẫn đi tiếp được; có JS thì `preventDefault()` + `fetchNextPage()`.
+- **Sentinel `IntersectionObserver`** (`rootMargin: 600px`) tự nạp trang kế; đang
+  nạp thì chèn skeleton trong lưới + `aria-live="polite"`; hết thì hiện
+  "Đã xem hết N phim.". Item được **khử trùng theo `slug`** giữa các trang vì
+  thứ tự upstream có thể dịch giữa 2 request.
+- **Quick switch**: `BrowseQuickSwitch` là hàng chip cuộn ngang, `sticky top-16`
+  (dưới header `h-16`), chip đang xem có `aria-current="page"`; nguồn chip lấy
+  theo loại trang (thể loại/quốc gia/năm/danh mục). Trang `/tim-kiem` không có
+  chip; `/tim-kiem` không keyword thì page không render grid (tránh fetch rỗng).
+- **Chi phí**: First Load JS của các trang duyệt tăng ~23 kB (113 → 136 kB) do
+  island mang theo logic infinite query — chấp nhận để đổi lấy cuộn vô tận.
 
 ## Tiến độ xem cho khách (chưa đăng nhập)
 

@@ -441,3 +441,28 @@ Log ambiguous decisions here (Phase 0+). Newest last.
 94. **Eslint bỏ qua `playwright-report/**` + `test-results/**`**: đây là artifact
     sinh bởi Playwright (đã gitignore) nhưng `eslint .` vẫn quét và báo hàng nghìn
     lỗi trên file minified, làm `pnpm lint` fail sau mỗi lần chạy E2E.
+
+## Duyệt phim: cuộn vô tận + quick switch — 2026-09-17
+
+95. **Client island nhận `initialData` từ SSR, không bỏ SSR**: `BrowseGrid` chạy
+    `useInfiniteQuery` với `initialData` = trang do server component fetch sẵn,
+    nên trang 1 vẫn nằm trong HTML trả về (indexable, LCP như cũ) và không bị
+    refetch lại (staleTime mặc định 60s). Đánh đổi: First Load JS các trang duyệt
+    +~23 kB (113 → 136 kB); chấp nhận vì trước đó các trang này gần như không có
+    JS tương tác và cuộn vô tận cần TanStack Query ở client.
+96. **Giữ `?page=N` làm điểm vào + nút "Xem thêm" là `<a>` thật**: cuộn vô tận
+    không cập nhật URL (không history replace — tránh tranh chấp back/forward).
+    `?page=N` vẫn render trang N làm trang bắt đầu rồi cuộn tiếp; nút dự phòng
+    giữ `href="?page=N+1"` nên no-JS và crawler vẫn đi được các trang sau, kèm
+    `onClick` chuyển sang `fetchNextPage()` khi có JS.
+97. **Khử trùng theo `slug` khi gộp các trang**: thứ tự upstream có thể dịch giữa
+    hai request nên cùng một phim có thể xuất hiện ở 2 trang; giữ lần xuất hiện
+    đầu để tránh key React trùng (repo từng dính lỗi này) và tránh nhảy layout.
+98. **`/tim-kiem` không keyword không render grid**: island sẽ fetch
+    `keyword=&page=1` từ client, tức một request vô nghĩa; page chặn trước và chỉ
+    hiện lời nhắc. Trước đây nhánh này rơi vào trạng thái "Không tải được dữ liệu"
+    (sai ngữ nghĩa) nên đây cũng là sửa lỗi nhỏ.
+99. **Quick switch = hàng chip sticky, không phải dropdown**: `sticky top-16`
+    khớp header `h-16`/`z-40` (`z-30` cho chip), nguồn chip suy ra từ `BrowseSource`
+    (`browseChips`) nên không cần state client; điều hướng bằng `<Link>` để server
+    page render lại như bình thường.
