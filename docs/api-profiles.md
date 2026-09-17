@@ -146,6 +146,22 @@ giữa nhiều profile gộp còn **một hàng cập nhật gần nhất** (the
 lựa chọn chấp nhận: rollback trả về mô hình một-người-một-gu, có thể mất tính
 tách biệt giữa các profile.
 
+## Làm lại sở thích (M2)
+
+Mỗi hàng profile ở `/profiles/manage` có nút **"Làm lại sở thích `<name>`"**.
+
+- **Chỉ làm lại được cho profile đang hoạt động.** Nếu profile đó không phải
+  profile hiện tại, UI hiện thông báo tiếng Việt yêu cầu chuyển trước
+  (`Hãy chuyển sang profile <name> trước khi làm lại sở thích.`) và **không**
+  tự switch. Đây là **deviation có chủ đích** so với spec (spec nói switch kèm
+  PIN dialog) — xem `docs/decisions.md`.
+- Với profile hiện tại: xác nhận (`window.confirm`) → `DELETE /me/preferences`
+  (204, reset trọng số **explicit**) → điều hướng `/onboarding?again=1`.
+- Tham số `again=1` bỏ qua guard client-side (guard vốn bounce profile đã
+  `onboarding_completed_at` về `/`), nên user làm lại được dù đã hoàn thành.
+- Reset **không** mất trọng số hành vi (favorite/rating/progress) — chúng được
+  tính lại lúc scoring; xem `docs/api-recommendations.md`.
+
 ## Config
 
 `MAX_PROFILES = 5` · `PIN_MAX_ATTEMPTS = 5` · `PIN_WINDOW = 60`

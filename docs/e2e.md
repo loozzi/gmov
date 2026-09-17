@@ -115,6 +115,34 @@ nhận slug tuỳ ý) nên spec này không skip khi CDN chặn. Timeout 120s/te
 Cleanup dùng helper `resetProfiles` (xoá PIN + xoá mọi profile non-default) và
 xoá favorites đã thêm, best-effort để trả account về profile mặc định.
 
+## Spec onboarding & gợi ý (`onboarding.spec.ts`)
+
+4 test phủ M2, **chỉ dùng account nền, không đăng ký tài khoản nào**. Mỗi test
+tạo 1–2 profile phụ rồi dọn trong `finally`: reset quyền sở thích bằng
+`DELETE /me/preferences` qua `rawApi`, xoá profile (`resetProfiles`), và đưa
+session trình duyệt về profile mặc định. Spec cần upstream thật (poster ở bước
+2 + snapshot catalog cho engine) nên gọi `skipIfNoUpstream()`; timeout 150s.
+Test chỉ khẳng định **luật** (rail hiện/ẩn, guard), không so nội dung gợi ý —
+tránh flake do cache TTL/thứ tự.
+
+1. `a new profile onboards and gets a personal rail` — profile mới → switch qua
+   UI `/profiles` → `/onboarding` chọn thể loại + thích ≥1 poster → "Bắt đầu
+   xem" → về `/` thấy heading **"Gợi ý cho bạn"** và ít nhất một card.
+2. `skipping onboarding hides the personal rail and does not trap` — "Bỏ qua" ở
+   bước 1 → về `/`, chờ response `/me/recommendations` rồi assert **không** có
+   heading "Gợi ý cho bạn" (fallback "Phổ biến"/"Mới cập nhật" hoặc ẩn); vào lại
+   `/onboarding` bị guard đẩy về `/` (đã skip nên không kẹt).
+3. `redo preferences reopens onboarding and the rail comes back` — onboard →
+   `/profiles/manage` bấm "Làm lại sở thích `<name>`" (accept
+   `window.confirm`) → `DELETE /me/preferences` + mở `/onboarding?again=1` →
+   hoàn tất lại → rail vẫn render.
+4. `each profile keeps its own personal rail across switches` — onboard profile
+   A (gu này) và profile B (gu khác) → switch qua lại → rail của mỗi profile
+   vẫn render. Không assert nội dung y hệt (cache TTL làm thứ tự nhiễu).
+
+Lưu ý: rail chỉ nằm trên `/`, nên sau mỗi lần switch qua UI phải quay về `/`
+mới assert.
+
 ## CI
 
 E2E không chạy trên CI (chỉ chạy local): suite cần upstream thật + stream

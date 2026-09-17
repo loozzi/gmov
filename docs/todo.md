@@ -135,11 +135,22 @@ Brought forward — none blocks current functionality.
     CRUD + switch + PIN soft-gate, UI `/profiles` + `/profiles/manage` +
     header switcher. API: `docs/api-profiles.md`; quyết định: `docs/decisions.md`
     #112–116; E2E: `apps/web/e2e/profiles.spec.ts`.
-32. **M2 — Onboarding & gợi ý** — CHỜ LÀM (việc mở kế tiếp): thiết kế đã chốt ở
-    `docs/superpowers/specs/2026-09-17-profiles-and-recommendations-design.md`.
-    Gồm kho catalog snapshot + refresh lazy TTL 24h, sở thích per-profile
+32. ~~**M2 — Onboarding & gợi ý**~~ — DONE (2026-09-17): kho catalog snapshot
+    (`catalog_items`) + refresh APScheduler TTL 24h/CLI, sở thích per-profile
     (`profile_preferences`: quiz + poster like), engine xếp hạng deterministic
     (trọng số explicit lưu DB, hành vi tính lúc scoring), onboarding 3 bước
     (`/onboarding`, skip được), rail "Gợi ý cho bạn" kèm `reason` + fallback
-    "Phổ biến"/"Mới cập nhật", và "Làm lại sở thích" trong `/profiles/manage`.
-    Plan M2 sẽ viết bám code thật sau khi M1 xanh.
+    "Phổ biến"/"Mới cập nhật" (ẩn khi `newest`), và "Làm lại sở thích" trong
+    `/profiles/manage`. API: `docs/api-recommendations.md`; quyết định:
+    `docs/decisions.md` #117–126; E2E: `apps/web/e2e/onboarding.spec.ts`.
+
+## Nợ phát sinh từ M2 (onboarding & gợi ý)
+
+33. **Poster bị "bỏ qua" không được lưu.** `POST /me/preferences/posters` nhận
+    `skipped` nhưng `profile_preferences` không có cột nên tín hiệu âm này mất;
+    engine chỉ nhận tín hiệu dương từ poster like. Nếu cần "đừng gợi ý thể loại
+    này nữa" thì phải thêm cột + migration (debt nhỏ, cố ý không làm v1).
+34. **Lý do gợi ý chỉ là text per-card, không có UI phụ.** `MovieRail.reasons`
+    render một dòng `"Vì bạn thích <nhãn>"` dưới card; không có tooltip/badge
+    riêng, và rail fallback luôn `reason = null`. Đủ dùng cho v1, mở rộng khi
+    cần giải thích gợi ý trực quan hơn.

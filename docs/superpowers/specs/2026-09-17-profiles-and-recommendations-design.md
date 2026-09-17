@@ -102,10 +102,15 @@ chứa trọng số **explicit** — xem Decision 8.
 
 `slug` String(255) PK, `name`, `original_name` NULL, `poster_url`,
 `thumb_url`, `year` Int NULL (index), `genres` JSON (list slug), `country`
-String NULL, `casts` Text NULL, `director` Text NULL, `kind` String(16) NULL
-(phim lẻ/phim bộ nếu listing có), `fetched_at` DateTime tz NOT NULL,
-`source` String(32) NOT NULL (loại listing đã sinh ra item). Kho nhỏ (ước tính
-vài trăm → vài nghìn dòng) nên scoring chạy trong Python, không cần index GIN.
+String NULL, `casts` Text NULL, `director` Text NULL, `fetched_at` DateTime tz
+NOT NULL, `source` String(32) NOT NULL (loại listing đã sinh ra item). Kho nhỏ
+(ước tính vài trăm → vài nghìn dòng) nên scoring chạy trong Python, không cần
+index GIN.
+
+> **Đã sửa theo ruling R2 (2026-09-17):** cột `kind` String(16) NULL đã bị
+> **bỏ** — `MovieCard` upstream không có `kind`/`type`, suy từ loại listing là
+> mong manh và engine không dùng. Truy vết loại listing nằm ở `source`. Xem
+> `docs/decisions.md` #118.
 
 ## Migration (backfill, một chiều về dữ liệu)
 
@@ -198,14 +203,19 @@ nguyên hình dạng**, chỉ ngầm theo profile hoạt động.
 
 Trọng số explicit từ `profile_preferences`: quiz chọn = 2.0/thể loại; poster
 like = +0.5/thể loại của poster đó, cap 3.0. Trọng số hành vi tính tại lúc
-scoring: favorite +1.0, rating ≥8 +1.5, xem ≥90% +0.5, rating ≤4 −1.5.
+scoring: favorite +1.0, rating ≥4 +1.5, xem ≥90% +0.5, rating ≤2 −1.5.
+
+> **Đã sửa (2026-09-17):** rating của app là thang **1..5 sao**
+> (`RatingUpsert.stars: ge=1, le=5`), nên ngưỡng đúng là `stars >= 4` /
+> `stars <= 2`. Ngưỡng ≥8/≤4 ban đầu giả định thang 10 điểm và là **sai**. Xem
+> `docs/decisions.md` #122.
 
 Điểm ứng viên (catalog trong DB, chấm bằng Python):
 
 ```
 score = 3×(Σw_thể loại khớp / √số thể loại của phim)      # tín hiệu chính
       + 1×quốc gia khớp với countries đã chọn
-      + 2×(casts/director trùng người của phim đã favorite / rating ≥8)
+      + 2×(casts/director trùng người của phim đã favorite / rating ≥4)
       + 0.5×độ mới (năm ≥ 2020)
       + 1×điểm trung bình từ bảng ratings nội bộ (nếu ≥ POPULAR_MIN_RATINGS)
 ```
@@ -232,11 +242,17 @@ Nguồn: các listing sẵn có (thể loại, quốc gia, năm — trang 1, tá
 `slug`, dedupe, ghi `fetched_at`.
 
 - CLI `python -m app.cli refresh-catalog` (chạy tay, có log tiến độ).
-- Lazy refresh: khi `min(fetched_at)` cũ hơn `CATALOG_TTL_HOURS = 24` → lấy
-  redis lock `catalog:refresh:lock` (TTL 5 phút, chống crawl trùng) và chạy
-  nền bằng `BackgroundTasks`, **không chặn response**.
+- Lazy refresh: khi snapshot cũ hơn `CATALOG_TTL_HOURS = 24` → lấy redis lock
+  `catalog:refresh:lock` (TTL 5 phút, chống crawl trùng) và chạy nền,
+  **không chặn response**.
 - Warm-up lúc startup nếu kho **rỗng** (lần deploy đầu); best-effort, lỗi mạng
   chỉ log và để lần request sau thử lại.
+
+> **Đã sửa theo ruling R3 (2026-09-17):** dùng **APScheduler interval job**
+> (`token_cleanup` pattern) thay `BackgroundTasks` — job chu kỳ
+> `CATALOG_REFRESH_INTERVAL_MINUTES`, warm-up một lần lúc startup nếu kho rỗng,
+> cộng CLI chạy tay. Độ cũ tính theo `max(fetched_at)`. Xem `docs/decisions.md`
+> #119.
 
 ## Config
 
@@ -265,6 +281,11 @@ cho bạn" (kèm `reason`) ngay sau hero; "Phổ biến"/"Mới cập nhật" ch
 có gu. "Làm lại sở thích" trong `/profiles/manage` cho **mọi** profile: nếu là
 profile khác profile hiện tại thì switch trước (kèm PIN dialog nếu khoá) rồi
 mới mở onboarding.
+
+> **Đã sửa (2026-09-17):** UI **không** tự switch kèm PIN dialog. Profile không
+> hoạt động chỉ hiện thông báo `Hãy chuyển sang profile <name> trước khi làm
+> lại sở thích.` rồi dừng. Đây là deviation có chủ đích. Xem
+> `docs/decisions.md` #124.
 
 ## Testing
 

@@ -20,8 +20,9 @@
 
 ## Pages
 
-- `/` — hero carousel (top 5 latest) + Xem tiếp (auth island, first) + rails:
-  Mới cập nhật, Phim lẻ, Phim bộ, Hoạt hình, TV Shows.
+- `/` — hero carousel (top 5 latest) + rail **Gợi ý cho bạn** (auth island,
+  client component — xem mục Gợi ý bên dưới) + Xem tiếp + rails: Mới cập nhật,
+  Phim lẻ, Phim bộ, Hoạt hình, TV Shows.
 - `/phim/[slug]` — backdrop/poster, meta (năm, thời lượng, thể loại, quốc gia,
   đạo diễn, diễn viên, mô tả), `generateMetadata` (title/description/og:image),
   ResumeButton ("Xem ngay" / "Xem tiếp tập X từ MM:SS"), FavoriteButton
@@ -34,7 +35,8 @@
 - `/me`, `/me/favorites`, `/me/watchlist`, `/me/history` — auth pages (middleware-guarded).
   History reuses continue-watching data (no separate table, see decisions #17).
 - `/profiles` — "Ai đang xem?" (xem mục Profiles bên dưới).
-- `/profiles/manage` — đổi tên/avatar, đặt/xoá PIN, xoá profile.
+- `/profiles/manage` — đổi tên/avatar, đặt/xoá PIN, xoá profile, "Làm lại sở thích".
+- `/onboarding` — quiz 3 bước thiết lập gu (M2, xem mục Gợi ý bên dưới).
 - `MovieCard` — client component with blur placeholder + error fallback icon.
 
 ## Profiles (M1)
@@ -55,6 +57,41 @@
   "Quản lý profile"; chọn profile khoá sẽ mở PIN dialog trước khi switch.
 - Trang chỉ dành cho người đã đăng nhập; khách thấy lời nhắc + link
   `/login?next=/profiles`. API: `docs/api-profiles.md`.
+
+## Onboarding & gợi ý (M2)
+
+### `/onboarding` — quiz 3 bước
+
+- **Bước 1 — "Gu của bạn là gì?"**: grid chip thể loại + quốc gia lấy từ
+  `lib/catalog.ts` (`GENRES`/`COUNTRIES`, nguồn tĩnh — upstream không có endpoint
+  menu, ruling R1). Phải chọn ≥1 để nút "Tiếp tục" bật.
+- **Bước 2 — "Chọn poster bạn thích"**: 2 hàng × 6 poster lấy từ listing công
+  khai (`/movies/latest` + listing của thể loại/quốc gia đầu tiên đã chọn), mỗi
+  poster có nút thích/bỏ qua; like gửi `POST /me/preferences/posters`.
+- **Bước 3 — "Sẵn sàng xem!"**: tổng kết + "Bắt đầu xem" → `PUT /me/preferences`.
+- **"Bỏ qua" ở mọi bước** → `PUT /me/preferences` với `skipped: true` rồi về `/`.
+- **Guard client-side**: nếu profile hiện tại có `onboarding_completed_at` và
+  không vào bằng `?again=1` → `router.replace("/")`; chưa đăng nhập → CTA đăng
+  nhập. Không dùng middleware (middleware chỉ thấy cookie refresh).
+- `?again=1` (từ "Làm lại sở thích") bỏ qua guard để onboard lại.
+- Test ids ổn định cho Playwright: `onboarding-genre-<slug>`,
+  `onboarding-country-<slug>`, `onboarding-next`, `onboarding-skip`,
+  `onboarding-poster-like-<slug>`, `onboarding-poster-skip-<slug>`,
+  `onboarding-finish`.
+
+### Rail gợi ý trên trang chủ
+
+`RecommendationsRail` là **client component** (ruling R4) theo mẫu
+`continue-watching-rail`: `useAuth()` + `useRecommendations()`, trả `null` khi
+chưa đăng nhập.
+
+- Tiêu đề theo `source`: **"Gợi ý cho bạn"** (`personal`), **"Phổ biến"**
+  (`popular`); `newest` **ẩn hẳn** vì trùng rail tĩnh "Mới cập nhật". Cũng ẩn
+  khi đang tải, lỗi, hoặc `items.length === 0`.
+- `MovieRail` nhận thêm prop optional `reasons` (`Record<slug, string>`); rail
+  render **dòng lý do** ngắn dưới mỗi card (`"Vì bạn thích Hành Động"`). Đây là
+  text per-card, không có UI phụ (xem `docs/todo.md`).
+- API + engine: `docs/api-recommendations.md`.
 
 ## Duyệt phim: cuộn vô tận + chuyển nhanh
 
