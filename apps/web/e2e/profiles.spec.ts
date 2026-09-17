@@ -49,6 +49,7 @@ const slugsOf = (page: { items: { movie_slug: string }[] }) =>
 async function cleanup(
   account: TestAccount,
   favoriteSlugs: string[] = [],
+  knownPins: Record<string, string> = {},
 ): Promise<void> {
   try {
     const token = (await loginUser(account)).access_token;
@@ -59,7 +60,7 @@ async function cleanup(
     console.log(`[profiles] favorite cleanup skipped: ${String(e).slice(0, 140)}`);
   }
   try {
-    await resetProfiles(account);
+    await resetProfiles(account, knownPins);
   } catch (e) {
     console.log(`[profiles] reset skipped: ${String(e).slice(0, 140)}`);
   }
@@ -133,11 +134,13 @@ test("second profile keeps its own My list and switching back preserves the firs
 
 test("a locked profile asks for its PIN", async ({ page }) => {
   const account = await loadAccount();
+  let lockedId = "";
 
   try {
     await resetProfiles(account);
     const token = (await loginUser(account)).access_token;
     const locked = await createProfile(token, "Bé", "panda");
+    lockedId = locked.id;
     await setProfilePin(token, locked.id, account.password, "2468");
 
     await loginViaApi(page);
@@ -161,7 +164,7 @@ test("a locked profile asks for its PIN", async ({ page }) => {
       "Bé (đang xem)",
     );
   } finally {
-    await resetProfiles(account);
+    await cleanup(account, [], lockedId ? { [lockedId]: "2468" } : {});
   }
 });
 
@@ -169,15 +172,24 @@ test("the default profile cannot be deleted and the sixth is rejected", async ({
   page,
 }) => {
   const account = await loadAccount();
+  const nameBase = `Test ${stamp()}`;
 
   try {
     await resetProfiles(account);
     const token = (await loginUser(account)).access_token;
     const def = await defaultProfile(token);
+
+    // Fill up to the account's ACTUAL limit (tolerates a leftover profile from
+    // an interrupted earlier run instead of assuming four free slots).
     const created: ApiProfile[] = [];
-    for (let i = 1; i <= 4; i++) {
-      created.push(await createProfile(token, `Test ${i}`, "star"));
+    let list = await listProfiles(token);
+    while (list.items.length < list.max) {
+      created.push(
+        await createProfile(token, `${nameBase} ${created.length + 1}`, "star"),
+      );
+      list = await listProfiles(token);
     }
+    expect(list.items.length).toBe(list.max);
 
     await loginViaApi(page);
     await page.goto("/profiles/manage");
@@ -190,23 +202,25 @@ test("the default profile cannot be deleted and the sixth is rejected", async ({
     ).toHaveCount(0);
 
     // ...while a non-default row does (control for the assertion above).
+    const sample = created[0] ?? list.items.find((item) => !item.is_default);
+    if (!sample) throw new Error("no non-default profile to assert against");
     await expect(
       page
-        .getByTestId(`profile-row-${created[0].id}`)
-        .getByRole("button", { name: `Xoá profile ${created[0].name}` }),
+        .getByTestId(`profile-row-${sample.id}`)
+        .getByRole("button", { name: `Xoá profile ${sample.name}` }),
     ).toBeVisible();
 
-    // A sixth profile is refused server-side.
+    // One more profile is refused server-side, at the real limit.
     const res = await rawApi("/api/v1/me/profiles", {
       method: "POST",
       headers: authHeaders(token),
-      body: JSON.stringify({ name: "Test 5", avatar: "star" }),
+      body: JSON.stringify({ name: `${nameBase} overflow`, avatar: "star" }),
     });
     expect(res.status).toBe(409);
     const body = (await res.json()) as { code?: string };
     expect(body.code).toBe("PROFILE_LIMIT_REACHED");
   } finally {
-    await resetProfiles(account);
+    await cleanup(account);
   }
 });
 
@@ -214,11 +228,13 @@ test("deleting a profile removes only its data", async ({ page }) => {
   const account = await loadAccount();
   const keepSlug = `e2e-keep-${stamp()}`;
   const doomedSlug = `e2e-doomed-${stamp()}`;
+  let doomedId = "";
 
   try {
     await resetProfiles(account);
     const token = (await loginUser(account)).access_token;
     const doomed = await createProfile(token, "Bé Hai", "dino");
+    doomedId = doomed.id;
     await addFavorite(token, keepSlug, `Phim giữ ${keepSlug}`);
 
     // Unlocked at this point, so the switch needs no PIN; lock it afterwards
@@ -256,6 +272,6 @@ test("deleting a profile removes only its data", async ({ page }) => {
     const staleBody = (await stale.json()) as { code?: string };
     expect(staleBody.code).toBe("PROFILE_NOT_FOUND");
   } finally {
-    await cleanup(account, [keepSlug]);
+    await cleanup(account, [keepSlug], doomedId ? { [doomedId]: "1357" } : {});
   }
 });
