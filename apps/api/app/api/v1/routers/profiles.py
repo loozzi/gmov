@@ -140,15 +140,23 @@ async def set_profile_pin(
     current: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ProfileOut:
+    ip = ratelimit.client_ip(request)
     await ratelimit.check_rate_limit(
-        ratelimit.pin_set_key(ratelimit.client_ip(request)),
+        ratelimit.pin_set_key(ip),
         profile_service.PIN_MAX_ATTEMPTS,
         profile_service.PIN_WINDOW,
     )
+    await ratelimit.check_login_allowed(ip, current.username)
     profile = await profile_service.get_owned(db, current.id, profile_id)
     if profile is None:
         raise AppException("Profile not found", "PROFILE_NOT_FOUND", 404)
-    updated = await profile_service.set_pin(
-        db, profile, data.password, data.pin
-    )
+    try:
+        updated = await profile_service.set_pin(
+            db, profile, data.password, data.pin
+        )
+    except AppException as exc:
+        if exc.code == "INVALID_PASSWORD":
+            await ratelimit.record_login_failure(ip, current.username)
+        raise
+    await ratelimit.clear_login_failures(ip, current.username)
     return ProfileOut.from_profile(updated)

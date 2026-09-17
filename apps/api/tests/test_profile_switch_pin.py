@@ -20,6 +20,10 @@ AUTH = "/api/v1/auth"
 ME = "/api/v1/me"
 PASSWORD = "password123"
 
+# Captured before the fixture stubs it out, so a test can restore the real
+# login-throttle check the pin-set route now shares.
+_real_check_login_allowed = ratelimit.check_login_allowed
+
 
 @dataclass
 class Env:
@@ -238,6 +242,27 @@ async def test_missing_pin_counts_as_failure(client_env, monkeypatch):
     second = await _switch(client_env, headers, locked["id"])
     assert second.status_code == 429, second.text
     assert second.json()["code"] == "RATE_LIMITED"
+
+
+async def test_set_pin_wrong_password_locks_login(client_env, monkeypatch):
+    monkeypatch.setattr(ratelimit, "check_login_allowed", _real_check_login_allowed)
+    monkeypatch.setattr(ratelimit, "LOGIN_FAIL_LIMIT", 2)
+    tokens = await _register_login(client_env, "pinlock@gmov.dev", "pinlock")
+    headers = _bearer(tokens["access_token"])
+    profile = await _create(client_env, headers, "Kid")
+
+    for _ in range(2):
+        r = await _set_pin(client_env, headers, profile["id"], password="wrong")
+        assert r.status_code == 400, r.text
+        assert r.json()["code"] == "INVALID_PASSWORD"
+
+    # Those account-password failures count against the shared login budget.
+    login = await client_env.client.post(
+        f"{AUTH}/login", data={"username": "pinlock", "password": PASSWORD}
+    )
+    assert login.status_code == 429, login.text
+    assert login.json()["code"] == "RATE_LIMITED"
+    assert "Retry-After" in login.headers
 
 
 async def test_set_pin_needs_account_password(client_env):
