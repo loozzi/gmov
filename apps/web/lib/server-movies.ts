@@ -1,5 +1,6 @@
 import "server-only";
 
+import { browsePath } from "@/lib/browse";
 import type { MovieDetail, PaginatedMovies } from "@/lib/types";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
@@ -27,35 +28,35 @@ export function fetchLatest(page = 1) {
 
 export function fetchList(listType: string, page = 1) {
   return get<PaginatedMovies>(
-    `/api/v1/movies/list/${listType}?page=${page}`,
+    browsePath({ kind: "list", slug: listType }, page),
     LIST_REVALIDATE,
   );
 }
 
 export function fetchGenre(slug: string, page = 1) {
   return get<PaginatedMovies>(
-    `/api/v1/movies/genre/${slug}?page=${page}`,
+    browsePath({ kind: "genre", slug }, page),
     LIST_REVALIDATE,
   );
 }
 
 export function fetchCountry(slug: string, page = 1) {
   return get<PaginatedMovies>(
-    `/api/v1/movies/country/${slug}?page=${page}`,
+    browsePath({ kind: "country", slug }, page),
     LIST_REVALIDATE,
   );
 }
 
 export function fetchYear(year: string, page = 1) {
   return get<PaginatedMovies>(
-    `/api/v1/movies/year/${year}?page=${page}`,
+    browsePath({ kind: "year", slug: year }, page),
     LIST_REVALIDATE,
   );
 }
 
 export function fetchSearch(keyword: string, page = 1) {
   return get<PaginatedMovies>(
-    `/api/v1/movies/search?keyword=${encodeURIComponent(keyword)}&page=${page}`,
+    browsePath({ kind: "search", keyword }, page),
     300,
   );
 }

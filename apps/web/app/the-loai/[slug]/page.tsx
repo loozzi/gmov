@@ -1,4 +1,5 @@
 import { BrowseGrid } from "@/components/movies/browse-grid";
+import type { BrowseSource } from "@/lib/browse";
 import { GENRES, labelFor } from "@/lib/catalog";
 import { fetchGenre } from "@/lib/server-movies";
 
@@ -13,14 +14,16 @@ export default async function GenrePage({
 }) {
   const { slug } = await params;
   const { page } = await searchParams;
-  const pageNum = Math.max(1, Number.parseInt(page ?? "1", 10) || 1);
-  const data = await fetchGenre(slug, pageNum);
+  const startPage = Math.max(1, Number.parseInt(page ?? "1", 10) || 1);
+  const source: BrowseSource = { kind: "genre", slug };
+  const data = await fetchGenre(slug, startPage);
 
   return (
     <BrowseGrid
       title={`Thể loại: ${labelFor(GENRES, slug, slug)}`}
-      data={data}
-      basePath={`/the-loai/${slug}`}
+      source={source}
+      startPage={startPage}
+      initialData={data}
     />
   );
 }
