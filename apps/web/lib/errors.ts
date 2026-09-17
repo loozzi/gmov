@@ -25,6 +25,7 @@ const CODE_MESSAGES: Record<string, string> = {
   INVALID_YEAR: "Năm không hợp lệ.",
   RATE_LIMITED: "Bạn thao tác quá nhanh. Hãy thử lại sau ít phút.",
   BOT_DETECTED: "Yêu cầu đăng ký không hợp lệ.",
+  SESSION_STALE: "Phiên đăng nhập đã cũ, vui lòng thử lại.",
   CANNOT_REPORT_OWN: "Bạn không thể báo cáo bình luận của chính mình.",
   COMMENT_HIDDEN: "Bình luận này đã bị ẩn.",
   REPORT_NOT_FOUND: "Không tìm thấy báo cáo.",

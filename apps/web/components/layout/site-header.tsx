@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { SearchBox } from "@/components/layout/search-box";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { ProfileMenu } from "@/components/profile/profile-menu";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -135,52 +136,55 @@ function AccountMenu() {
     );
   }
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="bg-brand text-brand-foreground flex size-9 cursor-pointer items-center justify-center rounded-full text-sm font-bold"
-          aria-label="Tài khoản"
-        >
-          {user.display_name.charAt(0).toUpperCase()}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
-        <DropdownMenuLabel className="truncate">
-          {user.display_name}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/me">
-            <User /> Trang cá nhân
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/me/favorites">
-            <Heart /> Phim yêu thích
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/me/watchlist">
-            <Bookmark /> Muốn xem
-          </Link>
-        </DropdownMenuItem>
-        {isModerator && (
+    <div className="flex items-center gap-1">
+      <ProfileMenu />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="bg-brand text-brand-foreground flex size-9 cursor-pointer items-center justify-center rounded-full text-sm font-bold"
+            aria-label="Tài khoản"
+          >
+            {user.display_name.charAt(0).toUpperCase()}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuLabel className="truncate">
+            {user.display_name}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
-            <Link href="/admin/reports">
-              <ShieldCheck /> Quản trị
+            <Link href="/me">
+              <User /> Trang cá nhân
             </Link>
           </DropdownMenuItem>
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={() => {
-            void logout();
-          }}
-        >
-          <LogOut /> Đăng xuất
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuItem asChild>
+            <Link href="/me/favorites">
+              <Heart /> Phim yêu thích
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/me/watchlist">
+              <Bookmark /> Muốn xem
+            </Link>
+          </DropdownMenuItem>
+          {isModerator && (
+            <DropdownMenuItem asChild>
+              <Link href="/admin/reports">
+                <ShieldCheck /> Quản trị
+              </Link>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => {
+              void logout();
+            }}
+          >
+            <LogOut /> Đăng xuất
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 

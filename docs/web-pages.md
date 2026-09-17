@@ -33,7 +33,28 @@
   and shows 5 quick suggestions. Old `/search` redirects here.
 - `/me`, `/me/favorites`, `/me/watchlist`, `/me/history` — auth pages (middleware-guarded).
   History reuses continue-watching data (no separate table, see decisions #17).
+- `/profiles` — "Ai đang xem?" (xem mục Profiles bên dưới).
+- `/profiles/manage` — đổi tên/avatar, đặt/xoá PIN, xoá profile.
 - `MovieCard` — client component with blur placeholder + error fallback icon.
+
+## Profiles (M1)
+
+- **`/profiles` — "Ai đang xem?"**: grid avatar các profile của tài khoản
+  (`useProfiles`), profile đang xem có nhãn "Đang xem", profile có PIN có badge
+  ổ; bấm một card → switch ngay, hoặc mở `ProfilePinDialog` nếu profile khoá.
+  Nút "Thêm profile" (`ProfileFormDialog`) chỉ hiện khi chưa đủ `max`.
+- **`/profiles/manage`**: mỗi profile một hàng — đổi tên & avatar, đặt/đổi/xoá
+  PIN (dialog riêng, cần **mật khẩu tài khoản**), và nút xoá. Profile mặc định
+  **không có nút xoá**. Xoá profile có PIN → dialog nhập PIN + cảnh báo; xoá
+  profile không PIN → `window.confirm`. Xoá chỉ mất dữ liệu của profile đó.
+  Sau switch/xoá profile đang dùng: `setAccessToken` mới + `queryClient.clear()`
+  (data per-profile nằm rải ở nhiều query key). Không dùng localStorage —
+  profile nhớ theo phiên/thiết bị qua refresh cookie.
+- **Header switcher** (`ProfileMenu`, cạnh avatar): dropdown liệt kê profile
+  (avatar, tên, ổ khoá nếu có PIN, dấu check cho profile hiện tại) + link
+  "Quản lý profile"; chọn profile khoá sẽ mở PIN dialog trước khi switch.
+- Trang chỉ dành cho người đã đăng nhập; khách thấy lời nhắc + link
+  `/login?next=/profiles`. API: `docs/api-profiles.md`.
 
 ## Duyệt phim: cuộn vô tận + chuyển nhanh
 

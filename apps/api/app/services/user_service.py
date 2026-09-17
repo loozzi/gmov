@@ -7,8 +7,10 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
+from app.db.models.profile import FALLBACK_AVATAR, Profile
 from app.db.models.user import User
 from app.schemas.auth import RegisterIn
+from app.services.profile_service import DEFAULT_PROFILE_NAME
 
 
 async def get_by_id(db: AsyncSession, user_id: uuid.UUID) -> User | None:
@@ -41,6 +43,16 @@ async def create(db: AsyncSession, data: RegisterIn) -> User:
         display_name=data.username,
     )
     db.add(user)
+    await db.flush()
+    db.add(
+        Profile(
+            user_id=user.id,
+            name=DEFAULT_PROFILE_NAME,
+            avatar=FALLBACK_AVATAR,
+            position=0,
+            is_default=True,
+        )
+    )
     await db.commit()
     await db.refresh(user)
     return user

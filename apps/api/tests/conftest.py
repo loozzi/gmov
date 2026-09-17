@@ -1,14 +1,40 @@
 """Pytest fixtures: isolated sqlite DB + ASGI test client per test."""
 
+import uuid
+from datetime import UTC, datetime, timedelta
+
+import jwt
 import pytest
 import pytest_asyncio
 from fakeredis.aioredis import FakeRedis
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core import security
+from app.core.config import settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+
+
+def make_access_token(
+    user_id: uuid.UUID,
+    profile_id: uuid.UUID,
+    session_jti: str = "test-session",
+) -> str:
+    now = datetime.now(UTC)
+    payload = {
+        "sub": str(user_id),
+        "sid": session_jti,
+        "pid": str(profile_id),
+        "type": security.ACCESS_TOKEN_TYPE,
+        "jti": str(uuid.uuid4()),
+        "iat": now,
+        "exp": now + timedelta(minutes=5),
+    }
+    return jwt.encode(
+        payload, settings.jwt_secret, algorithm=settings.jwt_algorithm
+    )
 
 
 @pytest.fixture(autouse=True)

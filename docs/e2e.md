@@ -92,6 +92,29 @@ dùng 2/3 quota `3 tài khoản/giờ/IP`, tránh `skip` vì throttle (đã từ
 test này còn đăng ký 2 account). Cleanup xoá bình luận qua API (xoá comment →
 cascade xoá report) + hạ account nền về `user`.
 
+## Spec profiles (`profiles.spec.ts`)
+
+4 test phủ M1, **chỉ dùng account nền** — KHÔNG đăng ký account nào (register
+bị throttle `3 tài khoản/giờ/IP`, đã từng dính). Cách ly được chứng minh bằng
+các profile tạo/xoá bên trong từng test; không cần data upstream (favorites
+nhận slug tuỳ ý) nên spec này không skip khi CDN chặn. Timeout 120s/test.
+
+1. `second profile keeps its own My list...` — tạo profile thứ hai → My list
+   tách biệt → switch qua UI `/profiles` → data khác → quay lại profile đầu
+   thấy nguyên vẹn; xoá profile đã tạo qua `/profiles/manage` (không PIN →
+   `window.confirm`).
+2. `a locked profile asks for its PIN` — đặt PIN → switch từ UI đòi PIN; PIN sai
+   hiện `alert` "PIN không đúng"; PIN đúng thì switch thành công.
+3. `the default profile cannot be deleted and the sixth is rejected` — hàng
+   profile mặc định không có nút xoá; tạo tới `max` rồi profile thứ 6 bị
+   server từ chối `409 PROFILE_LIMIT_REACHED`.
+4. `deleting a profile removes only its data` — xoá profile có PIN (dialog nhập
+   PIN): data của profile đó mất, profile khác nguyên vẹn, và scope của profile
+   đã xoá trả `404 PROFILE_NOT_FOUND`.
+
+Cleanup dùng helper `resetProfiles` (xoá PIN + xoá mọi profile non-default) và
+xoá favorites đã thêm, best-effort để trả account về profile mặc định.
+
 ## CI
 
 E2E không chạy trên CI (chỉ chạy local): suite cần upstream thật + stream

@@ -2,6 +2,7 @@
 
 import hashlib
 import ipaddress
+import uuid
 
 from fastapi import Request
 from redis.exceptions import RedisError
@@ -62,9 +63,59 @@ async def check_rate_limit(key: str, limit: int, window_seconds: int) -> None:
         if count == 1:
             await client.expire(key, window_seconds)
         if count > limit:
-            raise AppException("Too many requests", "RATE_LIMITED", 429)
+            ttl = await client.ttl(key)
+            raise AppException(
+                "Too many requests",
+                "RATE_LIMITED",
+                429,
+                headers=_retry_after(ttl),
+            )
     except AppException:
         raise
+    except (RedisError, OSError, ValueError):
+        pass
+
+
+def pin_attempt_key(profile_id: uuid.UUID, ip: str) -> str:
+    """Counter shared by every PIN check (switch + delete) of a profile."""
+    return f"ratelimit:pin:{profile_id}:{ip}"
+
+
+def pin_set_key(ip: str) -> str:
+    """Per-IP budget for setting/changing/clearing a PIN."""
+    return f"ratelimit:pin-set:{ip}"
+
+
+async def check_pin_attempt_allowed(
+    profile_id: uuid.UUID, ip: str, limit: int, window_seconds: int
+) -> None:
+    """Read-only budget check: 429 once `limit` failures are recorded."""
+    try:
+        client = get_redis_client()
+        count, ttl = await _counter(client, pin_attempt_key(profile_id, ip))
+        if count >= limit:
+            raise AppException(
+                "Too many PIN attempts",
+                "RATE_LIMITED",
+                429,
+                headers=_retry_after(ttl),
+            )
+    except AppException:
+        raise
+    except (RedisError, OSError, ValueError):
+        pass
+
+
+async def record_pin_failure(
+    profile_id: uuid.UUID, ip: str, window_seconds: int
+) -> None:
+    """Count one failed PIN attempt; successful ones never get here."""
+    try:
+        client = get_redis_client()
+        key = pin_attempt_key(profile_id, ip)
+        count = await client.incr(key)
+        if count == 1:
+            await client.expire(key, window_seconds)
     except (RedisError, OSError):
         pass
 

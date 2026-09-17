@@ -22,7 +22,12 @@ def verify_password(password: str, hashed: str) -> bool:
     return pwd_context.verify(password, hashed)
 
 
-def _encode(subject: str, token_type: str, expires: timedelta) -> str:
+def _encode(
+    subject: str,
+    token_type: str,
+    expires: timedelta,
+    extra: dict[str, str] | None = None,
+) -> str:
     now = datetime.now(UTC)
     payload = {
         "sub": subject,
@@ -31,14 +36,19 @@ def _encode(subject: str, token_type: str, expires: timedelta) -> str:
         "iat": now,
         "exp": now + expires,
     }
+    if extra:
+        payload.update(extra)
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def create_access_token(user_id: uuid.UUID) -> str:
+def create_access_token(
+    user_id: uuid.UUID, session_jti: str, profile_id: uuid.UUID
+) -> str:
     return _encode(
         str(user_id),
         ACCESS_TOKEN_TYPE,
         timedelta(minutes=settings.access_token_expire_minutes),
+        {"sid": session_jti, "pid": str(profile_id)},
     )
 
 

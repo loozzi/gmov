@@ -62,6 +62,165 @@ export function authHeaders(token: string): Record<string, string> {
   };
 }
 
+/** Profile/like helpers used by the profile specs. All of them are scoped to
+ * the account's ACTIVE PROFILE carried in `token`: switch first to operate as
+ * another profile. None of them register accounts (register quota is tight). */
+export interface ApiProfile {
+  id: string;
+  name: string;
+  avatar: string;
+  position: number;
+  has_pin: boolean;
+  is_default: boolean;
+}
+
+export interface ApiProfileListItem extends ApiProfile {
+  is_current: boolean;
+}
+
+export interface ProfileListResponse {
+  items: ApiProfileListItem[];
+  max: number;
+}
+
+export interface SwitchResponse {
+  access_token: string | null;
+  profile: ApiProfile | null;
+}
+
+export interface FavoriteItem {
+  id: string;
+  movie_slug: string;
+  movie_name: string;
+  poster_url: string | null;
+}
+
+export interface FavoriteListResponse {
+  items: FavoriteItem[];
+  page: number;
+  per_page: number;
+  total_items: number;
+}
+
+export function listProfiles(token: string): Promise<ProfileListResponse> {
+  return api("/api/v1/me/profiles", { headers: authHeaders(token) });
+}
+
+export function createProfile(
+  token: string,
+  name: string,
+  avatar = "popcorn",
+): Promise<ApiProfile> {
+  return api("/api/v1/me/profiles", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ name, avatar }),
+  });
+}
+
+export function switchProfile(
+  token: string,
+  id: string,
+  pin?: string,
+): Promise<SwitchResponse> {
+  return api(`/api/v1/me/profiles/${id}/switch`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(pin ? { pin } : {}),
+  });
+}
+
+export function deleteProfile(
+  token: string,
+  id: string,
+  pin?: string,
+): Promise<SwitchResponse> {
+  return api(`/api/v1/me/profiles/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+    body: JSON.stringify(pin ? { pin } : {}),
+  });
+}
+
+export function setProfilePin(
+  token: string,
+  id: string,
+  password: string,
+  pin: string | null,
+): Promise<ApiProfile> {
+  return api(`/api/v1/me/profiles/${id}/pin`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify({ password, pin }),
+  });
+}
+
+export function listFavorites(token: string): Promise<FavoriteListResponse> {
+  return api("/api/v1/me/favorites", { headers: authHeaders(token) });
+}
+
+export function addFavorite(
+  token: string,
+  movieSlug: string,
+  movieName: string,
+): Promise<FavoriteItem> {
+  return api("/api/v1/me/favorites", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ movie_slug: movieSlug, movie_name: movieName }),
+  });
+}
+
+export async function removeFavorite(
+  token: string,
+  movieSlug: string,
+): Promise<void> {
+  await api(`/api/v1/me/favorites/${encodeURIComponent(movieSlug)}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+/** Delete every non-default profile of the account (clearing PINs first) and
+ * leave the session on the default profile. Used by the profile specs to make
+ * runs idempotent on the shared account WITHOUT registering new ones. */
+export async function resetProfiles(
+  account: TestAccount,
+  knownPins: Record<string, string> = {},
+): Promise<void> {
+  let token = (await loginUser(account)).access_token;
+  for (const profile of (await listProfiles(token)).items) {
+    if (profile.is_default) continue;
+    try {
+      // Prefer deleting a locked profile with its PIN the test set: clearing
+      // the PIN first costs an extra `profile-pin-set` token, whose counter is
+      // shared per IP and is NOT covered by the `ratelimit:*` setup reset.
+      const knownPin = knownPins[profile.id];
+      if (profile.has_pin && !knownPin) {
+        await setProfilePin(token, profile.id, account.password, null);
+      }
+      const result = await deleteProfile(token, profile.id, knownPin);
+      if (result.access_token) token = result.access_token;
+    } catch (e) {
+      console.log(
+        `[helpers] could not delete profile ${profile.name}: ${String(e).slice(0, 120)}`,
+      );
+    }
+  }
+  // Surface leftovers instead of hiding them: a silently-kept profile breaks
+  // the next run's "at limit" precondition.
+  const remaining = (await listProfiles(token)).items.filter(
+    (profile) => !profile.is_default,
+  );
+  if (remaining.length > 0) {
+    console.log(
+      `[helpers] ${remaining.length} profile(s) left behind: ${remaining
+        .map((profile) => profile.name)
+        .join(", ")}`,
+    );
+  }
+}
+
 export async function waitForBackend(timeoutMs = 120_000): Promise<void> {
   const start = Date.now();
   for (;;) {

@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(default=30)
     refresh_token_expire_days: int = Field(default=30)
 
+    max_profiles: int = Field(default=5, ge=1)
+    pin_max_attempts: int = Field(default=5, ge=1)
+    pin_window: int = Field(default=60, ge=1)
+
     trusted_proxies: Annotated[list[str], NoDecode] = Field(
         default=[
             "127.0.0.0/8",

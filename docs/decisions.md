@@ -545,3 +545,33 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      Sửa test: click best-effort và chờ vị trí khác 0 đầu tiên thay vì đọc
      clock một lần — giữ nguyên bound ±5s nên resume hỏng vẫn fail (mutation
      `target = 0` → `got 2.05`). Không đổi code sản phẩm.
+
+## Profiles (M1) — 2026-09-17
+
+112. **Profile nằm trong phiên đăng nhập (`sid`/`pid`), không dùng header
+     `X-Profile-Id`**: access token mang `sid` (jti refresh session) + `pid`
+     (profile hoạt động), `refresh_tokens` có `profile_id` (ON DELETE SET NULL)
+     nên mỗi thiết bị nhớ profile riêng. Lý do: PIN chỉ có nghĩa khi **server**
+     enforce trên mọi request; header do client gửi có thể bị bỏ qua/giả mạo và
+     không gắn được với phiên. Token cũ thiếu `pid` fallback mềm về profile mặc
+     định; `pid` lạ → `404 PROFILE_NOT_FOUND`; ban kiểm trước profile.
+113. **Bình luận vẫn theo tài khoản**: chỉ 4 bảng tín hiệu xem (`favorite`,
+     `watchlist`, `watch_progress`, `ratings`) re-key từ `user_id` sang
+     `profile_id`. `comment`/`comment_report` giữ `user_id` để danh tính social
+     và luồng kiểm duyệt/ban không đổi — một người có nhiều profile gu khác
+     nhau nhưng vẫn là một danh tính khi bình luận.
+114. **Profile mặc định bất tử**: partial unique index `(user_id) WHERE
+     is_default` đảm bảo đúng 1 profile mặc định/tài khoản; xoá nó trả
+     `409 DEFAULT_PROFILE`. Không thể rơi vào trạng thái tài khoản không còn
+     profile nào. Mọi profile đều onboard lại được bất kì lúc nào (M2).
+115. **PIN là soft-gate, đặt/đổi/xoá PIN cần mật khẩu tài khoản**: PIN 4 số
+     hash bcrypt, chỉ chặn switch/xoá profile trong nhà — không phải ranh giới
+     bảo mật ngang mật khẩu. Muốn set/change/clear phải nhập `password` tài
+     khoản (`400 INVALID_PASSWORD` nếu sai) nên trẻ con không tự gỡ khoá được;
+     switch/xoá có PIN dùng chung bộ đếm `(profile_id, IP)` chống brute-force.
+116. **Chỉ lần thử PIN thất bại mới bị đếm** (Task 4 ruling): thiếu PIN
+     (`403 PIN_REQUIRED`) hoặc PIN sai (`401 INVALID_PIN`) mới `INCR` bộ đếm;
+     PIN đúng không tiêu ngân sách, nên thao tác hợp lệ không tự khoá mình.
+     Ngân sách cạn trả `429 RATE_LIMITED` trước cả khi so PIN. Bộ đếm + key
+     đặt/đổi PIN nằm trong namespace `ratelimit:*` để E2E reset được giữa các
+     lần chạy.
