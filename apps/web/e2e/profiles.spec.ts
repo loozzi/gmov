@@ -264,13 +264,18 @@ test("deleting a profile removes only its data", async ({ page }) => {
     const defaultSlugs = slugsOf(await listFavorites(token));
     expect(defaultSlugs).toContain(keepSlug);
     expect(defaultSlugs).not.toContain(doomedSlug);
-    // ...and the deleted profile's scope no longer resolves at all.
+    // ...and the deleted profile's scope self-heals to the default profile
+    // (`pid` of a removed profile falls back instead of 404-ing) without ever
+    // leaking the dead profile's favorites.
     const stale = await rawApi("/api/v1/me/favorites", {
       headers: authHeaders(doomedToken),
     });
-    expect(stale.status).toBe(404);
-    const staleBody = (await stale.json()) as { code?: string };
-    expect(staleBody.code).toBe("PROFILE_NOT_FOUND");
+    expect(stale.status).toBe(200);
+    const staleSlugs = slugsOf(
+      (await stale.json()) as { items: { movie_slug: string }[] },
+    );
+    expect(staleSlugs).toContain(keepSlug);
+    expect(staleSlugs).not.toContain(doomedSlug);
   } finally {
     await cleanup(account, [keepSlug], doomedId ? { [doomedId]: "1357" } : {});
   }
