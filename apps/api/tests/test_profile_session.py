@@ -81,7 +81,7 @@ def _bearer(token: str) -> dict[str, str]:
 def _hand_signed(
     user_id: uuid.UUID,
     *,
-    pid: uuid.UUID | None = None,
+    pid: uuid.UUID | str | None = None,
     sid: str | None = None,
 ) -> dict[str, str]:
     now = datetime.now(UTC)
@@ -180,6 +180,48 @@ async def test_foreign_pid_is_404(client_env):
     )
     assert r.status_code == 404
     assert r.json()["code"] == "PROFILE_NOT_FOUND"
+
+
+async def test_malformed_pid_is_404(client_env):
+    await _register_login(client_env, "bad1@gmov.dev", "bad1")
+    user = await _user(client_env, "bad1")
+
+    r = await client_env.client.get(
+        f"{ME}/profile", headers=_hand_signed(user.id, pid="not-a-uuid")
+    )
+    assert r.status_code == 404
+    assert r.json()["code"] == "PROFILE_NOT_FOUND"
+
+
+async def test_deleted_pid_self_heals_to_default(client_env):
+    tokens = await _register_login(client_env, "heal1@gmov.dev", "heal1")
+    second_id = await _add_profile(client_env, tokens["access_token"], "Child")
+    user = await _user(client_env, "heal1")
+    sid = security.decode_token(tokens["refresh_token"])["jti"]
+    async with client_env.factory() as db:
+        profile = await db.get(Profile, second_id)
+        await db.delete(profile)
+        await db.commit()
+    default_id = await _default_profile_id(client_env, "heal1")
+    headers = _hand_signed(user.id, pid=second_id, sid=sid)
+
+    profile = await client_env.client.get(f"{ME}/profile", headers=headers)
+    assert profile.status_code == 200, profile.text
+    assert profile.json()["id"] == str(default_id)
+
+    listing = await client_env.client.get(f"{ME}/profiles", headers=headers)
+    assert listing.status_code == 200, listing.text
+
+    favorites = await client_env.client.get(f"{ME}/favorites", headers=headers)
+    assert favorites.status_code == 200, favorites.text
+
+    async with client_env.factory() as db:
+        row = (
+            await db.execute(
+                select(RefreshToken).where(RefreshToken.jti == sid)
+            )
+        ).scalar_one()
+        assert row.profile_id == default_id
 
 
 async def test_banned_user_still_401_even_with_valid_pid(client_env):

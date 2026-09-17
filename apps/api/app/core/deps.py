@@ -69,10 +69,16 @@ async def _profile_from_claims(
         profile_id = uuid.UUID(str(raw))
     except (ValueError, TypeError):
         raise AppException("Profile not found", "PROFILE_NOT_FOUND", 404)
-    profile = await profile_service.get_owned(db, user.id, profile_id)
-    if profile is None:
-        raise AppException("Profile not found", "PROFILE_NOT_FOUND", 404)
-    return profile
+    profile = await profile_service.get_by_id(db, profile_id)
+    if profile is not None:
+        if profile.user_id != user.id:
+            raise AppException("Profile not found", "PROFILE_NOT_FOUND", 404)
+        return profile
+    default = await profile_service.default_for(db, user.id)
+    session_jti = payload.get("sid")
+    if session_jti is not None:
+        await profile_service.repoint_session(db, str(session_jti), default.id)
+    return default
 
 
 async def get_active_profile(
