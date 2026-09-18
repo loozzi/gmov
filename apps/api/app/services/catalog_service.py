@@ -25,9 +25,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.db.models.catalog_item import CatalogItem
 from app.db.session import get_redis_client, session_factory
-from app.schemas.movie import CandidateCard
+from app.schemas.movie import CandidateCard, CandidatePage, MovieCard
 from app.services import nguonc
-from app.services.catalog_map import COUNTRY_SLUGS, GENRE_SLUGS
+from app.services.catalog_map import (
+    COUNTRY_SLUGS,
+    GENRE_SLUGS,
+    country_slug,
+    genre_slug,
+)
 
 logger = logging.getLogger("gmov.catalog")
 
@@ -39,6 +44,9 @@ EXCLUDED_GENRE_SLUGS = frozenset({"phim-18"})
 LOCK_KEY = "catalog:refresh:lock"
 LOCK_TTL_SECONDS = 300
 JOB_ID = "catalog_refresh"
+# Bounded upstream concurrency: pages-per-listing multiplies the job fan-out
+# (default 5 pages × 49 listings), so don't fire hundreds at once.
+MAX_CONCURRENT_LISTINGS = 8
 
 
 @dataclass
@@ -80,11 +88,7 @@ def _kind_of(key: str) -> str | None:
 
 def _default_kinds() -> list[str]:
     return [
-        *(
-            slug
-            for slug in GENRE_SLUGS.values()
-            if slug not in EXCLUDED_GENRE_SLUGS
-        ),
+        *(slug for slug in GENRE_SLUGS.values() if slug not in EXCLUDED_GENRE_SLUGS),
         *COUNTRY_SLUGS.values(),
         *(str(year) for year in YEARS),
     ]
@@ -183,8 +187,14 @@ async def refresh(
     jobs = _jobs(keys, max(1, pages))
     stats = RefreshStats()
 
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_LISTINGS)
+
+    async def _fetch(kind: str, key: str, page: int) -> CandidatePage:
+        async with semaphore:
+            return await nguonc.fetch_candidate_page(kind, key, page)
+
     results = await asyncio.gather(
-        *(nguonc.fetch_candidate_page(kind, key, page) for kind, key, page in jobs),
+        *(_fetch(kind, key, page) for kind, key, page in jobs),
         return_exceptions=True,
     )
 
@@ -223,6 +233,17 @@ async def is_stale(db: AsyncSession, ttl_hours: int) -> bool:
     return datetime.now(UTC) - latest > timedelta(hours=ttl_hours)
 
 
+def card_of(item: CatalogItem) -> MovieCard:
+    return MovieCard(
+        slug=item.slug,
+        name=item.name,
+        original_name=item.original_name,
+        thumb_url=item.thumb_url or None,
+        poster_url=item.poster_url or None,
+        year=str(item.year) if item.year is not None else None,
+    )
+
+
 async def list_items(
     db: AsyncSession, *, limit: int | None = None
 ) -> list[CatalogItem]:
@@ -241,6 +262,73 @@ async def by_slugs(db: AsyncSession, slugs: Sequence[str]) -> list[CatalogItem]:
     ).scalars()
     found = {row.slug: row for row in rows}
     return [found[slug] for slug in wanted if slug in found]
+
+
+async def ensure_metadata(
+    db: AsyncSession, slugs: Sequence[str], *, limit: int = 50
+) -> list[CatalogItem]:
+    """Catalog rows for `slugs`, backfilling missing ones from upstream detail.
+
+    A user signal (favorite/history/...) is only useful once its movie's genres
+    are known; the periodic crawl misses older or less-listed titles. Fetch is
+    best-effort: network or commit errors are logged and skipped, never raised,
+    so the caller gets whatever could be resolved.
+    """
+    wanted = list(dict.fromkeys(slug for slug in slugs if slug))
+    if not wanted:
+        return []
+    found = {row.slug: row for row in await by_slugs(db, wanted)}
+    missing = [slug for slug in wanted if slug not in found][: max(0, limit)]
+    if not missing:
+        return [found[slug] for slug in wanted if slug in found]
+
+    semaphore = asyncio.Semaphore(5)
+
+    async def _fetch(slug: str):
+        async with semaphore:
+            try:
+                return slug, await nguonc.fetch_detail(slug)
+            except Exception as exc:
+                logger.warning("catalog backfill failed for %s: %s", slug, exc)
+                return slug, None
+
+    results = await asyncio.gather(*(_fetch(slug) for slug in missing))
+    now = datetime.now(UTC)
+    added = False
+    for slug, detail in results:
+        if detail is None:
+            continue
+        db.add(
+            CatalogItem(
+                slug=slug,
+                name=detail.name or slug,
+                original_name=detail.original_name,
+                poster_url=detail.poster_url or "",
+                thumb_url=detail.thumb_url or "",
+                year=_year_of(detail.year),
+                genres=sorted(
+                    {s for label in detail.genres if (s := genre_slug(label))}
+                ),
+                country=next(
+                    (s for label in detail.countries if (s := country_slug(label))),
+                    None,
+                ),
+                casts=detail.casts,
+                director=detail.director,
+                fetched_at=now,
+                source="backfill",
+            )
+        )
+        added = True
+    if added:
+        try:
+            await db.commit()
+        except Exception as exc:
+            logger.warning("catalog backfill commit failed: %s", exc)
+            await db.rollback()
+    # Re-read after commit: the session may expire instances on commit.
+    fresh = {row.slug: row for row in await by_slugs(db, wanted)}
+    return [fresh[slug] for slug in wanted if slug in fresh]
 
 
 async def count(db: AsyncSession) -> int:

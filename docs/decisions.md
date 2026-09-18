@@ -762,3 +762,31 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      row có thể thua một rotation đang chèn row khác). Điều chỉnh #80 (đã ghi
      "không dùng advisory lock") — có guard nên vẫn chạy test SQLite bình
      thường.
+
+140. **Onboarding chỉ dành cho hồ sơ trống; hồ sơ đã có tín hiệu dùng
+     `/me/taste`.** User đã có favorite/rating/lịch sử/watchlist/phản hồi không
+     phải làm lại quiz (họ đã "trả lời" bằng hành vi); thay vào đó có trang
+     "Gu của tôi" để xem nguồn và sửa. Rail cá nhân vì vậy mở cho cả hồ sơ
+     **chưa từng** onboarding nhưng có tín hiệu (`has_signals`), không chỉ hồ sơ
+     đã quiz (#117 không đổi: quiz vẫn là nguồn explicit). Trang chủ mời
+     onboarding bằng CTA mềm cho hồ sơ trống, không hard-redirect (tránh bẫy).
+141. **Gu là hai tầng: derived tính lúc đọc + explicit sửa được, có
+     `excluded_genres`.** Derived (favorite, rating, xem xong/xem dở, watchlist,
+     phản hồi card) tính runtime qua `taste_service.taste_profile()`, không lưu —
+     nên reset onboarding (#58) không mất tín hiệu hành vi. Explicit nằm ở
+     `profile_preferences`; thêm cột `excluded_genres` để user **gỡ** một thể
+     loại thắng mọi nguồn (nếu chỉ ghi explicit weight thì derived sẽ cộng lại).
+     Bảng `recommendation_feedback` (UNIQUE profile+phim, `kind` interested/
+     not_interested) lưu thumb; đổi ý = update, hoàn tác = xoá row. Cap mỗi thể
+     loại `[-3.0, +3.0]`. Lý do gợi ý nêu nguồn mạnh nhất. Đây là Hướng 1 đã
+     chốt trong brainstorm (không lưu trọng số hiệu dụng).
+142. **Cache gợi ý phải phản ánh tín hiệu thư viện; catalog lấy 5 trang + backfill
+     theo yêu cầu.** Key `recs:` thêm `signals_ver` = `(count, max updated_at)`
+     của 5 bảng tín hiệu, vì bản M2 chỉ bump theo `profile_preferences` nên thêm
+     favorite/xem phim không làm mới gợi ý trong 15 phút (đo được, sửa luôn).
+     `CATALOG_REFRESH_PAGES` 1→5: **đo lại 2026-09-18** thấy 5 trang đầu của một
+     listing cho 50 slug khác nhau (ghi chú cũ "trang sâu ~0 unique" là sai), kèm
+     chặn fan-out 8 request đồng thời. Vì crawl không phủ hết phim cũ,
+     `ensure_metadata()` backfill-on-demand (cap 50 slug, fail-open) cho slug có
+     tín hiệu nhưng thiếu snapshot — nếu không, tín hiệu người dùng mất giá trị
+     vì không map được sang thể loại.

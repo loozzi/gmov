@@ -104,7 +104,19 @@ Brought forward — none blocks current functionality.
     `skipped` nhưng `profile_preferences` không có cột nên tín hiệu âm này mất;
     engine chỉ nhận tín hiệu dương từ poster like. Nếu cần "đừng gợi ý thể loại
     này nữa" thì phải thêm cột + migration (debt nhỏ, cố ý không làm v1).
-34. **Lý do gợi ý chỉ là text per-card, không có UI phụ.** `MovieRail.reasons`
-    render một dòng `"Vì bạn thích <nhãn>"` dưới card; không có tooltip/badge
-    riêng, và rail fallback luôn `reason = null`. Đủ dùng cho v1, mở rộng khi
-    cần giải thích gợi ý trực quan hơn.
+34. **Lý do gợi ý vẫn là text per-card, chưa có tooltip/badge riêng.** M3 đã
+    làm lý do nêu **nguồn** (`"Vì bạn yêu thích phim <nhãn>"`,
+    `"Có <người> bạn đã xem"`, `"Được đánh giá cao"`); vẫn chỉ là một dòng dưới
+    card, và fallback `popular`/`newest` vẫn `reason = null`. Mở rộng khi cần
+    giải thích trực quan hơn (badge, popover).
+
+35. ~~**M3 — Gu người xem & onboarding lại**~~ — DONE (2026-09-18): bảng
+    `recommendation_feedback` + `profile_preferences.excluded_genres`, service
+    `taste_service` gộp explicit + derived (thêm xem dở/watchlist/phản hồi, cap
+    ±3, `seen` đầy đủ), API `GET /me/taste` + `/me/recommendations/feedback`,
+    trang `/me/taste` "Gu của tôi", 2 nút Quan tâm/Không quan tâm trên card gợi ý
+    (toast hoàn tác), onboarding chỉ cho hồ sơ trống + CTA mềm, cache key theo
+    `signals_ver`, catalog 5 trang + backfill on-demand. API:
+    `docs/api-recommendations.md`; quyết định: `docs/decisions.md` #140–142;
+    spec: `docs/superpowers/specs/2026-09-18-taste-onboarding-redesign-design.md`.
+    E2E chưa cập nhật (làm tay).

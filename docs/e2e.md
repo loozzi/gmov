@@ -207,6 +207,13 @@ không so nội dung gợi ý — tránh flake do cache TTL/thứ tự.
 Lưu ý: rail chỉ nằm trên `/`, nên sau mỗi lần switch qua UI phải quay về `/`
 mới assert.
 
+M3 (2026-09-18) đổi guard: profile **có tín hiệu** (favorite/rating/lịch sử/
+watchlist/phản hồi) mở `/onboarding` không kèm `?again=1` sẽ bị đẩy sang
+`/me/taste`. Các test trên dùng profile **mới hoàn toàn** nên vẫn hợp lệ, nhưng
+nếu seed tín hiệu cho profile trước khi vào `/onboarding` thì phải thêm
+`?again=1`. Spec cho trang "Gu của tôi" và 2 nút phản hồi chưa viết (manual test
+đợt này).
+
 ## CI
 
 E2E không chạy trên CI (chỉ chạy local): suite cần upstream thật + stream

@@ -16,7 +16,7 @@ from app.db.models.rating import Rating
 from app.db.models.watch_progress import WatchProgress
 from app.db.session import get_db
 from app.main import app
-from app.services import preference_service
+from app.services import taste_service
 from tests.conftest import make_access_token
 from tests.session_helpers import select_default
 
@@ -25,8 +25,10 @@ ME = "/api/v1/me"
 EMPTY = {
     "genres": {},
     "countries": {},
+    "excluded_genres": [],
     "onboarding_completed_at": None,
     "skipped": False,
+    "has_signals": False,
 }
 
 
@@ -121,9 +123,7 @@ async def _seed_signals(
                 Favorite(profile_id=profile_id, movie_slug=slug, movie_name=slug)
             )
         for slug, stars in ratings:
-            session.add(
-                Rating(profile_id=profile_id, movie_slug=slug, stars=stars)
-            )
+            session.add(Rating(profile_id=profile_id, movie_slug=slug, stars=stars))
         for slug, position, duration in progress:
             session.add(
                 WatchProgress(
@@ -142,7 +142,8 @@ async def _seed_signals(
 
 async def _weights(env: Env, profile_id: uuid.UUID):
     async with env.factory() as session:
-        return await preference_service.behavior_weights(session, profile_id)
+        taste = await taste_service.taste_profile(session, profile_id, None)
+        return taste.genre_weights, taste.seen
 
 
 async def test_get_empty_and_put_overwrites(client_env):
@@ -257,9 +258,7 @@ async def test_delete_removes_row(client_env):
 async def test_reset_keeps_behaviour_weights(client_env):
     headers, _ = await _register_login(client_env, "pref6@gmov.dev", "pref6")
     pid = await _profile_id(client_env, headers)
-    await _seed_catalog(
-        client_env, [{"slug": "phim-x", "genres": ["hanh-dong"]}]
-    )
+    await _seed_catalog(client_env, [{"slug": "phim-x", "genres": ["hanh-dong"]}])
     await _seed_signals(
         client_env, pid, favorites=("phim-x",), ratings=(("phim-x", 5),)
     )
@@ -316,10 +315,20 @@ async def test_behavior_rules_skip_missing_catalog_films(client_env):
         "tinh-cam": -1.5,
         "phieu-luu": -1.5,
         "hoat-hinh": 0.5,
+        "co-trang": 0.2,
     }
     assert "am-nhac" not in weights
-    assert "co-trang" not in weights
-    assert seen == {"fav", "missing", "finished"}
+    assert seen == {
+        "fav",
+        "missing",
+        "five",
+        "four",
+        "three",
+        "two",
+        "one",
+        "finished",
+        "partial",
+    }
 
 
 async def test_poster_feedback_rejects_over_limit_list(client_env):

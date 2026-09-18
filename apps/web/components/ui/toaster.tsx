@@ -14,10 +14,16 @@ import { cn } from "@/lib/utils";
 
 type ToastKind = "success" | "error" | "info";
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface Toast {
   id: number;
   kind: ToastKind;
   message: string;
+  action?: ToastAction;
 }
 
 const DISMISS_MS = 4000;
@@ -25,9 +31,9 @@ const DISMISS_MS = 4000;
 // animation instead of popping out.
 const EXIT_MS = 180;
 
-const ToastContext = createContext<(message: string, kind?: ToastKind) => void>(
-  () => {},
-);
+const ToastContext = createContext<
+  (message: string, kind?: ToastKind, action?: ToastAction) => void
+>(() => {});
 
 export function useToast() {
   return useContext(ToastContext);
@@ -53,9 +59,9 @@ export function Toaster({ children }: { children: ReactNode }) {
   );
 
   const push = useCallback(
-    (message: string, kind: ToastKind = "info") => {
+    (message: string, kind: ToastKind = "info", action?: ToastAction) => {
       const id = nextId++;
-      setToasts((prev) => [...prev.slice(-2), { id, kind, message }]);
+      setToasts((prev) => [...prev.slice(-2), { id, kind, message, action }]);
       setTimeout(() => dismiss(id), DISMISS_MS);
     },
     [dismiss],
@@ -89,6 +95,18 @@ export function Toaster({ children }: { children: ReactNode }) {
                 <XCircle className="mt-0.5 size-4 shrink-0 text-red-400" />
               ) : null}
               <span className="flex-1">{t.message}</span>
+              {t.action && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    t.action?.onClick();
+                    dismiss(t.id);
+                  }}
+                  className="text-brand shrink-0 cursor-pointer text-xs font-semibold hover:underline"
+                >
+                  {t.action.label}
+                </button>
+              )}
               <button
                 onClick={() => dismiss(t.id)}
                 aria-label="Đóng thông báo"

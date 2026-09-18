@@ -10,6 +10,8 @@ import sqlite3
 import uuid
 from pathlib import Path
 
+import pytest
+
 from app.core.config import settings
 
 APP_DIR = Path(__file__).resolve().parents[1]
@@ -90,6 +92,13 @@ def test_m2_tables_have_documented_shape(tmp_path, monkeypatch):
         for nullable in ("genres", "countries", "skipped", "created_at", "updated_at"):
             assert prefs[nullable]["notnull"] == 1
         assert prefs["onboarding_completed_at"]["notnull"] == 0
+        assert prefs["excluded_genres"]["notnull"] == 1
+
+        feedback = _columns(con, "recommendation_feedback")
+        assert feedback["id"]["pk"] == 1
+        assert feedback["profile_id"]["notnull"] == 1
+        assert feedback["movie_slug"]["notnull"] == 1
+        assert feedback["kind"]["notnull"] == 1
 
         catalog = _columns(con, "catalog_items")
         assert catalog["slug"]["pk"] == 1
@@ -116,14 +125,29 @@ def test_m2_tables_have_documented_shape(tmp_path, monkeypatch):
             "INSERT INTO profile_preferences (profile_id) VALUES (?)", (PROFILE_ID,)
         )
         row = con.execute(
-            "SELECT genres, countries, skipped, typeof(skipped) FROM"
-            " profile_preferences WHERE profile_id = ?",
+            "SELECT genres, countries, excluded_genres, skipped, typeof(skipped)"
+            " FROM profile_preferences WHERE profile_id = ?",
             (PROFILE_ID,),
         ).fetchone()
         assert row["genres"] == "{}"
         assert row["countries"] == "{}"
+        assert row["excluded_genres"] == "[]"
         assert row["skipped"] in (0, False), row["skipped"]
+
+        con.execute(
+            "INSERT INTO recommendation_feedback (id, profile_id, movie_slug, kind)"
+            " VALUES ('fb-1', ?, 'phim-a', 'interested')",
+            (PROFILE_ID,),
+        )
         con.commit()
+        with pytest.raises(sqlite3.IntegrityError):
+            con.execute(
+                "INSERT INTO recommendation_feedback"
+                " (id, profile_id, movie_slug, kind)"
+                " VALUES ('fb-2', ?, 'phim-a', 'not_interested')",
+                (PROFILE_ID,),
+            )
+        con.rollback()
     finally:
         con.close()
 

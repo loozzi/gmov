@@ -142,9 +142,9 @@ async def test_refresh_dedupes_by_slug_and_unions_genres(db_env):
 async def test_refresh_keeps_old_genres_when_listing_fails(db_env):
     ok = httpx.Response(200, json=payload([card("shared")]))
     dead = httpx.Response(500, json={})
-    respx.get(
-        f"{BASE}/films/the-loai/hanh-dong", params={"page": 1}
-    ).mock(side_effect=[ok, dead, dead, dead])
+    respx.get(f"{BASE}/films/the-loai/hanh-dong", params={"page": 1}).mock(
+        side_effect=[ok, dead, dead, dead]
+    )
     mock_listing("/films/the-loai/phim-hai", [card("shared")])
 
     async with db_env.factory() as db:
@@ -303,3 +303,61 @@ async def test_cli_set_role_still_dispatches(db_env, monkeypatch):
             await db.execute(select(User).where(User.username == "cli"))
         ).scalar_one()
     assert user.role.value == "admin"
+
+
+def _detail(slug: str, genres: list[str], countries: list[str]) -> dict:
+    return {
+        "status": "success",
+        "movie": {
+            **card(slug, year="2021"),
+            "id": "42",
+            "category": {
+                "1": {
+                    "group": {"name": "Thể loại"},
+                    "list": [{"name": g} for g in genres],
+                },
+                "2": {
+                    "group": {"name": "Quốc gia"},
+                    "list": [{"name": c} for c in countries],
+                },
+            },
+        },
+    }
+
+
+@respx.mock
+async def test_ensure_metadata_backfills_missing_slugs(db_env):
+    async with db_env.factory() as db:
+        db.add(
+            CatalogItem(
+                slug="known",
+                name="Known",
+                poster_url="",
+                thumb_url="",
+                genres=["hanh-dong"],
+                fetched_at=datetime.now(UTC),
+                source="genre:hanh-dong",
+            )
+        )
+        await db.commit()
+
+    respx.get(f"{BASE}/film/lost").mock(
+        return_value=httpx.Response(
+            200, json=_detail("lost", ["Hành Động", "Không Có"], ["Hàn Quốc"])
+        )
+    )
+
+    async with db_env.factory() as db:
+        rows = await catalog_service.ensure_metadata(
+            db, ["known", "lost", "unavailable"]
+        )
+
+    by_slug = {row.slug: row for row in rows}
+    assert set(by_slug) == {"known", "lost"}
+    assert by_slug["lost"].genres == ["hanh-dong"]
+    assert by_slug["lost"].country == "han-quoc"
+    assert by_slug["lost"].year == 2021
+    assert by_slug["lost"].source == "backfill"
+
+    async with db_env.factory() as db:
+        assert await catalog_service.count(db) == 2

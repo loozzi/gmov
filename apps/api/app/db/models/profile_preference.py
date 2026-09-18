@@ -24,6 +24,9 @@ class ProfilePreference(Base, TimestampMixin):
     countries: Mapped[dict[str, float]] = mapped_column(
         JSON, nullable=False, default=dict, server_default=text("'{}'")
     )
+    excluded_genres: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'")
+    )
     onboarding_completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None
     )

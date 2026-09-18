@@ -146,9 +146,7 @@ async def _seed_signals(
                 Favorite(profile_id=profile_id, movie_slug=slug, movie_name=slug)
             )
         for slug, stars in ratings:
-            session.add(
-                Rating(profile_id=profile_id, movie_slug=slug, stars=stars)
-            )
+            session.add(Rating(profile_id=profile_id, movie_slug=slug, stars=stars))
         for slug, position, duration in progress:
             session.add(
                 WatchProgress(
@@ -184,12 +182,12 @@ async def test_personal_ranking_prefers_multi_genre_match(client_env):
     slugs = [item["movie"]["slug"] for item in body["items"]]
     assert slugs == ["combo", "action", "horror"]
     reasons = {item["movie"]["slug"]: item["reason"] for item in body["items"]}
-    assert reasons["combo"] == "Vì bạn thích Hành Động"
-    assert reasons["action"] == "Vì bạn thích Hành Động"
-    assert reasons["horror"] == "Vì bạn thích Kinh Dị"
+    assert reasons["combo"] == "Vì bạn thích phim Hành Động"
+    assert reasons["action"] == "Vì bạn thích phim Hành Động"
+    assert reasons["horror"] == "Vì bạn thích phim Kinh Dị"
 
 
-async def test_excludes_favorites_and_finished_but_keeps_in_progress(client_env):
+async def test_excludes_favorites_finished_and_in_progress(client_env):
     headers, _ = await _register_login(client_env, "rec2@gmov.dev", "rec2")
     pid = await _profile_id(client_env, headers)
     await _set_prefs(client_env, headers, {"hanh-dong": 2.0})
@@ -210,9 +208,7 @@ async def test_excludes_favorites_and_finished_but_keeps_in_progress(client_env)
 
     r = await client_env.client.get(RECS, headers=headers)
     slugs = [item["movie"]["slug"] for item in r.json()["items"]]
-    assert "fav" not in slugs
-    assert "done" not in slugs
-    assert slugs == ["partial"]
+    assert slugs == []
 
 
 async def test_people_overlap_boosts_score(client_env):
@@ -246,16 +242,17 @@ async def test_people_overlap_boosts_score(client_env):
 
     r = await client_env.client.get(RECS, headers=headers)
     slugs = [item["movie"]["slug"] for item in r.json()["items"]]
-    assert slugs == ["cand-cast", "cand-dir", "stranger", "seed-rated"]
+    assert slugs == ["cand-cast", "cand-dir", "stranger"]
     assert slugs.index("cand-cast") < slugs.index("stranger")
     assert "seed-fav" not in slugs
+    assert "seed-rated" not in slugs
 
 
 async def test_internal_average_is_proportional(client_env):
     headers, _ = await _register_login(client_env, "rec10@gmov.dev", "rec10")
-    pid = await _profile_id(client_env, headers)
     p2 = await _create_profile(client_env, headers, "P2")
     p3 = await _create_profile(client_env, headers, "P3")
+    p4 = await _create_profile(client_env, headers, "P4")
     await _set_prefs(client_env, headers, {"hanh-dong": 1.0})
     await _seed_catalog(
         client_env,
@@ -264,7 +261,7 @@ async def test_internal_average_is_proportional(client_env):
             {"slug": "aaa-low", "genres": ["hanh-dong"]},
         ],
     )
-    for profile in (pid, p2, p3):
+    for profile in (p2, p3, p4):
         await _seed_signals(
             client_env,
             profile,
@@ -278,9 +275,9 @@ async def test_internal_average_is_proportional(client_env):
 
 async def test_not_onboarded_returns_popular(client_env):
     headers, _ = await _register_login(client_env, "rec4@gmov.dev", "rec4")
-    pid = await _profile_id(client_env, headers)
     p2 = await _create_profile(client_env, headers, "P2")
     p3 = await _create_profile(client_env, headers, "P3")
+    p4 = await _create_profile(client_env, headers, "P4")
     await _seed_catalog(
         client_env,
         [
@@ -288,9 +285,8 @@ async def test_not_onboarded_returns_popular(client_env):
             {"slug": "unrated", "genres": ["kinh-di"], "year": 2024},
         ],
     )
-    await _seed_signals(client_env, pid, ratings=(("popular", 5),))
-    await _seed_signals(client_env, p2, ratings=(("popular", 5),))
-    await _seed_signals(client_env, p3, ratings=(("popular", 5),))
+    for profile in (p2, p3, p4):
+        await _seed_signals(client_env, profile, ratings=(("popular", 5),))
 
     r = await client_env.client.get(RECS, headers=headers)
     assert r.status_code == 200, r.text
@@ -304,7 +300,6 @@ async def test_not_onboarded_returns_popular(client_env):
 
 async def test_no_qualifying_ratings_returns_newest(client_env):
     headers, _ = await _register_login(client_env, "rec5@gmov.dev", "rec5")
-    pid = await _profile_id(client_env, headers)
     p2 = await _create_profile(client_env, headers, "P2")
     await _seed_catalog(
         client_env,
@@ -314,7 +309,6 @@ async def test_no_qualifying_ratings_returns_newest(client_env):
             {"slug": "undated", "year": None},
         ],
     )
-    await _seed_signals(client_env, pid, ratings=(("old", 5),))
     await _seed_signals(client_env, p2, ratings=(("old", 5),))
 
     r = await client_env.client.get(RECS, headers=headers)
@@ -343,9 +337,7 @@ async def test_cache_hit_ignores_db_changes(client_env):
     await _seed_catalog(client_env, [{"slug": "base", "genres": ["hanh-dong"]}])
 
     first = (await client_env.client.get(RECS, headers=headers)).json()
-    await _seed_catalog(
-        client_env, [{"slug": "intruder", "genres": ["hanh-dong"]}]
-    )
+    await _seed_catalog(client_env, [{"slug": "intruder", "genres": ["hanh-dong"]}])
     second = (await client_env.client.get(RECS, headers=headers)).json()
 
     assert second == first
@@ -411,9 +403,7 @@ async def test_negative_only_match_has_no_reason(client_env):
 async def test_recommendations_are_isolated_per_profile(client_env):
     headers, user_id = await _register_login(client_env, "rec12@gmov.dev", "rec12")
     pid_b = await _create_profile(client_env, headers, "B")
-    b_headers = {
-        "Authorization": f"Bearer {make_access_token(user_id, pid_b)}"
-    }
+    b_headers = {"Authorization": f"Bearer {make_access_token(user_id, pid_b)}"}
     await _set_prefs(client_env, headers, {"hanh-dong": 2.0})
     await _set_prefs(client_env, b_headers, {"kinh-di": 2.0})
     await _seed_catalog(

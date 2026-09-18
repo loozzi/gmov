@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
@@ -12,9 +13,18 @@ interface Props {
   emptyHint?: string;
   /** Optional per-movie reason, keyed by movie slug. */
   reasons?: Record<string, string>;
+  /** Replace the default card (e.g. to overlay feedback controls). */
+  renderCard?: (movie: MovieCardType) => ReactNode;
 }
 
-export function MovieRail({ title, href, movies, emptyHint, reasons }: Props) {
+export function MovieRail({
+  title,
+  href,
+  movies,
+  emptyHint,
+  reasons,
+  renderCard,
+}: Props) {
   if (movies.length === 0 && !emptyHint) return null;
   return (
     <section className="group/rail space-y-2">
@@ -37,7 +47,7 @@ export function MovieRail({ title, href, movies, emptyHint, reasons }: Props) {
         <div className="rail-scroll -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
           {movies.map((m) => (
             <div key={m.slug} className="w-36 shrink-0 sm:w-44">
-              <MovieCard movie={m} />
+              {renderCard ? renderCard(m) : <MovieCard movie={m} />}
               {reasons?.[m.slug] && (
                 <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                   {reasons[m.slug]}

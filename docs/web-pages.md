@@ -85,7 +85,7 @@
   PIN dialog trước khi switch. Dropdown dùng `modal={false}` để không khoá scroll
   trang (tránh nháy scrollbar). API: `docs/api-profiles.md`.
 
-## Onboarding & gợi ý (M2)
+## Onboarding & gợi ý (M2 + M3)
 
 ### `/onboarding` — quiz 3 bước
 
@@ -97,10 +97,12 @@
   poster có nút thích/bỏ qua; like gửi `POST /me/preferences/posters`.
 - **Bước 3 — "Sẵn sàng xem phim!"**: tổng kết + "Bắt đầu xem" → `PUT /me/preferences`.
 - **"Bỏ qua" ở mọi bước** → `PUT /me/preferences` với `skipped: true` rồi về `/`.
-- **Guard client-side**: nếu profile hiện tại có `onboarding_completed_at` và
-  không vào bằng `?again=1` → `router.replace("/")`; chưa đăng nhập → CTA đăng
-  nhập. Không dùng middleware (middleware chỉ thấy cookie refresh).
-- `?again=1` (từ "Làm lại sở thích") bỏ qua guard để onboard lại.
+- **Guard client-side**: profile **có tín hiệu** (favorite/rating/lịch sử/
+  watchlist/phản hồi) mà không vào bằng `?again=1` → `router.replace("/me/taste")`
+  (M3: user đã có dữ liệu quản gu ở trang riêng, không làm lại quiz); profile đã
+  onboard nhưng chưa có tín hiệu → `/` như cũ; chưa đăng nhập → CTA đăng nhập.
+  Không dùng middleware (middleware chỉ thấy cookie refresh).
+- `?again=1` (từ "Làm lại sở thích"/"Chạy lại onboarding") bỏ qua guard.
 - Test ids ổn định cho Playwright: `onboarding-genre-<slug>`,
   `onboarding-country-<slug>`, `onboarding-next`, `onboarding-skip`,
   `onboarding-poster-like-<slug>`, `onboarding-poster-skip-<slug>`,
@@ -115,9 +117,33 @@ chưa đăng nhập.
 - Tiêu đề theo `source`: **"Gợi ý cho bạn"** (`personal`), **"Phổ biến"**
   (`popular`); `newest` **ẩn hẳn** vì trùng rail tĩnh "Mới cập nhật". Cũng ẩn
   khi đang tải, lỗi, hoặc `items.length === 0`.
-- `MovieRail` nhận thêm prop optional `reasons` (`Record<slug, string>`); rail
-  render **dòng lý do** ngắn dưới mỗi card (`"Vì bạn thích Hành Động"`). Đây là
-  text per-card, không có UI phụ (xem `docs/todo.md`).
+- `MovieRail` nhận thêm prop optional `reasons` (`Record<slug, string>`) và
+  `renderCard` (M3); rail render **dòng lý do** ngắn dưới mỗi card, nay theo
+  nguồn (`"Vì bạn yêu thích phim Hành Động"`, `"Có <diễn viên> bạn đã xem"`, …).
+- **Hai nút phản hồi trên mỗi card gợi ý** (M3, `recommendation-feedback.tsx`):
+  "Quan tâm" / "Không quan tâm" → `POST /me/recommendations/feedback`, card ẩn
+  ngay (optimistic) và toast có nút **Hoàn tác** (`DELETE`). Toaster nay nhận
+  action tùy chọn (`toast(message, kind, { label, onClick })`).
+- **CTA mời onboarding** (`onboarding-cta.tsx`) trên trang chủ: chỉ hiện khi đã
+  đăng nhập, chưa `onboarding_completed_at` và `has_signals === false`; bấm sang
+  `/onboarding`. Không hard-redirect (tránh bẫy user).
+
+## `/me/taste` — "Gu của tôi" (M3)
+
+Trang xem/sửa gu, link trong menu profile ("Gu của tôi"):
+
+- **Thể loại**: thanh trọng số (đỏ khi âm) + chip breakdown nguồn
+  (`bạn chọn`, `yêu thích`, `đánh giá`, `xem xong`, `đang xem`, `muốn xem`,
+  `phản hồi`) từ `GET /me/taste`. Gỡ → thêm vào `excluded_genres` (thắng mọi
+  nguồn, kể cả lịch sử); thêm lại thể loại đã ẩn hoặc thêm thể loại mới với
+  trọng số `+2.0`.
+- **Quốc gia**: đọc từ `country_weights`, gỡ làm giảm `countries`.
+- **Phản hồi gợi ý**: danh sách phim đã bấm Quan tâm/Không quan tâm + nút Hoàn tác.
+- **Chạy lại onboarding**: xác nhận → `DELETE /me/preferences` rồi
+  `/onboarding?again=1` (không đụng favorite/lịch sử/watchlist).
+- Test ids: `taste-remove-<slug>`, `taste-add-<slug>`, `taste-undo-<slug>`,
+  `taste-reset`, `rec-interested-<slug>`, `rec-not-interested-<slug>`,
+  `onboarding-cta`.
 - API + engine: `docs/api-recommendations.md`.
 
 ## Bình luận có spoiler

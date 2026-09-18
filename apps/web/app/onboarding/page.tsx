@@ -81,6 +81,12 @@ function OnboardingFlow() {
   // profile must be bounced here on mount (unless entering via "Làm lại").
   useEffect(() => {
     if (ready || authLoading || !isAuthenticated || prefsLoading) return;
+    // A profile that already has signals manages taste at /me/taste; the quiz
+    // is only for empty profiles (or an explicit "Làm lại" with ?again=1).
+    if (!again && prefs?.has_signals) {
+      router.replace("/me/taste");
+      return;
+    }
     if (!again && prefs?.onboarding_completed_at) {
       router.replace("/");
       return;

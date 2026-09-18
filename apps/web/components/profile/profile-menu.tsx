@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, ChevronDown, Lock, Settings, Users } from "lucide-react";
+import { Check, ChevronDown, Lightbulb, Lock, Settings, Users } from "lucide-react";
 import { useState } from "react";
 
 import { ProfileAvatar } from "@/components/profile/profile-avatar";
@@ -132,6 +132,11 @@ export function ProfileMenu() {
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <Link href="/me/taste">
+              <Lightbulb /> Gu của tôi
+            </Link>
+          </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link href="/profiles/manage">
               <Settings /> Quản lý profile

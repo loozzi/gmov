@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     catalog_ttl_hours: int = Field(default=24, ge=1)
     catalog_refresh_interval_minutes: int = Field(default=360, ge=1)
-    catalog_refresh_pages: int = Field(default=1, ge=1)
+    catalog_refresh_pages: int = Field(default=5, ge=1)
 
     recs_limit: int = Field(default=20, ge=1)
     recs_cache_ttl: int = Field(default=900, ge=1)

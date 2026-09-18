@@ -1,6 +1,7 @@
 import { ContinueWatchingRail } from "@/components/movies/continue-watching-rail";
 import { HeroCarousel } from "@/components/movies/hero-carousel";
 import { MovieRail } from "@/components/movies/movie-rail";
+import { OnboardingCta } from "@/components/movies/onboarding-cta";
 import { RecommendationsRail } from "@/components/movies/recommendations-rail";
 import { Reveal } from "@/components/ui/reveal";
 import { fetchGenre, fetchLatest, fetchList } from "@/lib/server-movies";
@@ -22,6 +23,9 @@ export default async function Home() {
     <div>
       <HeroCarousel movies={heroMovies} />
       <div className="relative z-10 -mt-20 space-y-8 pb-8 sm:-mt-24">
+        <Reveal>
+          <OnboardingCta />
+        </Reveal>
         <Reveal>
           <RecommendationsRail />
         </Reveal>
