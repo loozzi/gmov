@@ -134,9 +134,9 @@ Trang xem/sửa gu, link trong menu profile ("Gu của tôi"):
 
 - **Thể loại**: thanh trọng số (đỏ khi âm) + chip breakdown nguồn
   (`bạn chọn`, `yêu thích`, `đánh giá`, `xem xong`, `đang xem`, `muốn xem`,
-  `phản hồi`) từ `GET /me/taste`. Gỡ → thêm vào `excluded_genres` (thắng mọi
-  nguồn, kể cả lịch sử); thêm lại thể loại đã ẩn hoặc thêm thể loại mới với
-  trọng số `+2.0`.
+  `phản hồi`) từ `GET /me/taste`. Gỡ → thêm vào `excluded_genres`: thể loại
+  không nhận điểm từ bất kỳ nguồn nào và **phim gắn thể loại đó bị loại hẳn**
+  khỏi gợi ý; thêm lại thể loại đã ẩn hoặc thêm thể loại mới với trọng số `+2.0`.
 - **Quốc gia**: đọc từ `country_weights`, gỡ làm giảm `countries`.
 - **Phản hồi gợi ý**: danh sách phim đã bấm Quan tâm/Không quan tâm + nút Hoàn tác.
 - **Chạy lại onboarding**: xác nhận → `DELETE /me/preferences` rồi

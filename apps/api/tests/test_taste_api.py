@@ -265,6 +265,30 @@ async def test_signals_only_profile_gets_personal_recommendations(client_env):
     assert body["items"][0]["reason"] == "Vì bạn yêu thích phim Hành Động"
 
 
+async def test_excluded_genre_filters_movies_with_other_genres(client_env):
+    headers, _ = await _register_login(client_env, "taste9@gmov.dev", "taste9")
+    await _seed_catalog(
+        client_env,
+        [
+            {"slug": "pure-action", "genres": ["hanh-dong"]},
+            {"slug": "mixed-anime", "genres": ["hanh-dong", "hoat-hinh"]},
+        ],
+    )
+    await client_env.client.put(
+        f"{ME}/preferences",
+        headers=headers,
+        json={
+            "genres": {"hanh-dong": 2.0},
+            "countries": {},
+            "excluded_genres": ["hoat-hinh"],
+        },
+    )
+
+    body = (await client_env.client.get(RECS, headers=headers)).json()
+    slugs = [item["movie"]["slug"] for item in body["items"]]
+    assert slugs == ["pure-action"]
+
+
 async def test_not_interested_penalises_genre_and_hides(client_env):
     headers, _ = await _register_login(client_env, "taste6@gmov.dev", "taste6")
     pid = await _profile_id(client_env, headers)

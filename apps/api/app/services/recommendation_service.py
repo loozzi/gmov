@@ -25,6 +25,9 @@ from app.services.taste_service import TasteProfile
 
 MAX_LIMIT = 50
 FALLBACK_TTL_SECONDS = 300
+# Bump when scoring/exclusion rules change: the cache key otherwise only tracks
+# user data, so a deployed algorithm change would serve stale rails for the TTL.
+ENGINE_VERSION = 2
 GENRE_WEIGHT = 3.0
 COUNTRY_WEIGHT = 1.0
 PEOPLE_WEIGHT = 2.0
@@ -135,6 +138,11 @@ async def _personal(
     for item in items:
         if item.slug in taste.seen:
             continue
+        # Excluding a genre drops the movie entirely, not just its weight: most
+        # animation titles also carry a liked genre ("hanh-dong", "gia-tuong"),
+        # so zeroing the weight alone still recommended them.
+        if taste.excluded_genres and set(item.genres or []) & taste.excluded_genres:
+            continue
         score, best_genre, person = _score(
             item,
             taste.genre_weights,
@@ -211,11 +219,14 @@ async def recommend(
     )
     if onboarded or await taste_service.has_signals(db, profile_id):
         signals_version = await taste_service.signals_version(db, profile_id)
-        key = f"recs:{profile_id}:{_version_of(prefs)}:{signals_version}"
+        key = (
+            f"recs:{profile_id}:{ENGINE_VERSION}:"
+            f"{_version_of(prefs)}:{signals_version}"
+        )
         fetcher = partial(_personal, db, profile_id, prefs, MAX_LIMIT)
         ttl = settings.recs_cache_ttl
     else:
-        key = f"recs:{profile_id}:{_version_of(prefs)}"
+        key = f"recs:{profile_id}:{ENGINE_VERSION}:{_version_of(prefs)}"
         fetcher = partial(_fallback, db, MAX_LIMIT)
         ttl = FALLBACK_TTL_SECONDS
     data, _status = await cache.cached_fetch(key, ttl, RecommendationsOut, fetcher)

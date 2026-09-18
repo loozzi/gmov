@@ -107,10 +107,12 @@ ngưỡng dùng `stars >= 4` / `stars <= 2` (không phải ≥8/≤4 — spec ba
 ## Trang "Gu của tôi" (`GET /taste`)
 
 `taste_profile()` gộp hai tầng: explicit (`profile_preferences.genres/countries`)
-và hàng vi tính lúc đọc, rồi cap mỗi thể loại trong `[-3.0, +3.0]` (loại thể loại
-trong `excluded_genres`). `sources` trả đóng góp từng nguồn để UI giải thích "vì
-sao có gu này"; web dùng chính dữ liệu đó để gỡ/thêm thể loại (`excluded_genres`)
-và hoàn tác phản hồi. Gỡ thể loại thắng mọi nguồn, kể cả lịch sử.
+và hành vi tính lúc đọc, rồi cap mỗi thể loại trong `[-3.0, +3.0]`. `excluded_genres`
+là một **bộ lọc cứng**: thể loại bị gỡ không nhận điểm (mọi nguồn) **và phim có
+bất kỳ thể loại nào trong đó bị loại hẳn khỏi rail cá nhân** — nếu chỉ trừ điểm
+thì phim hoạt hình vẫn lọt vì hầu hết cũng gắn `hanh-dong`/`gia-tuong`. `sources`
+trả đóng góp từng nguồn để UI giải thích "vì sao có gu này"; web dùng chính dữ
+liệu đó để gỡ/thêm thể loại và hoàn tác phản hồi.
 
 ## Engine chấm điểm
 
@@ -160,7 +162,10 @@ score = 3.0 × (Σ w_thể-loại-khớp / √số_thể_loại_của_phim)   # 
 
 ## Cache
 
-- Key `recs:{profile_id}:{prefs_ver}:{signals_ver}` với `prefs_ver` = epoch
+- Key `recs:{profile_id}:{engine_ver}:{prefs_ver}:{signals_ver}` với `engine_ver`
+  = `recommendation_service.ENGINE_VERSION` (tăng khi đổi luật chấm/lọc; đổi code
+  không bump `prefs_ver`/`signals_ver` nên nếu thiếu thành phần này sẽ phục vụ
+  rail cũ tới hết TTL), `prefs_ver` = epoch
   `updated_at` của row `profile_preferences` (fallback `0` khi chưa có row) và
   `signals_ver` = fingerprint `(count, max updated_at)` gộp từ
   favorite/rating/watch_progress/watchlist/recommendation_feedback. Key này

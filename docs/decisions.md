@@ -776,6 +776,10 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      nên reset onboarding (#58) không mất tín hiệu hành vi. Explicit nằm ở
      `profile_preferences`; thêm cột `excluded_genres` để user **gỡ** một thể
      loại thắng mọi nguồn (nếu chỉ ghi explicit weight thì derived sẽ cộng lại).
+     Gỡ thể loại là **lọc cứng phim** (`_personal` bỏ mọi item có giao thể loại),
+     không chỉ trừ điểm: catalog có 0 phim chỉ gắn `hoat-hinh`, nên trừ điểm vẫn
+     để phim hoạt hình lọt qua nhờ `hanh-dong`/`gia-tuong` (bug người dùng báo,
+     đã sửa + test #taste9).
      Bảng `recommendation_feedback` (UNIQUE profile+phim, `kind` interested/
      not_interested) lưu thumb; đổi ý = update, hoàn tác = xoá row. Cap mỗi thể
      loại `[-3.0, +3.0]`. Lý do gợi ý nêu nguồn mạnh nhất. Đây là Hướng 1 đã
@@ -784,6 +788,8 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      theo yêu cầu.** Key `recs:` thêm `signals_ver` = `(count, max updated_at)`
      của 5 bảng tín hiệu, vì bản M2 chỉ bump theo `profile_preferences` nên thêm
      favorite/xem phim không làm mới gợi ý trong 15 phút (đo được, sửa luôn).
+     `ENGINE_VERSION` thêm vào key vì đổi luật chấm/lọc không đổi key dữ liệu →
+     phục vụ rail cũ tới hết TTL (gặp lúc sửa lỗi lọc `excluded_genres`).
      `CATALOG_REFRESH_PAGES` 1→5: **đo lại 2026-09-18** thấy 5 trang đầu của một
      listing cho 50 slug khác nhau (ghi chú cũ "trang sâu ~0 unique" là sai), kèm
      chặn fan-out 8 request đồng thời. Vì crawl không phủ hết phim cũ,
