@@ -3,7 +3,10 @@ import type { MetadataRoute } from "next";
 import { siteUrl } from "@/lib/seo";
 import { fetchLatest } from "@/lib/server-movies";
 
-export const revalidate = 21600; // 6h: sitemap regen chậm, upstream mới vẫn index được
+// Rendered per request for the same reason as robots.ts: `SITE_URL` is
+// runtime-only. Upstream listing fetches stay cached (see server-movies.ts),
+// so regeneration is cheap.
+export const dynamic = "force-dynamic";
 
 const MAX_PAGES = 100; // 100 trang x 10 phim = ~1000 URL
 const CONCURRENCY = 5;
