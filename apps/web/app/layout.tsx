@@ -2,9 +2,7 @@ import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
 import "./globals.css";
 
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
-import { ProfilePickerGate } from "@/components/profile/profile-picker-gate";
+import { AppShell } from "@/components/layout/app-shell";
 import { Providers } from "@/components/providers";
 import { PwaRegister } from "@/components/pwa-register";
 import { THEME_INIT_SCRIPT } from "@/components/theme-provider";
@@ -38,12 +36,7 @@ export default function RootLayout({
       <body className={`${roboto.className} flex min-h-screen flex-col antialiased`}>
         <PwaRegister />
         <Providers>
-          <SiteHeader />
-          <ProfilePickerGate />
-          <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
-            {children}
-          </main>
-          <SiteFooter />
+          <AppShell>{children}</AppShell>
         </Providers>
       </body>
     </html>

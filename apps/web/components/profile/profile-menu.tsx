@@ -20,7 +20,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
 import { ApiError, toVietnameseMessage } from "@/lib/errors";
-import { requestProfilePicker } from "@/lib/profile-picker";
 import {
   useCurrentProfile,
   useProfiles,
@@ -86,7 +85,11 @@ export function ProfileMenu() {
 
   return (
     <>
-      <DropdownMenu>
+      {/* modal={false}: a transient menu must not lock the page scroll.
+          Radix's default modal mode hides the viewport scrollbar while open,
+          which makes the whole page flicker on open/close. The nav menu in
+          SiteHeader does the same. */}
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
@@ -102,8 +105,10 @@ export function ProfileMenu() {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>Profile</DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => requestProfilePicker()}>
-            <Users /> Đổi profile
+          <DropdownMenuItem asChild>
+            <Link href="/profiles">
+              <Users /> Đổi profile
+            </Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {list.isLoading && (

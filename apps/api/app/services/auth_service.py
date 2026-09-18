@@ -17,7 +17,7 @@ from app.services import profile_service, user_service
 
 
 def _build_pair(
-    user_id: uuid.UUID, family_id: uuid.UUID, profile_id: uuid.UUID
+    user_id: uuid.UUID, family_id: uuid.UUID, profile_id: uuid.UUID | None
 ) -> tuple[TokenPair, RefreshToken]:
     """Create tokens + the (unsaved) refresh row. Caller commits."""
     refresh, jti = security.create_refresh_token(user_id)
@@ -38,7 +38,7 @@ def _build_pair(
 
 
 async def _issue_pair(
-    db: AsyncSession, user: User, profile_id: uuid.UUID
+    db: AsyncSession, user: User, profile_id: uuid.UUID | None
 ) -> TokenPair:
     pair, row = _build_pair(user.id, uuid.uuid4(), profile_id)
     db.add(row)
@@ -55,6 +55,9 @@ async def register(db: AsyncSession, data: RegisterIn) -> User:
 
 
 async def login(db: AsyncSession, login: str, password: str) -> TokenPair:
+    """Authenticate the account, NOT a profile: the pair starts unselected so
+    a PIN-locked profile (the default included) cannot be read before its PIN
+    is verified through `POST /me/profiles/{id}/switch`."""
     user = await user_service.get_by_login(db, login)
     if user is None or not security.verify_password(password, user.hashed_password):
         raise AppException("Invalid credentials", "INVALID_CREDENTIALS", 401)
@@ -62,8 +65,7 @@ async def login(db: AsyncSession, login: str, password: str) -> TokenPair:
         raise AppException("Account is disabled", "ACCOUNT_DISABLED", 403)
     if user.banned_at is not None:
         raise AppException("Account banned", "ACCOUNT_BANNED", 403)
-    profile = await profile_service.default_for(db, user.id)
-    return await _issue_pair(db, user, profile.id)
+    return await _issue_pair(db, user, None)
 
 
 def _decode_refresh(token: str) -> dict:
@@ -166,11 +168,13 @@ async def refresh(db: AsyncSession, token: str) -> TokenPair:
                 "Invalid refresh token", "INVALID_REFRESH_TOKEN", 401
             )
         profile_id = presented.profile_id
-        if (
-            profile_id is None
-            or await profile_service.get_owned(db, user.id, profile_id) is None
+        if profile_id is not None and (
+            await profile_service.get_owned(db, user.id, profile_id) is None
         ):
-            profile_id = (await profile_service.default_for(db, user.id)).id
+            # The selected profile is gone: the session degrades to unselected
+            # (the client is sent back to the chooser) instead of being moved
+            # to the account default, which may be PIN-locked.
+            profile_id = None
         pair, new_row = _build_pair(user.id, presented.family_id, profile_id)
         db.add(new_row)
         await db.commit()

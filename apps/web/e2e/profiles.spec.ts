@@ -19,7 +19,11 @@ import {
   type PinCandidates,
   type TestAccount,
 } from "./helpers/api";
-import { loginViaApi } from "./helpers/auth";
+import {
+  continuePastChooser,
+  loginViaApi,
+  loginViaUi,
+} from "./helpers/auth";
 
 // These specs MUST NOT register accounts: register is throttled 3/hour/IP and
 // the base account from global-setup is the only one used. Isolation is proven
@@ -67,15 +71,17 @@ async function cleanup(
   }
 }
 
-/** Log in through the actual form so AuthProvider.login() runs in THIS tab.
- * Needed by the picker spec: the picker only appears when the user logged in
- * inside that tab (the module-level intent is not persisted across reloads). */
-async function loginViaUi(page: Page, account: TestAccount): Promise<void> {
+/** Log in through the actual form and STOP on the chooser (the immersive
+ * `/profiles` screen): the picker tests need to see it before picking. */
+async function loginToChooser(
+  page: Page,
+  account: TestAccount,
+): Promise<void> {
   await page.goto("/login");
   await page.getByLabel(/email hoặc tên đăng nhập/i).fill(account.username);
   await page.getByLabel(/^mật khẩu$/i).fill(account.password);
   await page.getByRole("button", { name: /^đăng nhập$/i }).click();
-  await page.waitForURL((url) => url.pathname !== "/login", {
+  await page.waitForURL((url) => url.pathname === "/profiles", {
     timeout: 30_000,
   });
 }
@@ -122,13 +128,13 @@ test("second profile keeps its own My list and switching back preserves the firs
     await expect(page.getByText(`Phim mặc định ${keepSlug}`).first()).toBeVisible();
     await expect(page.getByText(`Phim Bé ${secondSlug}`)).toHaveCount(0);
 
-    // Switch to the second profile through the UI.
+    // Switch to the second profile through the UI: picking leaves the chooser.
     await page.goto("/profiles");
     await page.getByTestId(`profile-card-${second.id}`).click();
-    await expect(page.getByTestId(`profile-card-${second.id}`)).toHaveAttribute(
-      "aria-label",
-      "Bé (đang xem)",
-    );
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+    await expect(
+      page.locator("header").getByRole("button", { name: /chọn profile/i }),
+    ).toContainText("Bé");
     await page.goto("/me/favorites");
     await expect(page.getByText(`Phim Bé ${secondSlug}`).first()).toBeVisible();
     await expect(page.getByText(`Phim mặc định ${keepSlug}`)).toHaveCount(0);
@@ -136,10 +142,10 @@ test("second profile keeps its own My list and switching back preserves the firs
     // Switch back: the first profile's data is intact.
     await page.goto("/profiles");
     await page.getByTestId(`profile-card-${def.id}`).click();
-    await expect(page.getByTestId(`profile-card-${def.id}`)).toHaveAttribute(
-      "aria-label",
-      `${def.name} (đang xem)`,
-    );
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+    await expect(
+      page.locator("header").getByRole("button", { name: /chọn profile/i }),
+    ).toContainText(def.name);
     await page.goto("/me/favorites");
     await expect(page.getByText(`Phim mặc định ${keepSlug}`).first()).toBeVisible();
     await expect(page.getByText(`Phim Bé ${secondSlug}`)).toHaveCount(0);
@@ -171,22 +177,25 @@ test("a locked profile asks for its PIN", async ({ page }) => {
     await page.goto("/profiles");
     await page.getByTestId(`profile-card-${locked.id}`).click();
 
-    const dialog = page.getByRole("dialog");
+    // The PIN prompt is a full-screen modal and never shows the digits.
+    const dialog = page.getByTestId("profile-pin-dialog");
     await expect(dialog).toBeVisible();
+    const pinInput = dialog.getByLabel("Mã PIN");
+    await expect(pinInput).toHaveAttribute("type", "password");
 
     // Wrong PIN: the dialog stays open and shows the error.
-    await dialog.getByLabel("Mã PIN").fill("0000");
+    await pinInput.fill("0000");
     await dialog.getByRole("button", { name: /^xác nhận$/i }).click();
     await expect(dialog.getByRole("alert")).toHaveText(/PIN không đúng/i);
 
-    // Right PIN: the switch goes through and the card becomes current.
-    await dialog.getByLabel("Mã PIN").fill("2468");
+    // Right PIN: the switch goes through and the chooser hands off to home.
+    await pinInput.fill("2468");
     await dialog.getByRole("button", { name: /^xác nhận$/i }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByTestId(`profile-card-${locked.id}`)).toHaveAttribute(
-      "aria-label",
-      "Bé (đang xem)",
-    );
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+    await expect(
+      page.locator("header").getByRole("button", { name: /chọn profile/i }),
+    ).toContainText("Bé");
   } finally {
     await cleanup(account, [], lockedId ? { [lockedId]: "2468" } : {});
   }
@@ -288,18 +297,16 @@ test("deleting a profile removes only its data", async ({ page }) => {
     const defaultSlugs = slugsOf(await listFavorites(token));
     expect(defaultSlugs).toContain(keepSlug);
     expect(defaultSlugs).not.toContain(doomedSlug);
-    // ...and the deleted profile's scope self-heals to the default profile
-    // (`pid` of a removed profile falls back instead of 404-ing) without ever
-    // leaking the dead profile's favorites.
+    // ...and a token still holding the deleted profile's `pid` is answered
+    // with PROFILE_REQUIRED (the session goes back to the chooser) instead of
+    // being silently moved to the default profile, whose data would then leak.
     const stale = await rawApi("/api/v1/me/favorites", {
       headers: authHeaders(doomedToken),
     });
-    expect(stale.status).toBe(200);
-    const staleSlugs = slugsOf(
-      (await stale.json()) as { items: { movie_slug: string }[] },
+    expect(stale.status).toBe(403);
+    expect(((await stale.json()) as { code: string }).code).toBe(
+      "PROFILE_REQUIRED",
     );
-    expect(staleSlugs).toContain(keepSlug);
-    expect(staleSlugs).not.toContain(doomedSlug);
   } finally {
     await cleanup(account, [keepSlug], doomedId ? { [doomedId]: "1357" } : {});
   }
@@ -365,6 +372,14 @@ test("changing a PIN requires the current PIN", async ({ page }) => {
     const dialog = page.getByRole("dialog", { name: "Đổi PIN" });
     await expect(dialog).toBeVisible();
 
+    // Regression: the open animation used to apply its own translate on top of
+    // the centring utility, parking every dialog in the top-left quadrant.
+    const viewport = page.viewportSize();
+    const box = await dialog.boundingBox();
+    expect(box).not.toBeNull();
+    expect(Math.abs((box?.x ?? 0) + (box?.width ?? 0) / 2 - (viewport?.width ?? 0) / 2)).toBeLessThan(2);
+    expect(Math.abs((box?.y ?? 0) + (box?.height ?? 0) / 2 - (viewport?.height ?? 0) / 2)).toBeLessThan(2);
+
     // Wrong current PIN is rejected: the dialog stays open with the error.
     await dialog.getByLabel("PIN hiện tại").fill("0000");
     await dialog.getByLabel("Mật khẩu tài khoản").fill(account.password);
@@ -383,7 +398,7 @@ test("changing a PIN requires the current PIN", async ({ page }) => {
   }
 });
 
-test("the picker appears after login and enforces the PIN", async ({
+test("logging in lands on the full-screen chooser and enforces the PIN", async ({
   page,
 }) => {
   const account = await loadAccount();
@@ -397,18 +412,41 @@ test("the picker appears after login and enforces the PIN", async ({
     spareId = spare.id;
     await setProfilePin(token, spareId, account.password, "4321");
 
-    // Log in through the form in THIS tab: only then does the picker fire.
-    await loginViaUi(page, account);
+    // Log in through the form in THIS tab: the chooser is the landing page.
+    await loginToChooser(page, account);
 
-    const picker = page.getByTestId("profile-picker");
-    await expect(picker).toBeVisible();
+    const chooser = page.getByTestId("profile-chooser");
+    await expect(chooser).toBeVisible();
+    // Immersive screen: the app chrome is hidden, so choosing is the only way
+    // forward (no "Để sau", no header links out).
+    await expect(page.locator("header")).toHaveCount(0);
+    await expect(page.getByText(/Để sau/i)).toHaveCount(0);
 
-    // A locked profile prompts for its PIN before switching.
-    await page.getByTestId(`profile-picker-option-${spareId}`).click();
-    const pinDialog = page.getByRole("dialog", {
-      name: `Nhập PIN cho ${name}`,
-    });
+    // A locked profile opens the full-screen PIN modal (masked input).
+    await page.getByTestId(`profile-card-${spareId}`).click();
+    const pinDialog = page.getByTestId("profile-pin-dialog");
     await expect(pinDialog).toBeVisible();
+    await expect(pinDialog.getByLabel("Mã PIN")).toHaveAttribute(
+      "type",
+      "password",
+    );
+    const viewport = page.viewportSize();
+    // The open animation scales the surface, so poll until it is exactly the
+    // viewport — at (0,0), the size the old keyframe translate broke.
+    await expect
+      .poll(
+        async () => {
+          const b = await pinDialog.boundingBox();
+          return {
+            x: Math.round(b?.x ?? -1),
+            y: Math.round(b?.y ?? -1),
+            w: Math.round(b?.width ?? 0),
+            h: Math.round(b?.height ?? 0),
+          };
+        },
+        { timeout: 5_000 },
+      )
+      .toEqual({ x: 0, y: 0, w: viewport?.width, h: viewport?.height });
 
     await pinDialog.getByLabel("Mã PIN").fill("0000");
     await pinDialog.getByRole("button", { name: /^xác nhận$/i }).click();
@@ -417,12 +455,166 @@ test("the picker appears after login and enforces the PIN", async ({
     await pinDialog.getByLabel("Mã PIN").fill("4321");
     await pinDialog.getByRole("button", { name: /^xác nhận$/i }).click();
 
-    await expect(picker).toBeHidden();
+    // Picking hands off to the app: home page with the new profile in header.
+    await expect(pinDialog).toBeHidden();
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
     await expect(
       page.locator("header").getByRole("button", { name: /chọn profile/i }),
     ).toContainText(name);
   } finally {
     await cleanup(account, [], spareId ? { [spareId]: "4321" } : {});
+    await restoreDefault(account);
+  }
+});
+
+test("an unselected session is sent to the chooser before it can browse", async ({
+  page,
+}) => {
+  const account = await loadAccount();
+
+  try {
+    await resetProfiles(account);
+    // Login selects no profile (the backend answers PROFILE_REQUIRED for
+    // profile-scoped data), so "/" must hand off to the immersive chooser.
+    await loginViaApi(page, { skipChooser: true });
+    await expect(page).toHaveURL(/\/profiles\?next=%2F$/, { timeout: 20_000 });
+    await expect(page.getByTestId("profile-chooser")).toBeVisible();
+    await expect(page.locator("header")).toHaveCount(0);
+
+    // Picking resumes at the original target.
+    await continuePastChooser(page, "/");
+  } finally {
+    await cleanup(account);
+  }
+});
+
+test("picking the profile already on screen still asks for its PIN", async ({
+  page,
+}) => {
+  const account = await loadAccount();
+  const name = `Lai ${stamp()}`;
+  let spareId = "";
+
+  try {
+    await resetProfiles(account);
+    const token = (await loginUser(account)).access_token;
+    const spare = await createProfile(token, name, "ninja");
+    spareId = spare.id;
+    await setProfilePin(token, spareId, account.password, "2468");
+
+    // Bind this tab to the locked profile through the chooser first.
+    await loginViaApi(page, { skipChooser: true });
+    await expect(page.getByTestId("profile-chooser")).toBeVisible();
+    await page.getByTestId(`profile-card-${spareId}`).click();
+    const pinDialog = page.getByTestId("profile-pin-dialog");
+    await expect(pinDialog).toBeVisible();
+    await pinDialog.getByLabel("Mã PIN").fill("2468");
+    await pinDialog.getByRole("button", { name: /^xác nhận$/i }).click();
+    await expect(pinDialog).toBeHidden();
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+
+    // Now the same profile is the current one ("đang xem"): picking it again
+    // must still verify the PIN — the old `is_current` shortcut walked in.
+    await page.goto("/profiles");
+    await page.getByTestId(`profile-card-${spareId}`).click();
+    await expect(pinDialog).toBeVisible();
+    await pinDialog.getByLabel("Mã PIN").fill("2468");
+    await pinDialog.getByRole("button", { name: /^xác nhận$/i }).click();
+    await expect(pinDialog).toBeHidden();
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+  } finally {
+    await cleanup(account, [], spareId ? { [spareId]: "2468" } : {});
+    await restoreDefault(account);
+  }
+});
+
+test("a chooser handoff respects the ?next target", async ({ page }) => {
+  const account = await loadAccount();
+
+  try {
+    await resetProfiles(account);
+    await page.goto("/login?next=%2Fme%2Ffavorites");
+    await page.getByLabel(/email hoặc tên đăng nhập/i).fill(account.username);
+    await page.getByLabel(/^mật khẩu$/i).fill(account.password);
+    await page.getByRole("button", { name: /^đăng nhập$/i }).click();
+    await page.waitForURL(
+      (url) =>
+        url.pathname === "/profiles" &&
+        url.searchParams.get("next") === "/me/favorites",
+      { timeout: 30_000 },
+    );
+
+    // No profile is current until one is picked: any card works, the first
+    // one (the default) has no PIN.
+    await continuePastChooser(page, "/me/favorites");
+  } finally {
+    await cleanup(account);
+    await restoreDefault(account);
+  }
+});
+
+test("a chooser handoff ignores a next that points back at the chooser", async ({
+  page,
+}) => {
+  const account = await loadAccount();
+
+  try {
+    await resetProfiles(account);
+    // self-referential next (the old guest CTA used to emit this): one pick
+    // must be enough — no second mandatory pick.
+    await page.goto("/login?next=%2Fprofiles");
+    await page.getByLabel(/email hoặc tên đăng nhập/i).fill(account.username);
+    await page.getByLabel(/^mật khẩu$/i).fill(account.password);
+    await page.getByRole("button", { name: /^đăng nhập$/i }).click();
+    await page.waitForURL((url) => url.pathname === "/profiles", {
+      timeout: 30_000,
+    });
+
+    await continuePastChooser(page, "/");
+    await expect(page.getByTestId("profile-chooser")).toHaveCount(0);
+  } finally {
+    await cleanup(account);
+    await restoreDefault(account);
+  }
+});
+
+test("a chooser switch recovers from a stale has_pin via PIN_REQUIRED", async ({
+  page,
+}) => {
+  const account = await loadAccount();
+  const name = `Chooser ${stamp()}`;
+  let spareId = "";
+
+  try {
+    await resetProfiles(account);
+    const token = (await loginUser(account)).access_token;
+    spareId = (await createProfile(token, name, "panda")).id;
+
+    // Load the chooser while the profile is still unlocked, so the client
+    // caches has_pin === false.
+    await loginViaApi(page);
+    await page.goto("/profiles");
+    const card = page.getByTestId(`profile-card-${spareId}`);
+    await expect(card).toBeVisible();
+
+    // Set the PIN behind the client's back; the cached list is now stale.
+    await setProfilePin(token, spareId, account.password, "9753");
+
+    await card.click();
+    // The server answers PIN_REQUIRED; the chooser must open the PIN prompt
+    // instead of leaving a dead-end error on the page.
+    const pinDialog = page.getByTestId("profile-pin-dialog");
+    await expect(pinDialog).toBeVisible();
+    await pinDialog.getByLabel("Mã PIN").fill("9753");
+    await pinDialog.getByRole("button", { name: /^xác nhận$/i }).click();
+
+    await expect(pinDialog).toBeHidden();
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+    await expect(
+      page.locator("header").getByRole("button", { name: /chọn profile/i }),
+    ).toContainText(name);
+  } finally {
+    await cleanup(account, [], spareId ? { [spareId]: "9753" } : {});
     await restoreDefault(account);
   }
 });
@@ -481,3 +673,75 @@ test("a stale has_pin reveals the current-PIN field on PIN_REQUIRED", async ({
     );
   }
 });
+
+test("the profile menu never locks page scroll (no scrollbar flicker)", async ({
+  page,
+}) => {
+  const account = await loadAccount();
+  const name = `Scroll ${stamp()}`;
+  let spareId = "";
+
+  try {
+    await resetProfiles(account);
+    const token = (await loginUser(account)).access_token;
+    spareId = (await createProfile(token, name, "ghost")).id;
+
+    // Two profiles so the chooser appears on login; picking the current one is
+    // the (required) way through to the app chrome.
+    await loginViaUi(page, account);
+
+    const scrollState = () =>
+      page.evaluate(() => ({
+        locked: document.body.getAttribute("data-scroll-locked"),
+        bodyOverflow: getComputedStyle(document.body).overflow,
+        pageHasScroll:
+          document.documentElement.scrollHeight >
+          document.documentElement.clientHeight,
+      }));
+
+    // Wait for the profile gate to resolve and the home content to render: the
+    // page must actually be scrollable, otherwise "no lock" is trivially true
+    // and the regression this guards (a hiding scrollbar) can't happen.
+    await expect
+      .poll(async () => (await scrollState()).pageHasScroll, { timeout: 20_000 })
+      .toBe(true);
+    const before = await scrollState();
+    expect(before.locked).toBeNull();
+
+    await page.getByRole("button", { name: "Chọn profile" }).click();
+    await expect(
+      page.getByRole("menuitem", { name: /Quản lý profile/ }),
+    ).toBeVisible();
+
+    // A transient menu must not lock the page scroll: hiding the viewport
+    // scrollbar while the menu is open is what made it flicker on open/close.
+    const during = await scrollState();
+    expect(during.locked).toBeNull();
+    expect(during.bodyOverflow).not.toBe("hidden");
+    expect(during.pageHasScroll).toBe(true);
+
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("menuitem", { name: /Quản lý profile/ }),
+    ).toBeHidden();
+
+    // The account menu lives in the same header and had the same default.
+    await page.getByRole("button", { name: "Tài khoản" }).click();
+    await expect(page.getByRole("menuitem", { name: /Trang cá nhân/ })).toBeVisible();
+    const accountDuring = await scrollState();
+    expect(accountDuring.locked).toBeNull();
+    expect(accountDuring.bodyOverflow).not.toBe("hidden");
+    await page.keyboard.press("Escape");
+    await expect(
+      page.getByRole("menuitem", { name: /Trang cá nhân/ }),
+    ).toBeHidden();
+
+    const after = await scrollState();
+    expect(after.locked).toBeNull();
+    expect(after.bodyOverflow).not.toBe("hidden");
+  } finally {
+    await cleanup(account, [], spareId ? { [spareId]: [] } : {});
+    await restoreDefault(account);
+  }
+});
+

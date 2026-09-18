@@ -10,11 +10,11 @@ Thiết kế/động cơ: `docs/superpowers/specs/2026-09-17-profiles-and-recomm
 
 | Method | Path | Body | Success |
 |--------|------|------|---------|
-| GET | `/profile` | — | 200 `ProfileOut` — profile đang hoạt động của phiên |
-| GET | `/profiles` | — | 200 `ProfileListOut` — mọi profile của tài khoản, kèm `is_current` |
+| GET | `/profile` | — | 200 `ProfileOut` — profile đang hoạt động của phiên; `403 PROFILE_REQUIRED` khi phiên chưa chọn profile |
+| GET | `/profiles` | — | 200 `ProfileListOut` — mọi profile của tài khoản, kèm `is_current`; **chạy được cả khi chưa chọn profile** (danh sách là đường vào chooser) |
 | POST | `/profiles` | `ProfileCreateIn` | 201 `ProfileOut`; `409 PROFILE_LIMIT_REACHED` khi đủ 5; `409 PROFILE_NAME_TAKEN` |
 | PATCH | `/profiles/{id}` | `ProfilePatchIn` | 200 `ProfileOut` — đổi tên/avatar (kể cả profile mặc định); `404 PROFILE_NOT_FOUND`; `409 PROFILE_NAME_TAKEN` |
-| POST | `/profiles/{id}/switch` | `ProfileSwitchIn` | 200 `SwitchOut`; `403 PIN_REQUIRED`, `401 INVALID_PIN`, `404 PROFILE_NOT_FOUND`, `401 SESSION_STALE` |
+| POST | `/profiles/{id}/switch` | `ProfileSwitchIn` | 200 `SwitchOut` — **cách duy nhất** để có access token gắn profile (đã qua PIN nếu profile có PIN); `403 PIN_REQUIRED`, `401 INVALID_PIN`, `404 PROFILE_NOT_FOUND`, `401 SESSION_STALE` |
 | DELETE | `/profiles/{id}` | `ProfileSwitchIn` | 200 `SwitchOut`; `403 PIN_REQUIRED`, `401 INVALID_PIN`, `409 DEFAULT_PROFILE`, `404 PROFILE_NOT_FOUND` |
 | PUT | `/profiles/{id}/pin` | `ProfilePinIn` | 200 `ProfileOut`; `403 PIN_REQUIRED`, `401 INVALID_PIN`, `400 INVALID_PASSWORD`, `404 PROFILE_NOT_FOUND` |
 
@@ -40,7 +40,7 @@ Thiết kế/động cơ: `docs/superpowers/specs/2026-09-17-profiles-and-recomm
 // ProfileSwitchIn = { "pin"?: "1234" }   // regex ^\d{4}$
 // ProfilePinIn    = { "password": str, "current_pin"?: "1234", "pin"?: "1234" | null }
 
-// SwitchOut — DELETE non-active trả cả hai null
+// SwitchOut — DELETE luôn trả cả hai null (phiên không nhận profile kế nhiệm)
 { "access_token": "jwt" | null, "profile": ProfileOut | null }
 ```
 
@@ -54,11 +54,14 @@ Thiết kế/động cơ: `docs/superpowers/specs/2026-09-17-profiles-and-recomm
 
 ### DELETE trả gì?
 
-- Xoá profile **không phải** profile đang dùng → `{"access_token": null,
-  "profile": null}`; phiên hiện tại không đổi.
-- Xoá **profile đang dùng** → phiên tự fallback về profile mặc định và response
-  mang access token mới trỏ profile mặc định kèm `ProfileOut` của nó, để client
-  thay token ngay (`setAccessToken` + `queryClient.resetQueries()`).
+Luôn `{"access_token": null, "profile": null}`.
+
+- Xoá profile **không phải** profile đang dùng → phiên hiện tại không đổi.
+- Xoá **profile đang dùng** → phiên trở về **chưa chọn profile**
+  (`refresh_tokens.profile_id = NULL`). Server **không** phát token cho profile
+  mặc định: nếu profile đó có PIN thì việc "kế thừa" nó sẽ vô hiệu hoá PIN. Web
+  đưa người dùng về `/profiles` để chọn lại (`queryClient.clear()` +
+  `router.replace("/profiles")`).
 
 Hard delete: dữ liệu của profile mất theo qua FK `ON DELETE CASCADE`
 (`favorites`, `watchlist`, `watch_progress`, `ratings`).
@@ -70,7 +73,8 @@ Hard delete: dữ liệu của profile mất theo qua FK `ON DELETE CASCADE`
 | `PROFILE_LIMIT_REACHED` | 409 | Tạo profile thứ 6 (đủ `MAX_PROFILES = 5`) |
 | `PROFILE_NAME_TAKEN` | 409 | Tên trùng (case-insensitive) với profile khác cùng tài khoản |
 | `DEFAULT_PROFILE` | 409 | Cố xoá profile `is_default = true` |
-| `PROFILE_NOT_FOUND` | 404 | `{id}` không tồn tại **hoặc** không thuộc tài khoản hiện tại |
+| `PROFILE_NOT_FOUND` | 404 | `{id}` không tồn tại **hoặc** không thuộc tài khoản hiện tại; `pid` claim hỏng |
+| `PROFILE_REQUIRED` | 403 | Phiên chưa chọn profile (token không có `pid`, hoặc `pid` trỏ profile đã bị xoá) mà gọi endpoint gắn profile |
 | `PIN_REQUIRED` | 403 | Profile có PIN nhưng request thiếu `pin` (switch/delete) hoặc thiếu `current_pin` (đổi/xoá PIN) |
 | `INVALID_PIN` | 401 | `pin` / `current_pin` sai |
 | `INVALID_PASSWORD` | 400 | Mật khẩu tài khoản sai khi đặt/đổi/xoá PIN |
@@ -109,33 +113,45 @@ Profile là một phần của phiên đăng nhập, **không** phải header `X
 PIN chỉ có nghĩa khi server enforce trên mọi request.
 
 - **Access token** mang claim `sub` (user id), `sid` (jti của refresh session đã
-  phát hành nó), `pid` (profile đang hoạt động), `type`, `jti`, `exp`
-  (`app/core/security.py`).
+  phát hành nó), `type`, `jti`, `exp` (`app/core/security.py`), và `pid` (profile
+  đang hoạt động) **chỉ khi phiên đã chọn profile**.
+- **Login/Register không chọn profile**: `/auth/login` xác thực *tài khoản* rồi
+  phát cặp token **không có `pid`**; profile mặc định cũng không được
+  tự động kích hoạt, nên PIN của nó vẫn có hiệu lực.
+- **`pid` vắng mặt = "chưa chọn"**, không phải "dùng mặc định": mọi endpoint gắn
+  profile (`/me/profile`, `/me/favorites`, progress, ratings, recommendations…)
+  trả `403 PROFILE_REQUIRED` cho tới khi client gọi `POST /me/profiles/{id}/switch`.
+  Riêng `GET /me/profiles`, `POST /switch` và `DELETE` chạy ở tầng tài khoản
+  (`get_session_context`, profile có thể `None`) để còn đường thoát; nhóm quản lý
+  profile (`POST /profiles`, `PATCH /profiles/{id}`, `PUT .../pin`) chỉ cần
+  `get_current_user` vì không phụ thuộc profile đang chọn.
 - **`refresh_tokens`** có cột `profile_id` UUID FK `profiles.id` `ON DELETE SET
   NULL`. Mỗi row = một phiên/thiết bị → **mỗi thiết bị nhớ profile riêng**;
   không dùng localStorage.
-- **Thiếu `pid`** (token cũ phát trước khi deploy) → `deps` đối xử mềm và dùng
-  profile **mặc định**, nên session cũ không chết.
+- **Thiếu `pid`** (token cũ phát trước khi deploy, hoặc phiên mới chưa chọn) →
+  `403 PROFILE_REQUIRED`. Token phát trước khi có profiles coi như "chưa chọn":
+  một lần `switch` là dùng lại được, không có nhánh nào tự nhảy vào profile mặc
+  định.
 - **`pid` thuộc user khác** → `404 PROFILE_NOT_FOUND` (không lộ sự tồn tại
   profile của người khác). `pid` hỏng (không phải UUID) cũng `404`. Ban được
   kiểm **trước** khi resolve profile nên user bị cấm vẫn `401 ACCOUNT_BANNED`.
-- **`pid` trỏ profile đã bị xoá → tự chữa lành**: server fallback về profile
-  **mặc định** của tài khoản và, nếu token có `sid`, ghi luôn
-  `refresh_tokens.profile_id` của phiên đó về profile mặc định (best-effort —
-  phiên đã bị logout thì bỏ qua). Nhờ vậy `GET /me/profile`, `GET /me/profiles`
-  và `GET /me/favorites` vẫn `200` thay vì kẹt `404`; thiết bị thứ hai không
-  còn phải chờ access token hết hạn.
+- **`pid` trỏ profile đã bị xoá → phiên về "chưa chọn"**: server ghi
+  `refresh_tokens.profile_id = NULL` (best-effort — phiên đã logout thì bỏ qua)
+  rồi trả `403 PROFILE_REQUIRED`; `GET /me/profiles` vẫn `200` nên client luôn có
+  chooser để chọn lại. Không fallback về profile mặc định (có thể đang khoá PIN).
 - **Switch cần `sid`**: thiếu → `401 SESSION_STALE`. `activate_session` ghi lại
   `refresh_tokens.profile_id` của đúng phiên đang gọi rồi phát access token mới.
-- **Refresh**: đọc row theo `jti`; nếu `profile_id` là NULL hoặc trỏ profile đã
-  bị xoá → fallback profile mặc định; access token mới luôn mang `sid` + `pid`.
+- **Refresh**: đọc row theo `jti`; `pid` mới = `refresh_tokens.profile_id`.
+  NULL, hoặc trỏ profile đã bị xoá → token mới **không có `pid`** (phiên chưa
+  chọn; client về chooser). Nhờ vậy đăng nhập lại sau khi profile bị xoá không
+  bao giờ rơi vào profile mặc định mà không qua PIN.
 - **Register** tạo user + profile mặc định (`is_default`) trong **cùng một
   transaction** (`app/services/user_service.py`).
 
-> **Tự chữa lành (multi-device)**: profile đang dùng bị xoá ở thiết bị khác thì
-> mọi request kế tiếp trên thiết bị này tự fallback về profile mặc định và
-> `GET /me/profiles` vẫn hiển thị được danh sách + nút "Thêm profile". UI không
-> cần refresh token mới để thoát khỏi trạng thái kẹt.
+> **Có thể thoát (multi-device)**: profile đang dùng bị xoá ở thiết bị khác thì
+> request kế tiếp trên thiết bị này trả `403 PROFILE_REQUIRED` và `GET
+> /me/profiles` vẫn `200`, nên UI hiển thị chooser + nút "Thêm profile" ngay mà
+> không cần chờ access token hết hạn.
 
 ## Migration
 

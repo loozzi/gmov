@@ -7,7 +7,15 @@ import { readFile } from "node:fs/promises";
 
 import { LAST_USER_FILE } from "./api";
 
-export async function loginViaApi(page: Page): Promise<void> {
+export interface UiAccount {
+  username: string;
+  password: string;
+}
+
+export async function loginViaApi(
+  page: Page,
+  options: { skipChooser?: boolean } = {},
+): Promise<void> {
   const account = JSON.parse(await readFile(LAST_USER_FILE, "utf8"));
   const res = await page.request.post("/api/auth/login", {
     data: { username: account.username, password: account.password },
@@ -17,7 +25,51 @@ export async function loginViaApi(page: Page): Promise<void> {
     `test login via /api/auth/login must succeed, got ${res.status()}`,
   ).toBeTruthy();
   await page.goto("/");
+  // Login selects no profile, so "/" bounces to the chooser: every caller but
+  // the gate test wants a usable app session, which means picking one.
+  if (!options.skipChooser) await continuePastChooser(page, "/");
+}
+
+/** Pick the default profile on the immersive chooser and leave. Specs that
+ *  need the app chrome (header/footer) must call this: a fresh login always
+ *  lands on /profiles, which shows no header. */
+export async function continuePastChooser(
+  page: Page,
+  target = "/",
+): Promise<void> {
+  await expect(page.getByTestId("profile-chooser")).toBeVisible({
+    timeout: 20_000,
+  });
+  const firstCard = page
+    .getByTestId("profile-chooser")
+    .locator('[data-testid^="profile-card-"]')
+    .first();
+  await expect(
+    firstCard.locator("svg.lucide-lock"),
+    "the first chooser card (the shared account's default profile) must stay PIN-free",
+  ).toHaveCount(0);
+  await firstCard.click();
+  await page.waitForURL((url) => url.pathname === target, {
+    timeout: 20_000,
+  });
   await expect(page.getByRole("button", { name: /tài khoản/i })).toBeVisible({
     timeout: 20_000,
   });
+}
+
+/** Log in through the actual form (so AuthProvider.login() runs in THIS tab)
+ *  and continue past the profile chooser to `target`. */
+export async function loginViaUi(
+  page: Page,
+  account: UiAccount,
+  target = "/",
+): Promise<void> {
+  await page.goto("/login");
+  await page.getByLabel(/email hoặc tên đăng nhập/i).fill(account.username);
+  await page.getByLabel(/^mật khẩu$/i).fill(account.password);
+  await page.getByRole("button", { name: /^đăng nhập$/i }).click();
+  await page.waitForURL((url) => url.pathname !== "/login", {
+    timeout: 30_000,
+  });
+  await continuePastChooser(page, target);
 }

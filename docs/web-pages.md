@@ -34,29 +34,51 @@
   and shows 5 quick suggestions. Old `/search` redirects here.
 - `/me`, `/me/favorites`, `/me/watchlist`, `/me/history` — auth pages (middleware-guarded).
   History reuses continue-watching data (no separate table, see decisions #17).
-- `/profiles` — "Ai đang xem?" (xem mục Profiles bên dưới).
+- `/login`, `/register` — form đăng nhập/đăng ký; xong thì **luôn** `replace` sang
+  `/profiles?next=<đích cũ>` (đích lọc open redirect — decision #132).
+- `/profiles` — "Ai đang xem?" — màn hình chọn profile full-screen (xem mục Profiles bên dưới).
 - `/profiles/manage` — đổi tên/avatar, đặt/xoá PIN, xoá profile, "Làm lại sở thích".
 - `/onboarding` — quiz 3 bước thiết lập gu (M2, xem mục Gợi ý bên dưới).
 - `MovieCard` — client component with blur placeholder + error fallback icon.
 
 ## Profiles (M1)
 
-- **`/profiles` — "Ai đang xem?"**: grid avatar các profile của tài khoản
-  (`useProfiles`), profile đang xem có nhãn "Đang xem", profile có PIN có badge
-  ổ; bấm một card → switch ngay, hoặc mở `ProfilePinDialog` nếu profile khoá.
-  Nút "Thêm profile" (`ProfileFormDialog`) chỉ hiện khi chưa đủ `max`.
+- **`/profiles` — "Ai đang xem?" (trang chọn profile)**: màn hình immersive
+  full-screen (`AppShell` ẩn header/footer cho riêng route này), nền tối, grid
+  avatar lớn giữa màn hình (`useProfiles`), profile đang xem có nhãn "Đang xem",
+  profile có PIN có badge ổ; bấm một card → switch rồi **rời trang** tới `next`
+  (query param, đã lọc open-redirect ở `lib/nav.ts`) hoặc `/`; profile khoá mở
+  `ProfilePinDialog`. Nút "Thêm profile" (`ProfileFormDialog`) chỉ hiện khi chưa
+  đủ `max`. Không có nút bỏ qua (bắt buộc chọn) và không có header để thoát ra;
+  khách chưa đăng nhập thấy lời nhắc + link `/login`.
+  **Đăng nhập/đăng ký luôn đáp xuống đây** (`router.replace("/profiles")`), kể cả
+  tài khoản một profile. Bấm card **đang xem** cũng đi qua `POST /switch` như mọi
+  card khác: chọn lại profile có PIN thì phải nhập PIN, không có lối tắt.
 - **`/profiles/manage`**: mỗi profile một hàng — đổi tên & avatar, đặt/đổi/xoá
   PIN (dialog riêng, cần **mật khẩu tài khoản**), và nút xoá. Profile mặc định
   **không có nút xoá**. Xoá profile có PIN → dialog nhập PIN + cảnh báo; xoá
   profile không PIN → `window.confirm`. Xoá chỉ mất dữ liệu của profile đó.
-  Sau switch/xoá profile đang dùng: `setAccessToken` mới + `queryClient.resetQueries()`
-  (data per-profile nằm rải ở nhiều query key). Không dùng localStorage —
-  profile nhớ theo phiên/thiết bị qua refresh cookie.
+  Sau switch: `setAccessToken` mới + `queryClient.resetQueries()` (data per-profile
+  nằm rải ở nhiều query key). Xoá **profile đang dùng** thì server không phát
+  profile kế nhiệm (mặc định có thể đang khoá PIN): trang `clear()` cache rồi
+  `router.replace("/profiles")` để chọn lại. Không dùng localStorage — profile
+  nhớ theo phiên/thiết bị qua refresh cookie.
+- **`ProfilePinDialog`** (mọi chỗ chỉ hỏi PIN: mở khoá/chuyển profile ở trang
+  chọn + menu header, xác nhận xoá profile có PIN): modal **full-screen**
+  (`DialogContent.fullScreen`) nền tối; ô PIN là `type="password"` nên không bao
+  giờ đọc được chữ số. Ngược lại `ProfileSetPinDialog` (đặt/đổi PIN trong
+  `/profiles/manage`, có cả mật khẩu tài khoản) vẫn là dialog thường.
+- **`ProfileGate`** (trong `AppShell`, mọi route không immersive): đã đăng nhập
+  mà **chưa chọn profile** → giữ một placeholder rồi `router.replace("/profiles?next=<đường
+  dẫn hiện tại>")`. Vì login không chọn profile, mọi endpoint gắn profile trả
+  `403 PROFILE_REQUIRED`; gate đưa người dùng về chooser thay vì để trang hiện
+  lỗi. Miễn trừ: `/profiles`, `/profiles/manage`, `/login`, `/register` — và
+  khách chưa đăng nhập vẫn duyệt web bình thường.
 - **Header switcher** (`ProfileMenu`, cạnh avatar): dropdown liệt kê profile
   (avatar, tên, ổ khoá nếu có PIN, dấu check cho profile hiện tại) + link
-  "Quản lý profile"; chọn profile khoá sẽ mở PIN dialog trước khi switch.
-- Trang chỉ dành cho người đã đăng nhập; khách thấy lời nhắc + link
-  `/login?next=/profiles`. API: `docs/api-profiles.md`.
+  "Đổi profile" về `/profiles` + link "Quản lý profile"; chọn profile khoá sẽ mở
+  PIN dialog trước khi switch. Dropdown dùng `modal={false}` để không khoá scroll
+  trang (tránh nháy scrollbar). API: `docs/api-profiles.md`.
 
 ## Onboarding & gợi ý (M2)
 

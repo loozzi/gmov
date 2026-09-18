@@ -652,3 +652,68 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      PIN thì bỏ qua `current_pin` (đặt lần đầu hoặc "xoá" khi chưa có PIN không
      cần). Bỏ rate limit riêng `ratelimit:pin-set:{ip}` (vốn đếm cả lần thành
      công) để nhất quán với nguyên tắc "chỉ lần thất bại tiêu ngân sách".
+132. **Chọn profile là một TRANG, không phải modal, và đăng nhập luôn đáp xuống
+     đó.** Bỏ hẳn `ProfilePickerGate` + `lib/profile-picker` (cờ ý định trong
+     tab): `login`/`register` giờ `router.replace("/profiles")` (kèm `next` đã
+     lọc qua `safeNextPath`), chọn xong thì rời trang tới `next` hoặc `/`. Lý do:
+     modal chồng lên trang gây nháy scrollbar và không "bắt buộc chọn" được; một
+     route riêng thì deep-link được, back/forward đúng, và test bằng URL thay vì
+     testid. `/profiles` chạy immersive: `AppShell` (client, đọc `usePathname`)
+     ẩn header/footer cho đúng route này — đổi nhỏ hơn nhiều so với việc dời 18
+     thư mục route sang route group. Không có nút "Để sau": chọn profile là bước
+     bắt buộc (người dùng vẫn tự điều hướng URL được, không thêm middleware chặn
+     cứng vì sẽ nhốt cả tab mới).
+133. **PIN không bao giờ hiển thị: dialog full-screen + `type="password"`.**
+     Form nhập PIN dùng ô `type="password"` (hiện dấu chấm) thay vì text, và
+     `DialogContent` có thêm biến thể `fullScreen` (phủ kín viewport, nền tối,
+     không bo góc) cho **mọi** `ProfilePinDialog` — tức mọi chỗ chỉ hỏi PIN:
+     mở khoá/chuyển profile ở trang chọn + menu header, và xác nhận xoá profile
+     có PIN. Form "Đặt/Đổi PIN" trong `/profiles/manage` vẫn là dialog thường vì
+     đó là `ProfileSetPinDialog` (form nhiều trường: mật khẩu tài khoản + PIN
+     hiện tại + PIN mới), không phải bàn phím PIN.
+134. **Menu header dùng `modal={false}` để không khoá scroll trang.** Radix
+     `DropdownMenu` mặc định `modal` → đặt `body[data-scroll-locked]` +
+     `overflow: hidden` khi mở; trang vẫn scroll được nên scrollbar viewport bị
+     bỏ và **nháy** mỗi lần mở/đóng. Menu profile + menu tài khoản chuyển sang
+     `modal={false}` (menu thể loại ở `SiteHeader` đã vậy từ trước). Có test E2E
+     chống tái phát: mở cả hai menu → `data-scroll-locked` phải vắng và
+     `overflow` không được `hidden`.
+135. **Keyframes của dialog chỉ animate `opacity`/`scale`, KHÔNG `transform`.** Bug
+     (có trước M3, phát hiện khi làm trang chọn profile): `@keyframes dialog-in/out`
+     đặt `transform: translate(-50%, -50%) scale(...)`, nhưng Tailwind v4 render
+     `-translate-x-1/2` bằng **thuộc tính `translate` độc lập**, nên hai phép dịch
+     cộng dồn → mọi dialog lệch hẳn vào 1/4 trên-trái (đo được: `translate: -50%
+     -50%` + `transform: matrix(…, -224, -149)` với dialog 448×298 trên viewport
+     1280×800 → x=192 thay vì 416). Dialog full-screen (`inset-0`, không có
+     translate) còn bị đẩy đi nửa viewport. Vì keyframe có `fill-mode: both`, giá
+     trị `transform` cuối vẫn dính sau khi animation kết thúc. Fix: bỏ translate
+     khỏi keyframe (việc căn giữa đã do utility `top-1/2 left-1/2 -translate-x-1/2
+     -translate-y-1/2` lo); E2E giờ assert dialog thường căn giữa đúng ≤2px và
+     dialog full-screen khớp viewport tại `(0,0)`.
+136. **Login KHÔNG chọn profile — `pid` trong access token là bằng chứng đã chọn
+     (và đã qua PIN).** Bug (user báo): đăng nhập xong profile **mặc định** đã
+     "đang hoạt động" dù chưa nhập PIN, vì `auth_service.login` phát token kèm
+     `pid = default` và `verify_pin` chỉ chạy ở `switch`/`delete` → `GET
+     /me/profile`, `/me/favorites`… trả `200` ngay sau login (đo được: PIN 1357
+     trên profile mặc định, login mới vẫn đọc được dữ liệu). Web cũng góp phần:
+     chooser thấy `is_current` thì `leave()` thẳng (`app/profiles/page.tsx`).
+     Chốt hướng **"không bind profile khi login"** (user chọn, strict nhất):
+     - `login`/`register` phát cặp token **không có `pid`**; `_profile_from_claims`
+       coi `pid` vắng = **chưa chọn** → `403 PROFILE_REQUIRED` (KHÔNG fallback về
+       profile mặc định — bỏ nhánh cũ của #130/#132).
+     - `POST /me/profiles/{id}/switch` là **cách duy nhất** để có token gắn
+       profile (đã verify PIN nếu profile có PIN). `GET /me/profiles`, `switch`
+       và `DELETE` chuyển sang `get_session_context` (profile có thể `None`) để
+       còn cửa thoát; nhóm quản lý profile vẫn chỉ cần `get_current_user`.
+     - `pid` trỏ profile đã xoá → `repoint_session(jti, None)` rồi
+       `PROFILE_REQUIRED`; refresh cũng vậy (không tự nhảy về mặc định). Xoá
+       profile đang dùng không phát profile kế nhiệm (`SwitchOut` cả hai null).
+     - Web: `ProfileGate` trong `AppShell` (đã đăng nhập + chưa chọn → giữ
+       placeholder rồi `router.replace("/profiles?next=…")`; miễn trừ
+       `/profiles`, `/profiles/manage`, `/login`, `/register`); chooser **luôn**
+       gọi `switch` kể cả card "Đang xem" nên PIN luôn được hỏi. Cùng lúc,
+       `clear_session_profile` chỉ xoá con trỏ phiên khi nó **vẫn** đang trỏ
+       profile đã mất — tab khác dùng chung refresh session có thể đã chọn profile
+       mới, xoá vô điều kiện sẽ nuốt mất lựa chọn đó.
+     Không cần migration: `refresh_tokens.profile_id` đã `nullable` + `ON DELETE
+     SET NULL` từ đầu.

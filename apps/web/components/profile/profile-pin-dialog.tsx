@@ -55,14 +55,23 @@ export function ProfilePinDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>
+      <DialogContent
+        fullScreen
+        data-testid="profile-pin-dialog"
+        className="flex flex-col items-center justify-center gap-4 text-center"
+      >
+        <DialogTitle className="text-2xl">{title}</DialogTitle>
+        <DialogDescription className="max-w-sm text-neutral-400">
           {description ?? "Nhập mã PIN gồm 4 chữ số của profile."}
         </DialogDescription>
-        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+        <form
+          onSubmit={handleSubmit}
+          className="flex w-full max-w-xs flex-col items-center gap-3"
+        >
+          {/* type=password: the PIN must never be readable on screen. */}
           <Input
             id="profile-pin"
+            type="password"
             aria-label="Mã PIN"
             inputMode="numeric"
             autoComplete="off"
@@ -73,19 +82,20 @@ export function ProfilePinDialog({
               setPin(event.target.value.replace(/\D/g, "").slice(0, 4))
             }
             placeholder="••••"
-            className="text-center text-lg tracking-[0.5em]"
+            className="border-neutral-700 bg-neutral-900 text-center text-lg tracking-[0.5em] text-neutral-50 placeholder:text-neutral-600"
           />
           {error && (
-            <p role="alert" className="text-xs text-red-400">
+            <p role="alert" className="text-sm text-red-400">
               {error}
             </p>
           )}
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="flex justify-center gap-2 pt-1">
             <Button
               type="button"
               variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={pending}
+              className="text-neutral-300 hover:bg-white/10 hover:text-neutral-50"
             >
               Huỷ
             </Button>

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { loginViaApi } from "./helpers/auth";
+import { continuePastChooser, loginViaApi } from "./helpers/auth";
 
 // NOTE: this spec registers one extra account per run. Server throttle is
 // 3 accounts/hour/IP and global-setup reuses its account, so steady-state
@@ -8,7 +8,7 @@ import { loginViaApi } from "./helpers/auth";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test("register -> auto login -> name in header", async ({ page }) => {
+test("register -> auto login -> chooser -> name in header", async ({ page }) => {
   const stamp = Date.now().toString(36);
   await page.goto("/register");
   await page.getByLabel(/email/i).fill(`e2e-reg-${stamp}@gmov.dev`);
@@ -16,7 +16,11 @@ test("register -> auto login -> name in header", async ({ page }) => {
   await page.getByLabel(/^mật khẩu$/i).fill("E2e-password-123");
   await page.getByLabel(/nhập lại mật khẩu/i).fill("E2e-password-123");
   await page.getByRole("button", { name: /^đăng ký$/i }).click();
-  await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+  // Signing up lands on the profile chooser (the immersive /profiles screen).
+  await page.waitForURL((url) => url.pathname === "/profiles", {
+    timeout: 20_000,
+  });
+  await continuePastChooser(page);
   // Logged in: header shows the account menu, not the login link.
   // (The footer always links to /login, so scope the check to the header.)
   const header = page.locator("header");

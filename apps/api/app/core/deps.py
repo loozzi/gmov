@@ -26,6 +26,16 @@ oauth2_optional = OAuth2PasswordBearer(
 class ActiveProfile:
     user: User
     profile: Profile
+
+
+@dataclass(frozen=True)
+class SessionContext:
+    """Request context for endpoints that must work before a profile is picked
+    (listing profiles, switching, deleting). They operate on the account, so
+    `profile` may be None — an unselected session."""
+
+    user: User
+    profile: Profile | None
     session_jti: str | None
 
 
@@ -61,10 +71,17 @@ async def _resolve_user(db: AsyncSession, token: str) -> User:
 
 async def _profile_from_claims(
     db: AsyncSession, user: User, payload: dict
-) -> Profile:
+) -> Profile | None:
+    """The profile this token operates as, or None when it selects none.
+
+    A `pid` that no longer resolves (deleted profile) clears the session
+    pointer and degrades to None, so the client goes back to the chooser
+    rather than being silently moved to the account default — which may be
+    PIN-locked. A foreign or malformed claim stays a hard 404.
+    """
     raw = payload.get("pid")
     if raw is None:
-        return await profile_service.default_for(db, user.id)
+        return None
     try:
         profile_id = uuid.UUID(str(raw))
     except (ValueError, TypeError):
@@ -74,23 +91,38 @@ async def _profile_from_claims(
         if profile.user_id != user.id:
             raise AppException("Profile not found", "PROFILE_NOT_FOUND", 404)
         return profile
-    default = await profile_service.default_for(db, user.id)
     session_jti = payload.get("sid")
     if session_jti is not None:
-        await profile_service.repoint_session(db, str(session_jti), default.id)
-    return default
+        await profile_service.clear_session_profile(db, str(session_jti), profile_id)
+    return None
+
+
+async def get_session_context(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> SessionContext:
+    """Account-level context: works with or without a selected profile."""
+    payload = _decode_access(token)
+    user = await _load_active_user(db, payload)
+    return SessionContext(
+        user=user,
+        profile=await _profile_from_claims(db, user, payload),
+        session_jti=payload.get("sid"),
+    )
 
 
 async def get_active_profile(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> ActiveProfile:
+    """Profile-scoped context. Until the user picks a profile (and clears its
+    PIN, when it has one) every profile-scoped endpoint answers 403."""
     payload = _decode_access(token)
     user = await _load_active_user(db, payload)
     profile = await _profile_from_claims(db, user, payload)
-    return ActiveProfile(
-        user=user, profile=profile, session_jti=payload.get("sid")
-    )
+    if profile is None:
+        raise AppException("Profile required", "PROFILE_REQUIRED", 403)
+    return ActiveProfile(user=user, profile=profile)
 
 
 async def get_current_user(

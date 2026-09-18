@@ -59,13 +59,21 @@ test.beforeAll(async () => {
   }
 });
 
-/** Switch the browser session to `id` through the "Ai đang xem?" page. */
-async function switchViaUi(page: Page, id: string): Promise<void> {
+/** Switch the browser session to `profile` through the "Ai đang xem?" page.
+ *  Picking a profile is required, so the chooser hands off to the home page —
+ *  verify the switch by the profile chip in the header. */
+async function switchViaUi(
+  page: Page,
+  profile: { id: string; name: string },
+): Promise<void> {
   await page.goto("/profiles");
-  const card = page.getByTestId(`profile-card-${id}`);
+  const card = page.getByTestId(`profile-card-${profile.id}`);
   await expect(card).toBeVisible();
   await card.click();
-  await expect(card).toHaveAttribute("aria-label", /đang xem/);
+  await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
+  await expect(
+    page.locator("header").getByRole("button", { name: /chọn profile/i }),
+  ).toContainText(profile.name);
 }
 
 /** Best-effort: return the shared browser session to the default profile. */
@@ -79,7 +87,7 @@ async function leaveOnDefault(page: Page, account: TestAccount): Promise<void> {
   const label = await card.getAttribute("aria-label");
   if (!label?.includes("đang xem")) {
     await card.click();
-    await expect(card).toHaveAttribute("aria-label", /đang xem/);
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 20_000 });
   }
 }
 
@@ -188,7 +196,7 @@ test("a new profile onboards and gets a personal rail", async ({ page }) => {
     profileToken = (await switchProfile(token, profile.id)).access_token ?? "";
 
     await loginViaApi(page);
-    await switchViaUi(page, profile.id);
+    await switchViaUi(page, profile);
 
     await page.goto("/onboarding");
     await completeOnboarding(page, "hanh-dong");
@@ -216,7 +224,7 @@ test("skipping onboarding hides the personal rail and does not trap", async ({
     profileToken = (await switchProfile(token, profile.id)).access_token ?? "";
 
     await loginViaApi(page);
-    await switchViaUi(page, profile.id);
+    await switchViaUi(page, profile);
 
     await page.goto("/onboarding");
     await expect(
@@ -274,7 +282,7 @@ test("redo preferences reopens onboarding and the rail comes back", async ({
     profileToken = (await switchProfile(token, profile.id)).access_token ?? "";
 
     await loginViaApi(page);
-    await switchViaUi(page, profile.id);
+    await switchViaUi(page, profile);
 
     await page.goto("/onboarding");
     await completeOnboarding(page, "hanh-dong");
@@ -324,13 +332,13 @@ test("each profile keeps its own personal rail across switches", async ({
     secondToken = (await switchProfile(token, second.id)).access_token ?? "";
 
     await loginViaApi(page);
-    await switchViaUi(page, first.id);
+    await switchViaUi(page, first);
     await page.goto("/onboarding");
     await completeOnboarding(page, "hanh-dong");
     await expectPersonalRail(page);
 
     // Onboard a second profile with a different taste.
-    await switchViaUi(page, second.id);
+    await switchViaUi(page, second);
     await page.goto("/onboarding");
     await pickGenre(page, "hoat-hinh");
     await skipPosters(page);
@@ -339,7 +347,7 @@ test("each profile keeps its own personal rail across switches", async ({
 
     // Back to the first profile: its rail still renders from its own cache/scope.
     // No content-equality assertion on purpose (cache TTL makes ordering noisy).
-    await switchViaUi(page, first.id);
+    await switchViaUi(page, first);
     await page.goto("/");
     await expectPersonalRail(page);
   } finally {

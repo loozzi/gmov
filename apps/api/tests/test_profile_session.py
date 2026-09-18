@@ -149,24 +149,54 @@ async def _set_session_profile(
         await db.commit()
 
 
-async def test_access_token_carries_sid_and_pid(client_env):
+async def test_login_token_carries_sid_without_pid(client_env):
+    """Login authenticates the account only: no profile is selected yet, so a
+    PIN-locked default profile cannot be read before its PIN is entered."""
     tokens = await _register_login(client_env, "sid1@gmov.dev", "sid1")
     access = security.decode_token(tokens["access_token"])
     refresh = security.decode_token(tokens["refresh_token"])
-    default_id = await _default_profile_id(client_env, "sid1")
 
     assert access["sid"] == refresh["jti"]
-    assert access["pid"] == str(default_id)
+    assert "pid" not in access
+
+    r = await client_env.client.get(
+        f"{ME}/profile", headers=_bearer(tokens["access_token"])
+    )
+    assert r.status_code == 403
+    assert r.json()["code"] == "PROFILE_REQUIRED"
 
 
-async def test_missing_pid_falls_back_to_default(client_env):
+async def test_switch_binds_the_picked_profile(client_env):
+    tokens = await _register_login(client_env, "pick1@gmov.dev", "pick1")
+    default_id = await _default_profile_id(client_env, "pick1")
+
+    r = await client_env.client.post(
+        f"{ME}/profiles/{default_id}/switch",
+        headers=_bearer(tokens["access_token"]),
+        json={},
+    )
+    assert r.status_code == 200, r.text
+    bound = r.json()["access_token"]
+    assert security.decode_token(bound)["pid"] == str(default_id)
+
+    r = await client_env.client.get(f"{ME}/profile", headers=_bearer(bound))
+    assert r.status_code == 200, r.text
+    assert r.json()["id"] == str(default_id)
+
+
+async def test_missing_pid_is_profile_required(client_env):
     await _register_login(client_env, "old1@gmov.dev", "old1")
     user = await _user(client_env, "old1")
     headers = _hand_signed(user.id)
 
     r = await client_env.client.get(f"{ME}/profile", headers=headers)
-    assert r.status_code == 200, r.text
-    assert r.json()["id"] == str(await _default_profile_id(client_env, "old1"))
+    assert r.status_code == 403
+    assert r.json()["code"] == "PROFILE_REQUIRED"
+
+    # The chooser must stay reachable for the session to pick a profile.
+    listing = await client_env.client.get(f"{ME}/profiles", headers=headers)
+    assert listing.status_code == 200, listing.text
+    assert all(not item["is_current"] for item in listing.json()["items"])
 
 
 async def test_foreign_pid_is_404(client_env):
@@ -193,7 +223,7 @@ async def test_malformed_pid_is_404(client_env):
     assert r.json()["code"] == "PROFILE_NOT_FOUND"
 
 
-async def test_deleted_pid_self_heals_to_default(client_env):
+async def test_deleted_pid_resets_session_to_unselected(client_env):
     tokens = await _register_login(client_env, "heal1@gmov.dev", "heal1")
     second_id = await _add_profile(client_env, tokens["access_token"], "Child")
     user = await _user(client_env, "heal1")
@@ -202,18 +232,16 @@ async def test_deleted_pid_self_heals_to_default(client_env):
         profile = await db.get(Profile, second_id)
         await db.delete(profile)
         await db.commit()
-    default_id = await _default_profile_id(client_env, "heal1")
     headers = _hand_signed(user.id, pid=second_id, sid=sid)
 
-    profile = await client_env.client.get(f"{ME}/profile", headers=headers)
-    assert profile.status_code == 200, profile.text
-    assert profile.json()["id"] == str(default_id)
+    # The dead claim must not fall back to the (possibly PIN-locked) default.
+    for path in ("/profile", "/favorites"):
+        r = await client_env.client.get(f"{ME}{path}", headers=headers)
+        assert r.status_code == 403, f"{path}: {r.text}"
+        assert r.json()["code"] == "PROFILE_REQUIRED"
 
     listing = await client_env.client.get(f"{ME}/profiles", headers=headers)
     assert listing.status_code == 200, listing.text
-
-    favorites = await client_env.client.get(f"{ME}/favorites", headers=headers)
-    assert favorites.status_code == 200, favorites.text
 
     async with client_env.factory() as db:
         row = (
@@ -221,7 +249,38 @@ async def test_deleted_pid_self_heals_to_default(client_env):
                 select(RefreshToken).where(RefreshToken.jti == sid)
             )
         ).scalar_one()
-        assert row.profile_id == default_id
+        assert row.profile_id is None
+
+
+async def test_stale_pid_keeps_a_newer_selection(client_env):
+    """Tabs share one refresh session. A tab still holding the pid of a deleted
+    profile must not clear the selection another tab just made."""
+    tokens = await _register_login(client_env, "race1@gmov.dev", "race1")
+    kept = await _add_profile(client_env, tokens["access_token"], "Kept")
+    gone = await _add_profile(client_env, tokens["access_token"], "Gone")
+    user = await _user(client_env, "race1")
+    sid = security.decode_token(tokens["refresh_token"])["jti"]
+
+    # Another tab switched this session to `kept`...
+    await _set_session_profile(client_env, tokens["refresh_token"], kept)
+    # ...while this tab still presents a token for `gone`, since deleted.
+    async with client_env.factory() as db:
+        await db.delete(await db.get(Profile, gone))
+        await db.commit()
+
+    r = await client_env.client.get(
+        f"{ME}/profile", headers=_hand_signed(user.id, pid=gone, sid=sid)
+    )
+    assert r.status_code == 403
+    assert r.json()["code"] == "PROFILE_REQUIRED"
+
+    async with client_env.factory() as db:
+        row = (
+            await db.execute(
+                select(RefreshToken).where(RefreshToken.jti == sid)
+            )
+        ).scalar_one()
+        assert row.profile_id == kept
 
 
 async def test_banned_user_still_401_even_with_valid_pid(client_env):
@@ -253,7 +312,18 @@ async def test_refresh_keeps_active_profile(client_env):
     assert access["pid"] == str(second_id)
 
 
-async def test_profile_deleted_falls_back_after_refresh(client_env):
+async def test_unselected_session_stays_unselected_after_refresh(client_env):
+    tokens = await _register_login(client_env, "fresh1@gmov.dev", "fresh1")
+
+    r = await client_env.client.post(
+        f"{AUTH}/refresh", json={"refresh_token": tokens["refresh_token"]}
+    )
+    assert r.status_code == 200, r.text
+    access = security.decode_token(r.json()["access_token"])
+    assert "pid" not in access
+
+
+async def test_profile_deleted_clears_selection_after_refresh(client_env):
     tokens = await _register_login(client_env, "gone1@gmov.dev", "gone1")
     second_id = await _add_profile(client_env, tokens["access_token"], "Child")
     await _set_session_profile(client_env, tokens["refresh_token"], second_id)
@@ -267,6 +337,4 @@ async def test_profile_deleted_falls_back_after_refresh(client_env):
     )
     assert r.status_code == 200, r.text
     access = security.decode_token(r.json()["access_token"])
-    assert access["pid"] == str(
-        await _default_profile_id(client_env, "gone1")
-    )
+    assert "pid" not in access

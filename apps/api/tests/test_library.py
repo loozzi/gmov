@@ -9,6 +9,7 @@ from app.core import ratelimit
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from tests.session_helpers import select_default
 
 ME = "/api/v1/me"
 
@@ -54,6 +55,7 @@ async def _auth_headers(client) -> dict:
         data={"username": "libuser", "password": "password123"},
     )
     token = r.json()["access_token"]
+    token = await select_default(client, token)
     return {"Authorization": f"Bearer {token}"}
 
 

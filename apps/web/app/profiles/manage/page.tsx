@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Trash2,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
@@ -51,6 +52,7 @@ function deleteErrorMessage(error: unknown): string {
 export default function ManageProfilesPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const toast = useToast();
   const { data, isLoading, isError, error } = useProfiles();
   const deleteProfile = useDeleteProfile();
@@ -63,6 +65,13 @@ export default function ManageProfilesPage() {
     null,
   );
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Removing the profile we were watching leaves the session unselected
+  // (the server hands out no successor), so the chooser must pick again.
+  const leaveAfterDelete = () => {
+    queryClient.clear();
+    router.replace("/profiles");
+  };
 
   const handleDelete = (item: ProfileListItem) => {
     if (item.has_pin) {
@@ -80,7 +89,10 @@ export default function ManageProfilesPage() {
     deleteProfile.mutate(
       { id: item.id },
       {
-        onSuccess: () => toast(`Đã xoá profile ${item.name}.`, "success"),
+        onSuccess: () => {
+          toast(`Đã xoá profile ${item.name}.`, "success");
+          if (item.is_current) leaveAfterDelete();
+        },
         onError: (err: unknown) =>
           toast(deleteErrorMessage(err), "error"),
       },
@@ -97,6 +109,7 @@ export default function ManageProfilesPage() {
           setDeleteTarget(null);
           setDeleteError(null);
           toast(`Đã xoá profile ${target.name}.`, "success");
+          if (target.is_current) leaveAfterDelete();
         },
         onError: (err: unknown) => setDeleteError(pinErrorMessage(err)),
       },

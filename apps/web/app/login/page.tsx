@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toVietnameseMessage } from "@/lib/errors";
+import { safeNextPath } from "@/lib/nav";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Vui lòng nhập email hoặc tên đăng nhập."),
@@ -35,7 +36,12 @@ function LoginForm() {
     setServerError(null);
     try {
       await login(values.username.trim(), values.password);
-      router.push(searchParams.get("next") || "/");
+      // Picking a profile is part of logging in: the chooser is the landing
+      // page, and it forwards to `next` once a profile is picked.
+      const next = safeNextPath(searchParams.get("next"));
+      router.replace(
+        next ? `/profiles?next=${encodeURIComponent(next)}` : "/profiles",
+      );
       router.refresh();
     } catch (e) {
       setServerError(toVietnameseMessage(e));

@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch, setAccessToken } from "@/lib/api";
+import { isProfileRequired } from "@/lib/errors";
 
 export const AVATAR_KEYS = [
   "popcorn",
@@ -84,15 +85,16 @@ export function useProfiles() {
   });
 }
 
-export function useCurrentProfile() {
+export function useCurrentProfile(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: PROFILE_KEYS.current,
     queryFn: () => apiFetch<Profile>("/api/v1/me/profile"),
+    enabled: options.enabled ?? true,
+    // PROFILE_REQUIRED is deterministic (no profile picked yet), so the
+    // default retry would only delay the redirect to the chooser.
+    retry: (count, error) =>
+      !isProfileRequired(error) && count < 1,
   });
-}
-
-export function useActiveProfileHint() {
-  return useCurrentProfile();
 }
 
 export function useCreateProfile() {
@@ -135,16 +137,9 @@ export function useDeleteProfile() {
         method: "DELETE",
         body: JSON.stringify(pin ? { pin } : {}),
       }),
-    onSuccess: (data) => {
-      if (data.access_token) {
-        setAccessToken(data.access_token);
-        // Deleting the active profile moves the session to the default, so
-        // every profile-scoped cache entry is stale for the same reason as a
-        // switch: reset (drop data + refetch active observers) instead of
-        // `clear()`, which would leave the header on the deleted profile.
-        void queryClient.resetQueries();
-        return;
-      }
+    onSuccess: () => {
+      // The server never hands out a successor profile (an unselected session
+      // goes back to the chooser), so there is no token to install here.
       void queryClient.invalidateQueries({ queryKey: PROFILE_KEYS.all });
       void queryClient.invalidateQueries({ queryKey: PROFILE_KEYS.current });
     },

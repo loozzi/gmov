@@ -3,6 +3,7 @@
 from httpx import AsyncClient
 
 from tests.conftest import make_access_token
+from tests.session_helpers import select_default
 
 AUTH = "/api/v1/auth"
 ME = "/api/v1/me"
@@ -26,7 +27,8 @@ async def _register_login(
         data={"username": username, "password": "password123"},
     )
     assert r.status_code == 200, r.text
-    return _bearer(r.json()["access_token"]), user_id
+    token = await select_default(client, r.json()["access_token"])
+    return _bearer(token), user_id
 
 
 async def _current_profile_id(client: AsyncClient, headers: dict) -> str:

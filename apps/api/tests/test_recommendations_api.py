@@ -18,6 +18,7 @@ from app.db.session import get_db
 from app.main import app
 from app.services import cache as cache_service
 from tests.conftest import make_access_token
+from tests.session_helpers import select_default
 
 ME = "/api/v1/me"
 RECS = f"{ME}/recommendations"
@@ -72,8 +73,8 @@ async def _register_login(
         data={"username": username, "password": "password123"},
     )
     assert r.status_code == 200, r.text
-    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
-    return headers, user_id
+    token = await select_default(env.client, r.json()["access_token"])
+    return {"Authorization": f"Bearer {token}"}, user_id
 
 
 async def _profile_id(env: Env, headers: dict) -> uuid.UUID:

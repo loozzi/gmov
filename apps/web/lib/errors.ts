@@ -27,6 +27,7 @@ const CODE_MESSAGES: Record<string, string> = {
   BOT_DETECTED: "Yêu cầu đăng ký không hợp lệ.",
   SESSION_STALE: "Phiên đăng nhập đã cũ, vui lòng thử lại.",
   PROFILE_NOT_FOUND: "Không tìm thấy profile.",
+  PROFILE_REQUIRED: "Bạn cần chọn profile để tiếp tục.",
   DEFAULT_PROFILE: "Không thể xoá profile mặc định.",
   PROFILE_LIMIT_REACHED: "Đã đạt giới hạn số profile.",
   PROFILE_NAME_TAKEN: "Tên profile đã được sử dụng.",
@@ -59,6 +60,12 @@ export function toVietnameseMessage(error: unknown): string {
   }
   if (error instanceof Error) return error.message;
   return "Đã xảy ra lỗi. Hãy thử lại.";
+}
+
+/** The session is signed in but has not picked a profile yet (login does not
+ * select one): the only way forward is the chooser at /profiles. */
+export function isProfileRequired(error: unknown): boolean {
+  return error instanceof ApiError && error.code === "PROFILE_REQUIRED";
 }
 
 export function parseApiError(status: number, body: unknown): ApiError {
