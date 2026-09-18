@@ -50,7 +50,10 @@
   (query param, đã lọc open-redirect ở `lib/nav.ts`) hoặc `/`; profile khoá mở
   `ProfilePinDialog`. Nút "Thêm profile" (`ProfileFormDialog`) chỉ hiện khi chưa
   đủ `max`. Không có nút bỏ qua (bắt buộc chọn) và không có header để thoát ra;
-  khách chưa đăng nhập thấy lời nhắc + link `/login`.
+  khách chưa đăng nhập thấy lời nhắc + link `/login`. Cạnh "Quản lý profile" có
+  nút **"Đăng xuất"** (`data-testid="chooser-logout"`, chỉ hiện khi đã đăng nhập):
+  người không vào được profile nào (khoá hết, quên PIN) vẫn thoát được tài khoản;
+  đăng xuất xong ở lại trang, thấy ngay lời nhắc khách.
   **Đăng nhập/đăng ký luôn đáp xuống đây** (`router.replace("/profiles")`), kể cả
   tài khoản một profile. Bấm card **đang xem** cũng đi qua `POST /switch` như mọi
   card khác: chọn lại profile có PIN thì phải nhập PIN, không có lối tắt.
@@ -58,6 +61,8 @@
   PIN (dialog riêng, cần **mật khẩu tài khoản**), và nút xoá. Profile mặc định
   **không có nút xoá**. Xoá profile có PIN → dialog nhập PIN + cảnh báo; xoá
   profile không PIN → `window.confirm`. Xoá chỉ mất dữ liệu của profile đó.
+  Đổi tên/avatar của profile **có PIN** phải nhập thêm "Mã PIN" trong dialog
+  (server trả `PIN_REQUIRED` thì ô PIN tự hiện, kể cả khi cache `has_pin` cũ).
   Sau switch: `setAccessToken` mới + `queryClient.resetQueries()` (data per-profile
   nằm rải ở nhiều query key). Xoá **profile đang dùng** thì server không phát
   profile kế nhiệm (mặc định có thể đang khoá PIN): trang `clear()` cache rồi

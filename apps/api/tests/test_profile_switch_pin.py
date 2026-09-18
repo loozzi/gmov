@@ -221,10 +221,14 @@ async def test_only_failed_pin_attempts_consume_budget(client_env, monkeypatch):
         await _switch(client_env, headers, locked["id"], pin="0000")
     ).status_code == 401
 
-    # Correct PINs must never spend the budget, no matter how many.
+    # Correct PINs must never spend the budget, no matter how many. Each
+    # switch re-points the session, so the client moves to the token it got
+    # back (an access token that no longer matches the session is invalid).
+    current = headers
     for _ in range(4):
-        ok = await _switch(client_env, headers, locked["id"], pin="1234")
+        ok = await _switch(client_env, current, locked["id"], pin="1234")
         assert ok.status_code == 200, ok.text
+        current = _bearer(ok.json()["access_token"])
 
     # Only now does a second real failure exhaust the limit of 2.
     assert (
@@ -491,3 +495,106 @@ async def test_pin_hash_is_not_plaintext(client_env):
     assert row is not None
     assert row.pin_hash != "1234"
     assert security.verify_password("1234", row.pin_hash)
+
+
+async def _rename(env: Env, headers: dict, profile_id: str, name: str, pin=None):
+    body: dict = {"name": name}
+    if pin is not None:
+        body["pin"] = pin
+    return await env.client.patch(
+        f"{ME}/profiles/{profile_id}", headers=headers, json=body
+    )
+
+
+async def test_renaming_a_locked_profile_requires_its_pin(client_env):
+    """The manage page must not be a way around the PIN lock."""
+    tokens = await _register_login(client_env, "rn1@gmov.dev", "rn1")
+    headers = _bearer(tokens["access_token"])
+    locked = await _create(client_env, headers, "Khoá")
+    open_profile = await _create(client_env, headers, "Mở")
+    assert (
+        await _set_pin(client_env, headers, locked["id"], pin="1357")
+    ).status_code == 200
+
+    missing = await _rename(client_env, headers, locked["id"], "Đổi trộm")
+    assert missing.status_code == 403, missing.text
+    assert missing.json()["code"] == "PIN_REQUIRED"
+
+    wrong = await _rename(client_env, headers, locked["id"], "Đổi trộm", pin="0000")
+    assert wrong.status_code == 401
+    assert wrong.json()["code"] == "INVALID_PIN"
+
+    assert (await _profile_row(client_env, locked["id"])).name == "Khoá"
+
+    ok = await _rename(client_env, headers, locked["id"], "Đổi thật", pin="1357")
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["name"] == "Đổi thật"
+
+    # An unlocked profile still needs no PIN.
+    unlocked = await _rename(client_env, headers, open_profile["id"], "Mở luôn")
+    assert unlocked.status_code == 200, unlocked.text
+
+
+async def _login(env: Env, username: str) -> str:
+    r = await env.client.post(
+        f"{AUTH}/login", data={"username": username, "password": PASSWORD}
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["access_token"]
+
+
+async def test_locking_a_profile_drops_other_sessions_selection(client_env):
+    """Sessions that picked the profile while it was unlocked (or with the old
+    PIN) must not keep it once the PIN changes."""
+    tokens = await _register_login(client_env, "rev1@gmov.dev", "rev1")
+    headers = _bearer(tokens["access_token"])
+    profile = await _create(client_env, headers, "Bé")
+
+    # Second device (fresh session, same account) selects the profile while it
+    # has no PIN.
+    second = await _switch(
+        client_env, _bearer(await _login(client_env, "rev1")), profile["id"]
+    )
+    assert second.status_code == 200, second.text
+    second_headers = _bearer(second.json()["access_token"])
+    assert (
+        await client_env.client.get(f"{ME}/profile", headers=second_headers)
+    ).status_code == 200
+
+    # First device also selects it, then locks it.
+    first = await _switch(client_env, headers, profile["id"])
+    first_headers = _bearer(first.json()["access_token"])
+    assert (
+        await _set_pin(client_env, first_headers, profile["id"], pin="2468")
+    ).status_code == 200
+
+    # The other device loses the selection...
+    revoked = await client_env.client.get(f"{ME}/profile", headers=second_headers)
+    assert revoked.status_code == 403, revoked.text
+    assert revoked.json()["code"] == "PROFILE_REQUIRED"
+    listing = await client_env.client.get(f"{ME}/profiles", headers=second_headers)
+    assert listing.status_code == 200, listing.text
+    assert all(not item["is_current"] for item in listing.json()["items"])
+
+    # ...while the device that locked it keeps watching.
+    assert (
+        await client_env.client.get(f"{ME}/profile", headers=first_headers)
+    ).status_code == 200
+
+    # Clearing the PIN must NOT revoke anything: access only widens.
+    second2 = await _switch(
+        client_env,
+        _bearer(await _login(client_env, "rev1")),
+        profile["id"],
+        pin="2468",
+    )
+    assert second2.status_code == 200, second2.text
+    second2_headers = _bearer(second2.json()["access_token"])
+    assert (
+        await _set_pin(
+            client_env, first_headers, profile["id"], pin=None, current_pin="2468"
+        )
+    ).status_code == 200
+    assert (
+        await client_env.client.get(f"{ME}/profile", headers=second2_headers)
+    ).status_code == 200, "clearing a PIN must not eject the other device"

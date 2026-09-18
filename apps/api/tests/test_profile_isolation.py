@@ -119,6 +119,7 @@ async def test_watchlist_and_progress_and_rating_are_isolated(client):
 
 async def test_guest_progress_merge_lands_in_active_profile(client):
     h1, _ = await _register_login(client, "iso-guest@gmov.dev", "isoguest")
+    first = await _current_profile_id(client, h1)
     second = await _create_profile(client, h1, "Kid")
     r = await client.post(
         f"{ME}/profiles/{second}/switch", headers=h1, json={}
@@ -133,8 +134,18 @@ async def test_guest_progress_merge_lands_in_active_profile(client):
 
     r = await client.get(f"{ME}/progress/guest-movie", headers=h2)
     assert r.status_code == 200, r.text
+    # The old token (and its profile) no longer matches the session, so it is
+    # not a way to look at the first profile: switch back to it instead.
     r = await client.get(f"{ME}/progress/guest-movie", headers=h1)
-    assert r.status_code == 404
+    assert r.status_code == 403, r.text
+    assert r.json()["code"] == "PROFILE_REQUIRED"
+    back = await client.post(
+        f"{ME}/profiles/{first}/switch", headers=h2, json={}
+    )
+    assert back.status_code == 200, back.text
+    h1b = _bearer(back.json()["access_token"])
+    r = await client.get(f"{ME}/progress/guest-movie", headers=h1b)
+    assert r.status_code == 404, r.text
 
 
 async def test_other_profile_of_same_user_is_invisible_until_switch(client):

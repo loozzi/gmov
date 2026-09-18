@@ -12,6 +12,7 @@ import {
   rawApi,
   removeFavorite,
   resetProfiles,
+  sessionForProfile,
   setProfilePin,
   switchProfile,
   type ApiProfile,
@@ -109,6 +110,9 @@ test("second profile keeps its own My list and switching back preserves the firs
     const def = await defaultProfile(token);
     const second = await createProfile(token, "Bé", "cat");
     await addFavorite(token, keepSlug, `Phim mặc định ${keepSlug}`);
+    // Checked before the session moves: a switch re-points it, so the old
+    // token stops matching (the UI assertions below cover the default again).
+    expect(slugsOf(await listFavorites(token))).toContain(keepSlug);
 
     const switched = await switchProfile(token, second.id);
     expect(switched.access_token).toBeTruthy();
@@ -116,8 +120,6 @@ test("second profile keeps its own My list and switching back preserves the firs
     await addFavorite(secondToken, secondSlug, `Phim Bé ${secondSlug}`);
 
     // The two libraries must not bleed into each other.
-    expect(slugsOf(await listFavorites(token))).toContain(keepSlug);
-    expect(slugsOf(await listFavorites(token))).not.toContain(secondSlug);
     expect(slugsOf(await listFavorites(secondToken))).toContain(secondSlug);
     expect(slugsOf(await listFavorites(secondToken))).not.toContain(keepSlug);
 
@@ -275,7 +277,7 @@ test("deleting a profile removes only its data", async ({ page }) => {
     const switched = await switchProfile(token, doomed.id);
     const doomedToken = switched.access_token as string;
     await addFavorite(doomedToken, doomedSlug, `Phim xoá ${doomedSlug}`);
-    await setProfilePin(token, doomed.id, account.password, "1357");
+    await setProfilePin(doomedToken, doomed.id, account.password, "1357");
 
     await loginViaApi(page);
     await page.goto("/profiles/manage");
@@ -293,8 +295,13 @@ test("deleting a profile removes only its data", async ({ page }) => {
     expect((await listProfiles(token)).items.map((p) => p.id)).not.toContain(
       doomed.id,
     );
-    // ...the other profile's library is untouched...
-    const defaultSlugs = slugsOf(await listFavorites(token));
+    // ...the other profile's library is untouched (a separate session, since
+    // the one above now points at the deleted profile)...
+    const defaultToken = await sessionForProfile(
+      account,
+      (await defaultProfile(token)).id,
+    );
+    const defaultSlugs = slugsOf(await listFavorites(defaultToken));
     expect(defaultSlugs).toContain(keepSlug);
     expect(defaultSlugs).not.toContain(doomedSlug);
     // ...and a token still holding the deleted profile's `pid` is answered

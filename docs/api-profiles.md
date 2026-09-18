@@ -13,10 +13,10 @@ Thiết kế/động cơ: `docs/superpowers/specs/2026-09-17-profiles-and-recomm
 | GET | `/profile` | — | 200 `ProfileOut` — profile đang hoạt động của phiên; `403 PROFILE_REQUIRED` khi phiên chưa chọn profile |
 | GET | `/profiles` | — | 200 `ProfileListOut` — mọi profile của tài khoản, kèm `is_current`; **chạy được cả khi chưa chọn profile** (danh sách là đường vào chooser) |
 | POST | `/profiles` | `ProfileCreateIn` | 201 `ProfileOut`; `409 PROFILE_LIMIT_REACHED` khi đủ 5; `409 PROFILE_NAME_TAKEN` |
-| PATCH | `/profiles/{id}` | `ProfilePatchIn` | 200 `ProfileOut` — đổi tên/avatar (kể cả profile mặc định); `404 PROFILE_NOT_FOUND`; `409 PROFILE_NAME_TAKEN` |
+| PATCH | `/profiles/{id}` | `ProfilePatchIn` | 200 `ProfileOut` — đổi tên/avatar (kể cả profile mặc định); `403 PIN_REQUIRED`/`401 INVALID_PIN` khi profile có PIN; `404 PROFILE_NOT_FOUND`; `409 PROFILE_NAME_TAKEN` |
 | POST | `/profiles/{id}/switch` | `ProfileSwitchIn` | 200 `SwitchOut` — **cách duy nhất** để có access token gắn profile (đã qua PIN nếu profile có PIN); `403 PIN_REQUIRED`, `401 INVALID_PIN`, `404 PROFILE_NOT_FOUND`, `401 SESSION_STALE` |
 | DELETE | `/profiles/{id}` | `ProfileSwitchIn` | 200 `SwitchOut`; `403 PIN_REQUIRED`, `401 INVALID_PIN`, `409 DEFAULT_PROFILE`, `404 PROFILE_NOT_FOUND` |
-| PUT | `/profiles/{id}/pin` | `ProfilePinIn` | 200 `ProfileOut`; `403 PIN_REQUIRED`, `401 INVALID_PIN`, `400 INVALID_PASSWORD`, `404 PROFILE_NOT_FOUND` |
+| PUT | `/profiles/{id}/pin` | `ProfilePinIn` | 200 `ProfileOut`; `403 PIN_REQUIRED`, `401 INVALID_PIN`, `400 INVALID_PASSWORD`, `404 PROFILE_NOT_FOUND`; đặt/đổi PIN **thu hồi lựa chọn của các phiên khác** đang gắn profile |
 
 ## Shapes
 
@@ -35,7 +35,7 @@ Thiết kế/động cơ: `docs/superpowers/specs/2026-09-17-profiles-and-recomm
 // ProfileListOut = { "items": [ProfileListItemOut...], "max": 5 }
 
 // ProfileCreateIn = { "name": str 1..32, "avatar": slug }
-// ProfilePatchIn  = { "name"?: str 1..32, "avatar"?: slug }
+// ProfilePatchIn  = { "name"?: str 1..32, "avatar"?: slug, "pin"?: "1234" }  // pin bắt buộc khi profile đã có PIN
 
 // ProfileSwitchIn = { "pin"?: "1234" }   // regex ^\d{4}$
 // ProfilePinIn    = { "password": str, "current_pin"?: "1234", "pin"?: "1234" | null }
@@ -75,7 +75,7 @@ Hard delete: dữ liệu của profile mất theo qua FK `ON DELETE CASCADE`
 | `DEFAULT_PROFILE` | 409 | Cố xoá profile `is_default = true` |
 | `PROFILE_NOT_FOUND` | 404 | `{id}` không tồn tại **hoặc** không thuộc tài khoản hiện tại; `pid` claim hỏng |
 | `PROFILE_REQUIRED` | 403 | Phiên chưa chọn profile (token không có `pid`, hoặc `pid` trỏ profile đã bị xoá) mà gọi endpoint gắn profile |
-| `PIN_REQUIRED` | 403 | Profile có PIN nhưng request thiếu `pin` (switch/delete) hoặc thiếu `current_pin` (đổi/xoá PIN) |
+| `PIN_REQUIRED` | 403 | Profile có PIN nhưng request thiếu `pin` (switch/**rename**/delete) hoặc thiếu `current_pin` (đổi/xoá PIN) |
 | `INVALID_PIN` | 401 | `pin` / `current_pin` sai |
 | `INVALID_PASSWORD` | 400 | Mật khẩu tài khoản sai khi đặt/đổi/xoá PIN |
 | `SESSION_STALE` | 401 | Switch khi access token thiếu claim `sid` |
@@ -86,9 +86,10 @@ Hard delete: dữ liệu của profile mất theo qua FK `ON DELETE CASCADE`
 
 - PIN đúng **4 chữ số** (`^\d{4}$`), hash bằng passlib (bcrypt) vào
   `profiles.pin_hash`; không lưu thô, không log.
-- **Switch**, **xoá** hoặc **đổi/xoá PIN của** profile có PIN → phải nhập PIN
-  **của chính profile đó** (`switch/delete` dùng `pin`, đổi PIN dùng
-  `current_pin`). Ba đường dùng **chung một bộ đếm** theo `(profile_id, IP)`
+- **Switch**, **đổi tên/avatar**, **xoá** hoặc **đổi/xoá PIN của** profile có PIN →
+  phải nhập PIN **của chính profile đó** (`switch`/`delete`/`PATCH` dùng `pin`,
+  đổi PIN dùng `current_pin`): trang quản lý không phải lối vòng qua khoá. Bốn
+  đường dùng **chung một bộ đếm** theo `(profile_id, IP)`
   (`ratelimit:pin:{profile_id}:{ip}`) với `PIN_MAX_ATTEMPTS = 5` /
   `PIN_WINDOW = 60`s → `429 RATE_LIMITED` + `Retry-After`. Đổi endpoint không
   mở thêm ngân sách.
@@ -103,6 +104,12 @@ Hard delete: dữ liệu của profile mất theo qua FK `ON DELETE CASCADE`
   ngõ cụt cho tài khoản chưa từng đặt PIN.
 - PIN/`current_pin` sai → `401 INVALID_PIN`; thiếu khi đang cần → `403
   PIN_REQUIRED` (khác nhau để UI biết khi nào mở dialog).
+- **Đặt/đổi PIN thu hồi lựa chọn của mọi phiên KHÁC đang gắn profile đó**
+  (`refresh_tokens.profile_id = NULL`), kể cả access token chưa hết hạn: token
+  mang `pid` không còn khớp `profile_id` của phiên mình → `403 PROFILE_REQUIRED`,
+  buộc chọn lại + nhập PIN mới. Phiên vừa thao tác giữ nguyên (nó đã chứng minh
+  mật khẩu tài khoản + `current_pin`). **Xoá PIN không thu hồi gì** (quyền chỉ
+  mở rộng ra).
 
 Key PIN nằm trong namespace `ratelimit:*` để E2E `global-setup` reset được
 counters giữa các lần chạy.
@@ -139,6 +146,12 @@ PIN chỉ có nghĩa khi server enforce trên mọi request.
   `refresh_tokens.profile_id = NULL` (best-effort — phiên đã logout thì bỏ qua)
   rồi trả `403 PROFILE_REQUIRED`; `GET /me/profiles` vẫn `200` nên client luôn có
   chooser để chọn lại. Không fallback về profile mặc định (có thể đang khoá PIN).
+- **Token phải khớp lựa chọn của phiên**: `pid` trong access token bị so với
+  `refresh_tokens.profile_id` của `sid`; lệch nhau (phiên đã switch ở tab khác,
+  hoặc vừa bị thu hồi do đổi PIN) → `403 PROFILE_REQUIRED`. Nhờ vậy access token
+  phát trước đó không dùng tiếp được. Token không có `sid` (cũ) bỏ qua phép so
+  này; endpoint chỉ-cần-tài-khoản (`GET /me/profiles`, `switch`, `DELETE`) coi
+  lệch là "chưa chọn" nên chooser luôn mở được.
 - **Switch cần `sid`**: thiếu → `401 SESSION_STALE`. `activate_session` ghi lại
   `refresh_tokens.profile_id` của đúng phiên đang gọi rồi phát access token mới.
 - **Refresh**: đọc row theo `jti`; `pid` mới = `refresh_tokens.profile_id`.

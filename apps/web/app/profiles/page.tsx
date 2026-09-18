@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Lock, Plus, RefreshCw, Settings } from "lucide-react";
+import { Lock, LogOut, Plus, RefreshCw, Settings } from "lucide-react";
 import { Suspense, useState } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
@@ -67,7 +67,7 @@ function ProfileCard({ item, disabled, onSelect }: ProfileCardProps) {
 function ProfilesChooser() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const toast = useToast();
   const { data, isLoading, isError, error, refetch, isFetching } =
     useProfiles();
@@ -224,16 +224,31 @@ function ProfilesChooser() {
         </>
       )}
 
-      <Button
-        asChild
-        variant="ghost"
-        size="sm"
-        className="text-neutral-400 hover:bg-white/10 hover:text-neutral-50"
-      >
-        <Link href="/profiles/manage">
-          <Settings /> Quản lý profile
-        </Link>
-      </Button>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="text-neutral-400 hover:bg-white/10 hover:text-neutral-50"
+        >
+          <Link href="/profiles/manage">
+            <Settings /> Quản lý profile
+          </Link>
+        </Button>
+        {isAuthenticated && (
+          // Escape hatch for someone who cannot get into any profile (all
+          // locked, PIN forgotten): signing out must always be possible.
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid="chooser-logout"
+            className="text-neutral-400 hover:bg-white/10 hover:text-neutral-50"
+            onClick={() => void logout()}
+          >
+            <LogOut /> Đăng xuất
+          </Button>
+        )}
+      </div>
 
       <ProfilePinDialog
         open={locked !== null}

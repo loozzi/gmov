@@ -54,6 +54,8 @@ export interface UpdateProfileInput {
   id: string;
   name?: string;
   avatar?: string;
+  /** Required by the server when the profile has a PIN. */
+  pin?: string;
 }
 
 export interface DeleteProfileInput {
@@ -114,12 +116,13 @@ export function useCreateProfile() {
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, name, avatar }: UpdateProfileInput) =>
+    mutationFn: ({ id, name, avatar, pin }: UpdateProfileInput) =>
       apiFetch<Profile>(`/api/v1/me/profiles/${id}`, {
         method: "PATCH",
         body: JSON.stringify({
           ...(name !== undefined ? { name } : {}),
           ...(avatar !== undefined ? { avatar } : {}),
+          ...(pin ? { pin } : {}),
         }),
       }),
     onSuccess: () => {

@@ -82,6 +82,10 @@ class ProfileCreateIn(BaseModel):
 
 
 class ProfilePatchIn(BaseModel):
+    # Required to rename/restyle a profile that has a PIN (the manage page is
+    # not a way around the lock). Unlocked profiles ignore it.
+    pin: str | None = Field(default=None, pattern=PIN_PATTERN)
+
     name: str | None = Field(default=None, min_length=1, max_length=MAX_NAME_LENGTH)
     avatar: str | None = None
 

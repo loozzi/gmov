@@ -142,25 +142,42 @@ async def set_pin(
     pin: str | None,
     current_pin: str | None = None,
     ip: str = "unknown",
+    session_jti: str | None = None,
 ) -> Profile:
     """Set, change or clear a PIN. A profile that already has a PIN must
     present it as `current_pin` first (same throttle as switch/delete); the
-    owning account's password is always required."""
+    owning account's password is always required.
+
+    Locking or changing a PIN drops every OTHER session's selection of this
+    profile: those sessions may have picked it while it was unlocked (or with
+    the previous PIN), so they must pick again and clear the new PIN. The
+    acting session keeps it — it just proved the account password and the
+    current PIN. Clearing a PIN revokes nothing (access only widens)."""
     await verify_pin(db, profile, current_pin, ip)
     user = await db.get(User, profile.user_id)
     if user is None or not security.verify_password(password, user.hashed_password):
         raise AppException("Invalid password", "INVALID_PASSWORD", 400)
     profile.pin_hash = security.hash_password(pin) if pin is not None else None
+    if pin is not None:
+        stmt = update(RefreshToken).where(RefreshToken.profile_id == profile.id)
+        if session_jti is not None:
+            stmt = stmt.where(RefreshToken.jti != session_jti)
+        await db.execute(stmt.values(profile_id=None))
     await db.commit()
     await db.refresh(profile)
     return profile
 
 
-async def _session_row(
+async def get_session_row(
     db: AsyncSession, session_jti: str
 ) -> RefreshToken | None:
+    """The refresh session behind an access token, or None when it no longer
+    exists (logout / rotation cleanup)."""
     stmt = select(RefreshToken).where(RefreshToken.jti == session_jti)
     return (await db.execute(stmt)).scalar_one_or_none()
+
+
+_session_row = get_session_row
 
 
 async def activate_session(

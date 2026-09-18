@@ -27,6 +27,8 @@ function formErrorMessage(error: unknown): string {
     if (error.code === "PROFILE_NAME_TAKEN")
       return "Tên profile này đã được dùng.";
     if (error.code === "PROFILE_NOT_FOUND") return "Không tìm thấy profile.";
+    if (error.code === "PIN_REQUIRED") return "Profile này cần PIN.";
+    if (error.code === "INVALID_PIN") return "PIN không đúng.";
   }
   return toVietnameseMessage(error);
 }
@@ -48,14 +50,24 @@ export function ProfileFormDialog({
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState<string>(AVATAR_KEYS[0]);
   const [error, setError] = useState<string | null>(null);
+  const [pin, setPin] = useState("");
+  // Stored `has_pin` can be stale (set from another device); the server then
+  // answers PIN_REQUIRED, so reveal the field instead of trapping the user.
+  const [pinRequired, setPinRequired] = useState(false);
 
   const isEdit = profile !== null;
   const pending = create.isPending || update.isPending;
+  const needsPin = isEdit && (profile?.has_pin === true || pinRequired);
+  const pinComplete = /^\d{4}$/.test(pin);
+  const canSubmit =
+    name.trim().length > 0 && !pending && (!needsPin || pinComplete);
 
   useEffect(() => {
     if (!open) return;
     setName(profile?.name ?? "");
     setAvatar(profile?.avatar ?? AVATAR_KEYS[0]);
+    setPin("");
+    setPinRequired(false);
     setError(null);
   }, [open, profile]);
 
@@ -68,11 +80,17 @@ export function ProfileFormDialog({
       toast(isEdit ? "Đã cập nhật profile." : "Đã tạo profile.", "success");
       onOpenChange(false);
     };
-    const onError = (err: unknown) => setError(formErrorMessage(err));
+    const onError = (err: unknown) => {
+      // A profile with a PIN needs it even to be renamed: the server says so.
+      if (err instanceof ApiError && err.code === "PIN_REQUIRED") {
+        setPinRequired(true);
+      }
+      setError(formErrorMessage(err));
+    };
 
     if (isEdit && profile) {
       update.mutate(
-        { id: profile.id, name: trimmed, avatar },
+        { id: profile.id, name: trimmed, avatar, ...(pin ? { pin } : {}) },
         { onSuccess, onError },
       );
       return;
@@ -103,6 +121,26 @@ export function ProfileFormDialog({
               onChange={(event) => setName(event.target.value)}
             />
           </div>
+          {needsPin && (
+            <div className="space-y-1.5">
+              <label htmlFor="profile-pin" className="text-sm font-medium">
+                Mã PIN
+              </label>
+              <Input
+                id="profile-pin"
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                value={pin}
+                placeholder="4 chữ số"
+                onChange={(event) => setPin(event.target.value)}
+              />
+              <p className="text-muted-foreground text-xs">
+                Profile này có PIN — nhập PIN để đổi tên hoặc ảnh đại diện.
+              </p>
+            </div>
+          )}
           <div className="space-y-1.5">
             <span className="text-sm font-medium">Ảnh đại diện</span>
             <div className="grid grid-cols-6 gap-2">
@@ -138,7 +176,7 @@ export function ProfileFormDialog({
             >
               Huỷ
             </Button>
-            <Button type="submit" disabled={!name.trim() || pending}>
+            <Button type="submit" disabled={!canSubmit}>
               {pending ? "Đang lưu..." : isEdit ? "Lưu" : "Tạo profile"}
             </Button>
           </div>

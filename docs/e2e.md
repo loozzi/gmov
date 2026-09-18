@@ -156,7 +156,12 @@ không chọn profile — dùng `skipChooser: true` cho test assert chính cú �
 `continuePastChooser` (bấm card **đầu tiên** — profile mặc định, không PIN — rồi
 tới đích, mặc định `/`). Phía Node, `helpers/api.ts::loginUser` cũng login rồi
 switch sang profile mặc định (`loginUnselected` giữ token thô) vì mọi helper
-seed/cleanup đều gắn profile.
+seed/cleanup đều gắn profile. Cần token của một profile khác thì dùng
+**`sessionForProfile(account, id)`** (login mới + switch, phiên độc lập): access
+token bị ràng buộc với lựa chọn của chính phiên nó, nên sau một lần `switch`
+token cũ của phiên đó trả `403 PROFILE_REQUIRED` — cùng một spec muốn thao tác
+trên hai profile thì phải có hai phiên (hoặc dùng token mới nhất mà `switch`
+trả về).
 Cleanup dùng `resetProfiles` (xoá PIN + xoá mọi profile non-default) và xoá
 favorites đã thêm, best-effort để trả account về profile mặc định.
 

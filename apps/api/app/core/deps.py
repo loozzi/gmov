@@ -70,7 +70,7 @@ async def _resolve_user(db: AsyncSession, token: str) -> User:
 
 
 async def _profile_from_claims(
-    db: AsyncSession, user: User, payload: dict
+    db: AsyncSession, user: User, payload: dict, *, strict: bool
 ) -> Profile | None:
     """The profile this token operates as, or None when it selects none.
 
@@ -86,12 +86,24 @@ async def _profile_from_claims(
         profile_id = uuid.UUID(str(raw))
     except (ValueError, TypeError):
         raise AppException("Profile not found", "PROFILE_NOT_FOUND", 404)
+    session_jti = payload.get("sid")
     profile = await profile_service.get_by_id(db, profile_id)
     if profile is not None:
         if profile.user_id != user.id:
             raise AppException("Profile not found", "PROFILE_NOT_FOUND", 404)
+        if session_jti is not None:
+            # The claim must still match what the session selected: locking a
+            # profile (or another tab switching) re-points the session, and an
+            # access token issued before that must stop working immediately
+            # rather than for the rest of its 30-minute life.
+            row = await profile_service.get_session_row(db, str(session_jti))
+            if row is not None and row.profile_id != profile.id:
+                # Account-level endpoints (strict=False) just see "nothing
+                # selected", so the chooser stays reachable.
+                if not strict:
+                    return None
+                raise AppException("Profile required", "PROFILE_REQUIRED", 403)
         return profile
-    session_jti = payload.get("sid")
     if session_jti is not None:
         await profile_service.clear_session_profile(db, str(session_jti), profile_id)
     return None
@@ -106,7 +118,7 @@ async def get_session_context(
     user = await _load_active_user(db, payload)
     return SessionContext(
         user=user,
-        profile=await _profile_from_claims(db, user, payload),
+        profile=await _profile_from_claims(db, user, payload, strict=False),
         session_jti=payload.get("sid"),
     )
 
@@ -119,7 +131,7 @@ async def get_active_profile(
     PIN, when it has one) every profile-scoped endpoint answers 403."""
     payload = _decode_access(token)
     user = await _load_active_user(db, payload)
-    profile = await _profile_from_claims(db, user, payload)
+    profile = await _profile_from_claims(db, user, payload, strict=True)
     if profile is None:
         raise AppException("Profile required", "PROFILE_REQUIRED", 403)
     return ActiveProfile(user=user, profile=profile)

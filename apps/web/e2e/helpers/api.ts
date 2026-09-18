@@ -71,6 +71,19 @@ export async function loginUser(acc: TestAccount): Promise<{
   return tokens;
 }
 
+/** A fresh, independent session bound to `profileId`. Use this instead of
+ *  switching an existing session: a switch re-points that session, so every
+ *  older access token for it stops matching and is rejected (PROFILE_REQUIRED). */
+export async function sessionForProfile(
+  account: TestAccount,
+  profileId: string,
+  pin?: string,
+): Promise<string> {
+  const token = (await loginUnselected(account)).access_token;
+  const switched = await switchProfile(token, profileId, pin);
+  return switched.access_token ?? "";
+}
+
 export function authHeaders(token: string): Record<string, string> {
   return {
     "Content-Type": "application/json",

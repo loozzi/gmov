@@ -9,6 +9,7 @@ import {
   loginUser,
   rawApi,
   resetProfiles,
+  sessionForProfile,
   switchProfile,
   type TestAccount,
 } from "./helpers/api";
@@ -328,8 +329,8 @@ test("each profile keeps its own personal rail across switches", async ({
     firstId = first.id;
     const second = await createProfile(token, `B ${stamp()}`, "panda");
     secondId = second.id;
-    firstToken = (await switchProfile(token, first.id)).access_token ?? "";
-    secondToken = (await switchProfile(token, second.id)).access_token ?? "";
+    firstToken = await sessionForProfile(account, first.id);
+    secondToken = await sessionForProfile(account, second.id);
 
     await loginViaApi(page);
     await switchViaUi(page, first);

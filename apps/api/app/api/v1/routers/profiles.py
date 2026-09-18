@@ -69,12 +69,18 @@ async def create_profile(
 async def patch_profile(
     profile_id: uuid.UUID,
     data: ProfilePatchIn,
+    request: Request,
     current: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ProfileOut:
+    """Rename/re-avatar a profile. A profile that has a PIN demands it first:
+    managing profiles must not be a way around the lock."""
     profile = await profile_service.get_owned(db, current.id, profile_id)
     if profile is None:
         raise AppException("Profile not found", "PROFILE_NOT_FOUND", 404)
+    await profile_service.verify_pin(
+        db, profile, data.pin, ratelimit.client_ip(request)
+    )
     updated = await profile_service.rename(db, profile, data.name, data.avatar)
     return ProfileOut.from_profile(updated)
 
@@ -138,21 +144,27 @@ async def set_profile_pin(
     profile_id: uuid.UUID,
     data: ProfilePinIn,
     request: Request,
-    current: User = Depends(get_current_user),
+    ctx: SessionContext = Depends(get_session_context),
     db: AsyncSession = Depends(get_db),
 ) -> ProfileOut:
     ip = ratelimit.client_ip(request)
-    await ratelimit.check_login_allowed(ip, current.username)
-    profile = await profile_service.get_owned(db, current.id, profile_id)
+    await ratelimit.check_login_allowed(ip, ctx.user.username)
+    profile = await profile_service.get_owned(db, ctx.user.id, profile_id)
     if profile is None:
         raise AppException("Profile not found", "PROFILE_NOT_FOUND", 404)
     try:
         updated = await profile_service.set_pin(
-            db, profile, data.password, data.pin, data.current_pin, ip
+            db,
+            profile,
+            data.password,
+            data.pin,
+            data.current_pin,
+            ip,
+            ctx.session_jti,
         )
     except AppException as exc:
         if exc.code == "INVALID_PASSWORD":
-            await ratelimit.record_login_failure(ip, current.username)
+            await ratelimit.record_login_failure(ip, ctx.user.username)
         raise
-    await ratelimit.clear_login_failures(ip, current.username)
+    await ratelimit.clear_login_failures(ip, ctx.user.username)
     return ProfileOut.from_profile(updated)

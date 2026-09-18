@@ -717,3 +717,22 @@ Log ambiguous decisions here (Phase 0+). Newest last.
        mới, xoá vô điều kiện sẽ nuốt mất lựa chọn đó.
      Không cần migration: `refresh_tokens.profile_id` đã `nullable` + `ON DELETE
      SET NULL` từ đầu.
+137. **Quản lý profile không được là lối vòng qua PIN + đặt PIN thu hồi phiên
+     cũ.** Bug user báo: ở trang chọn profile (chưa nhập PIN) bấm "Quản lý profile"
+     là đổi được tên/avatar của profile đang khoá (PATCH chỉ cần `get_current_user`),
+     và phiên đã gắn profile từ trước vẫn giữ nguyên quyền sau khi profile được đặt
+     PIN (nợ #35). Fix:
+     - `PATCH /me/profiles/{id}` nhận `pin` tuỳ chọn và `verify_pin` khi profile có
+       PIN (chung bộ đếm với switch/delete); web thêm ô "Mã PIN" trong dialog đổi
+       tên/avatar, tự hiện khi server trả `PIN_REQUIRED` (cache `has_pin` có thể cũ).
+     - `set_pin` đặt/đổi PIN → `refresh_tokens.profile_id = NULL` cho **mọi phiên
+       khác** đang gắn profile đó (giữ phiên vừa thao tác — đã chứng minh mật khẩu
+       + `current_pin`); xoá PIN không thu hồi (quyền chỉ mở rộng).
+     - `deps` so `pid` của access token với `profile_id` của phiên (`sid`): lệch →
+       `403 PROFILE_REQUIRED`, nên token cũ hết hiệu lực **ngay** thay vì sống nốt
+       30 phút. Endpoint chỉ-cần-tài-khoản coi lệch = "chưa chọn" (chooser vẫn mở).
+     - Trang chọn profile thêm nút **Đăng xuất** (`chooser-logout`) làm lối thoát
+       cho người không vào được profile nào.
+     Không cần migration (cột `profile_id` đã nullable). E2E dùng
+     `sessionForProfile` cho token của profile khác: mỗi lần switch là phiên đổi
+     lựa chọn, token cũ không dùng lại được.
