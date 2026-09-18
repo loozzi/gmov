@@ -2,7 +2,7 @@
 
 ## Cơ chế
 
-- Service `db-backup` (image `postgres:16-alpine`, chạy bằng UID host) dump DB
+- Service `db-backup` (image `postgres:17-alpine`, chạy bằng UID host) dump DB
   **mỗi ngày** (`BACKUP_INTERVAL_SECONDS`, mặc định 86400) bằng
   `pg_dump --clean --if-exists` nén gzip → file
   `pgbackups/gmov-YYYYmmdd-Day-HHMMSS.sql.gz` (ví dụ

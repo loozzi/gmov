@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-gmov}
@@ -34,7 +34,7 @@ services:
       retries: 10
 
   db-backup:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     restart: unless-stopped
     # Chạy root để ghi được volume pgbackups mới tạo (root-owned); file dump
     # tạo ra 644 nên host vẫn đọc/copy được. Mọi thao tác qua container.

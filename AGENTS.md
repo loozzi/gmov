@@ -4,7 +4,7 @@
 
 - Monorepo: `apps/api` (FastAPI) + `apps/web` (Next.js). pnpm workspace for web.
 - Backend: Python 3.12, FastAPI, SQLAlchemy 2.0 (async) + asyncpg, Alembic,
-  Pydantic v2, pydantic-settings, PostgreSQL 16, Redis 7, httpx (async),
+  Pydantic v2, pydantic-settings, PostgreSQL 17, Redis 7, httpx (async),
   passlib[bcrypt], PyJWT. Dependencies via `uv` (`apps/api/pyproject.toml` + `uv.lock`).
 - Frontend: Next.js 15 (App Router) + TypeScript strict, Tailwind CSS v4,
   shadcn/ui, lucide-react, TanStack Query v5, zustand, hls.js, next/image.
