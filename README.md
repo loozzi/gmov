@@ -3,8 +3,24 @@
 [![CI](https://github.com/loozzi/gmov/actions/workflows/ci.yml/badge.svg)](https://github.com/loozzi/gmov/actions/workflows/ci.yml)
 
 Streaming web lấy dữ liệu từ API công khai NguonC (https://phim.nguonc.com):
-duyệt/tìm kiếm/lọc phim, xem qua trình phát nhúng, tài khoản thường, "Xem tiếp",
-yêu thích, lịch sử xem.
+duyệt/tìm kiếm/lọc phim, xem qua trình phát nhúng, tài khoản + hồ sơ xem,
+onboarding sở thích, gợi ý cá nhân hoá, "Xem tiếp", thư viện (watchlist, yêu
+thích, đánh giá, lịch sử), bình luận + kiểm duyệt, SEO đầy đủ.
+
+## Tính năng
+
+| Nhóm | Tính năng |
+|---|---|
+| Khám phá | Trang chủ (mới cập nhật + rail gợi ý), phim lẻ / phim bộ / hoạt hình / TV shows, lọc theo thể loại – quốc gia – năm, tìm kiếm có gợi ý + phím ↑/↓/Enter/Esc |
+| Xem phim | Player nhúng + fallback phát trực tiếp (HLS) khi upstream có m3u8; tiến độ theo từng tập, "Xem tiếp", lịch sử xem (theo hồ sơ) |
+| Tài khoản | Đăng ký/đăng nhập JWT (cookie httpOnly, xoay refresh token, chống reuse, rate-limit + honeypot); hồ sơ xem (tối đa 5, mã PIN, chuyển nhanh trên header) |
+| Onboarding | Quiz 3 bước (bỏ qua được, chỉ hỏi hồ sơ trống), chọn thể loại + bấm thích poster, làm lại trong quản lý hồ sơ (xem `docs/api-recommendations.md`) |
+| Gợi ý cho bạn | Engine deterministic kết hợp sở thích chọn tay + tín hiệu hành vi (yêu thích, đánh giá, xem xong/dở, watchlist, phản hồi); lý do trên từng card ("Vì bạn yêu thích…"); nút Quan tâm / Không quan tâm có hoàn tác; thể loại loại trừ bị lọc cứng khỏi gợi ý; trang "Gu của tôi" (`/me/taste`) |
+| Thư viện | Watchlist, yêu thích, đánh giá, lịch sử xem — tất cả theo từng hồ sơ (xem `docs/api-library.md`) |
+| Cộng đồng | Bình luận + trả lời, gắn spoiler (tự tick + tự động theo ngưỡng báo cáo), báo cáo vi phạm, ẩn/hiện bình luận; trang quản trị xử lý report + cấm/bỏ cấm tài khoản (xem `docs/api-moderation.md`) |
+| Giao diện | Sáng/tối (nhớ lựa chọn), responsive mobile, PWA (cài được, trang offline) |
+| SEO / chia sẻ | Meta + thẻ Open Graph/Twitter động theo từng phim (card 1200×630), JSON-LD (Movie/TVSeries/Breadcrumb), `sitemap.xml` ~1000 URL, `robots.txt`, đã xác minh Google Search Console |
+| Vận hành | `build.sh` deploy một lệnh (tùy chọn port, xem `docs/deploy.md`), healthcheck, backup DB hằng ngày + script restore (xem `docs/backup.md`), CI (ruff/pytest/lint/typecheck/build + build image), E2E Playwright |
 
 ## Demo
 
@@ -18,22 +34,33 @@ yêu thích, lịch sử xem.
 
 ## Stack
 
-- `apps/api`: FastAPI (Python 3.12, SQLAlchemy 2.0 async, PostgreSQL 16, Redis 7)
+- `apps/api`: FastAPI (Python 3.12, SQLAlchemy 2.0 async, PostgreSQL 17, Redis 7)
 - `apps/web`: Next.js 15 + TypeScript strict + Tailwind CSS v4
-- Hạ tầng: Docker multi-stage + docker-compose + nginx reverse proxy.
+- Hạ tầng: Docker multi-stage + docker-compose (+ nginx reverse proxy, tùy chọn);
+  script deploy `build.sh` ở root (không cần nginx).
 - Quy ước làm việc: `AGENTS.md`. Tài liệu API: `docs/api-auth.md`,
-  `docs/api-movies.md`, `docs/api-library.md`, `docs/api-moderation.md`.
+  `docs/api-movies.md`, `docs/api-library.md`, `docs/api-profiles.md`,
+  `docs/api-recommendations.md`, `docs/api-moderation.md`; web:
+  `docs/web-auth.md`, `docs/web-pages.md`, `docs/web-player.md`.
   Quyết định kiến trúc: `docs/decisions.md`.
 
 ## Yêu cầu hệ thống
 
 - Docker Engine ≥ 24 + Docker Compose v2 (chạy production hoặc full stack), **hoặc**
-- Local dev: Python 3.12 + `uv`, Node.js 22 + `pnpm` 9+, Postgres 16, Redis 7.
+- Local dev: Python 3.12 + `uv`, Node.js 22 + `pnpm` 9+, Postgres 17, Redis 7.
 
 ## Chạy production (khuyến nghị)
 
 ```bash
-cp .env.example .env   # sửa JWT_SECRET + POSTGRES_PASSWORD thật
+cp .env.example .env   # sửa JWT_SECRET + POSTGRES_PASSWORD thật (+ SITE_URL cho SEO)
+./build.sh up [--web-port N --api-port N --postgres-port N --redis-port N]
+```
+
+`build.sh` dựng `db redis api web`, chờ healthy rồi in URL; thêm lệnh
+`down [--volumes] | restart | logs [svc] | ps` (xem `docs/deploy.md`).
+Không dùng nginx vẫn chạy được; compose thuần vẫn hỗ trợ:
+
+```bash
 docker compose up --build -d
 ```
 
