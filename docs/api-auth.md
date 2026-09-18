@@ -9,7 +9,7 @@ Base: `/api/v1`. All errors are JSON `{"detail": ..., "code": ...}`.
 | POST | `/auth/register` | no | `{email, username(3–32, `[a-zA-Z0-9_.]`), password(≥8)}` + honeypot `website` (phải để trống) | 201 `UserOut` |
 | POST | `/auth/login` | no | OAuth2 form `username` (= email **or** username) + `password` | 200 `TokenPair` |
 | POST | `/auth/refresh` | no | `{refresh_token}` (rotates: old revoked, new pair issued) | 200 `TokenPair` |
-| POST | `/auth/logout` | no | `{refresh_token}` (idempotent, always 200) | 200 `{"ok": true}` |
+| POST | `/auth/logout` | no | `{refresh_token}` (idempotent, always 200; xoá **cả family**) | 200 `{"ok": true}` |
 | GET | `/users/me` | Bearer access | — | 200 `UserOut` |
 | PATCH | `/users/me` | Bearer access | `{display_name?, avatar_url?}` | 200 `UserOut` |
 
@@ -43,6 +43,23 @@ Base: `/api/v1`. All errors are JSON `{"detail": ..., "code": ...}`.
 - **Register tạo profile mặc định** (`name = "Mặc định"`, `position = 0`,
   `is_default = true`) trong cùng transaction với user, nên mọi tài khoản luôn
   có ít nhất một profile. Register vẫn KHÔNG auto-login (client gọi `/login`).
+
+## Session family (reuse detection)
+
+Mỗi lần đăng nhập mở một **family** (`refresh_tokens.family_id`); các lần rotate
+nối tiếp nằm cùng family. Cùng family được khoá bằng
+`pg_advisory_xact_lock(namespace, hashtext(family_id))` **trước khi đọc state**
+(Postgres; SQLite bỏ qua vì ghi tuần tự toàn cục — xem #139), nên mọi thay đổi
+của một family được tuần tự hoá kể cả INSERT member mới.
+
+- **Rotate bình thường**: member cũ `revoked_at = now`, cặp mới được phát.
+- **Trình lại trong `REFRESH_GRACE_SECONDS` (30s)**: coi là gửi trùng (double
+  boot/hai tab) → phát cặp mới, không kết tội trộm.
+- **Quá grace (hoặc token đã `compromised`)**: **revoke cả family** +
+  `compromised=true` cho mọi member → mọi token trong family trả
+  `401 INVALID_REFRESH_TOKEN`.
+- **Logout**: **xoá mọi row của family** (không phải revoke) để có hiệu lực ngay,
+  không dính grace.
 
 ## Error codes
 

@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import jwt
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import security
@@ -93,6 +93,35 @@ async def _load_row(db: AsyncSession, jti: str) -> RefreshToken | None:
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
+# Namespace for `pg_advisory_xact_lock(namespace, hashtext(family))`. Keep it
+# unique among whatever else may use advisory locks.
+_FAMILY_LOCK_NAMESPACE = 0x676D6F76  # "gmov"
+
+
+async def _lock_family_advisory(db: AsyncSession, family_id: uuid.UUID) -> None:
+    """Serialise every mutation of one family, INSERT included.
+
+    The row-level family lock (`_lock_family`) can only lock rows that already
+    exist; under READ COMMITTED a concurrent rotation may INSERT a new member
+    after the theft branch took its snapshot, so the new member would survive
+    the family revocation (#22). A transaction-scoped advisory lock is taken
+    before any family state is read, which also covers rows created by a
+    transaction still in flight. Postgres only: SQLite serialises writers
+    process-wide so the race cannot exist there, and the test suite keeps
+    running on the plain `FOR UPDATE` path.
+    """
+    if db.get_bind().dialect.name != "postgresql":
+        return
+    await db.execute(
+        select(
+            func.pg_advisory_xact_lock(
+                _FAMILY_LOCK_NAMESPACE, func.hashtext(str(family_id))
+            )
+        )
+    )
+
+
+
 def _family_lock_stmt(family_id: uuid.UUID) -> Select[tuple[RefreshToken]]:
     return (
         select(RefreshToken)
@@ -144,7 +173,9 @@ async def refresh(db: AsyncSession, token: str) -> TokenPair:
             raise AppException(
                 "Invalid refresh token", "INVALID_REFRESH_TOKEN", 401
             )
-        members = await _lock_family(db, row.family_id)
+        family_id = row.family_id
+        await _lock_family_advisory(db, family_id)
+        members = await _lock_family(db, family_id)
         now = datetime.now(UTC)
         presented = next((m for m in members if m.jti == jti), None)
         if presented is None or _as_aware(presented.expires_at) <= now:
@@ -187,8 +218,12 @@ async def refresh(db: AsyncSession, token: str) -> TokenPair:
 async def logout(db: AsyncSession, token: str) -> None:
     """Destroy a refresh session. Idempotent: unknown tokens still return 200.
 
-    The row is DELETED (not revoked) so logout takes effect immediately —
-    unlike rotation revokes, it is NOT covered by the re-issue grace window.
+    A session IS its family (every rotation chains off the previous member), so
+    the whole family is DELETED — one row at a time would leave a member that a
+    concurrent rotation is inserting right now alive. Rows are deleted (not
+    revoked) so logout takes effect immediately, unlike rotation revokes, which
+    are covered by the re-issue grace window. Takes the same family lock as
+    `refresh` for the same reason.
     """
     try:
         payload = security.decode_token(token)
@@ -197,8 +232,12 @@ async def logout(db: AsyncSession, token: str) -> None:
     jti = payload.get("jti")
     if not jti:
         return
-    stmt = select(RefreshToken).where(RefreshToken.jti == str(jti))
-    row = (await db.execute(stmt)).scalar_one_or_none()
-    if row is not None:
-        await db.delete(row)
-        await db.commit()
+    row = await _load_row(db, str(jti))
+    if row is None:
+        return
+    family_id = row.family_id
+    await _lock_family_advisory(db, family_id)
+    members = await _lock_family(db, family_id)
+    for member in members:
+        await db.delete(member)
+    await db.commit()

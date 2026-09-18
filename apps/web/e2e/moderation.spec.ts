@@ -13,7 +13,7 @@ import {
   registerUser,
   type TestAccount,
 } from "./helpers/api";
-import { loginViaUi } from "./helpers/auth";
+import { loginViaApi, loginViaUi } from "./helpers/auth";
 import { skipIfNoUpstream } from "./helpers/net";
 
 skipIfNoUpstream();
@@ -193,6 +193,73 @@ test("report -> hide -> hidden placeholder -> unhide -> cleanup", async ({
   }
 });
 
+
+test("a spoiler comment is veiled and revealed on click", async ({ page }) => {
+  const account = JSON.parse(
+    await readFile(LAST_USER_FILE, "utf8"),
+  ) as TestAccount;
+  const latest = (await api("/api/v1/movies/latest?page=1")) as MoviesPage;
+  const slug = latest.items[0]?.slug;
+  if (!slug) {
+    test.skip(true, "upstream returned no movies");
+    return;
+  }
+
+  const stamp2 = Date.now().toString(36);
+  const plainBody = `E2E plain ${stamp2}`;
+  const spoilBody = `E2E spoiler ${stamp2}`;
+  let plainPosted = false;
+  let spoilPosted = false;
+
+  try {
+    await loginViaApi(page);
+    await page.goto(`/phim/${slug}`);
+    const box = page.getByPlaceholder(/chia sẻ cảm nhận/i);
+    await expect(box).toBeVisible({ timeout: 20_000 });
+
+    // A comment without the checkbox stays plain.
+    await box.fill(plainBody);
+    await page.getByRole("button", { name: /gửi bình luận/i }).click();
+    plainPosted = true;
+    const plainCard = commentCard(page, plainBody);
+    await expect(plainCard).toBeVisible({ timeout: 20_000 });
+    await expect(plainCard.getByTestId("spoiler-veil")).toHaveCount(0);
+
+    // A spoiler comment is blurred behind a veil until the reader lifts it.
+    await box.fill(spoilBody);
+    await page.getByLabel(/nội dung có spoiler/i).check();
+    await page.getByRole("button", { name: /gửi bình luận/i }).click();
+    spoilPosted = true;
+    const card = commentCard(page, spoilBody);
+    await expect(card).toBeVisible({ timeout: 20_000 });
+    const veil = card.getByTestId("spoiler-veil");
+    await expect(veil).toBeVisible();
+    await expect(veil).toContainText(/nhấn để xem/i);
+
+    await veil.click();
+    await expect(card.getByTestId("spoiler-veil")).toHaveCount(0);
+    await expect(card.getByText(spoilBody)).toBeVisible();
+  } finally {
+    // API cleanup: two UI deletes would register the dialog handler twice.
+    const token = (await loginUser(account)).access_token;
+    for (const [posted, body] of [
+      [spoilPosted, spoilBody],
+      [plainPosted, plainBody],
+    ] as const) {
+      if (!posted) continue;
+      const listing = (await api(
+        `/api/v1/comments?movie_slug=${encodeURIComponent(slug)}&per_page=100`,
+      )) as { items: { id: string; body: string | null }[] };
+      const mine = listing.items.find((item) => item.body === body);
+      if (mine) {
+        await rawApi(`/api/v1/me/comments/${mine.id}`, {
+          method: "DELETE",
+          headers: authHeaders(token),
+        }).catch(() => undefined);
+      }
+    }
+  }
+});
 
 test("ban the comment author from the queue, then unban", async ({
   browser,

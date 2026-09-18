@@ -168,6 +168,7 @@ class ReplyOut(BaseModel):
     user: CommentUser
     body: str | None
     is_hidden: bool = False
+    has_spoiler: bool = False
     reported: bool = False
     created_at: datetime
 
@@ -178,6 +179,7 @@ class CommentOut(BaseModel):
     user: CommentUser
     body: str | None
     is_hidden: bool = False
+    has_spoiler: bool = False
     reported: bool = False
     created_at: datetime
     replies: list[ReplyOut] = Field(default_factory=list)
@@ -192,6 +194,8 @@ class PaginatedComments(BaseModel):
 
 
 class CommentAdd(BaseModel):
+    # Author-declared spoiler: readers get a veil they can lift locally.
+    has_spoiler: bool = False
     movie_slug: str = Field(min_length=1, max_length=255)
     body: str = Field(min_length=1, max_length=2000)
     parent_id: uuid.UUID | None = None

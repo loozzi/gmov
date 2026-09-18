@@ -352,8 +352,9 @@ Log ambiguous decisions here (Phase 0+). Newest last.
     đánh giá `revoked_at`/grace/`compromised` trên chính set đã khóa đó. Tránh
     hẳn thứ tự hai lock (khóa một row theo `jti` rồi mới khóa family) vốn để
     hai request đồng thời cùng family khóa ngược thứ tự → deadlock Postgres.
-    Không dùng advisory lock (test chạy SQLite); migration/constraint parity
-    đã có test chốt.
+    Không dùng advisory lock ở thời điểm đó (test chạy SQLite);
+    migration/constraint parity đã có test chốt. *(Bổ sung #139: row lock một
+    mình không đủ — xem mục đó.)*
 
 81. **Optimistic "Đã báo cáo" giữ dialog mounted**: trigger và `ReportDialog`
     render cùng nhau (không early-return thay cả nút) nên `isPending` vẫn hiện
@@ -736,3 +737,28 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      Không cần migration (cột `profile_id` đã nullable). E2E dùng
      `sessionForProfile` cho token của profile khác: mỗi lần switch là phiên đổi
      lựa chọn, token cũ không dùng lại được.
+138. **Spoiler là cờ riêng `comments.has_spoiler`, không tái dùng `is_hidden`.**
+     `is_hidden` là biện pháp kiểm duyệt (non-staff nhận `body: null` +
+     placeholder "Bình luận đã bị ẩn"); spoiler chỉ cần che mờ để người đọc tự
+     mở. Migration thêm cột nullable=False `server_default=false()` (theo đúng
+     bài học `'false'` text của #25). Ba đường đặt cờ: tác giả tick
+     `has_spoiler` khi gửi; **ngưỡng tự động** đếm reporter khác nhau có báo cáo
+     `open` cùng `reason=spoiler` ≥ `COMMENT_SPOILER_REPORT_THRESHOLD` (mặc
+     định 2) — độc lập với ngưỡng ẩn (đếm mọi reason); và moderator
+     `/admin/comments/{id}/spoiler|unspoiler` (auto-veil phải có đường hoàn
+     tác). Veil làm ở client (`blur` + nút "nhấn để xem"), `body` vẫn trả về —
+     đây là tiện ích cho người đọc, không phải hàng rào bảo mật; staff không bị
+     che.
+139. **Family refresh phải khoá bằng advisory lock, không chỉ row lock (#22).**
+     `SELECT ... WHERE family_id FOR UPDATE` chỉ khoá các row **đã tồn tại**;
+     dưới READ COMMITTED, một rotation hợp lệ trên member khác có thể INSERT
+     member mới sau snapshot của theft branch → member đó sống sót trong family
+     đã `compromised` (đo được bằng test Postgres-only:
+     `tests/test_auth_concurrency_integration.py`, mutation test cho
+     `live_members == 1` khi tắt lock). Fix: `pg_advisory_xact_lock(namespace,
+     hashtext(family_id))` lấy **trước** khi đọc state, trong cả `refresh` và
+     `logout`; guard dialect nên SQLite/test hiện tại không đổi (SQLite ghi tuần
+     tự toàn cục). Kèm đó `logout` xoá **cả family** (session = family; xoá một
+     row có thể thua một rotation đang chèn row khác). Điều chỉnh #80 (đã ghi
+     "không dùng advisory lock") — có guard nên vẫn chạy test SQLite bình
+     thường.

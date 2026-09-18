@@ -120,6 +120,14 @@ chưa đăng nhập.
   text per-card, không có UI phụ (xem `docs/todo.md`).
 - API + engine: `docs/api-recommendations.md`.
 
+## Bình luận có spoiler
+
+Form bình luận có checkbox **"Nội dung có spoiler"**; bình luận được gắn cờ
+(do tác giả tự khai, do đủ người báo `reason=spoiler`, hoặc moderator đánh dấu ở
+`/admin/reports`) sẽ hiện **che mờ** kèm nút "Nội dung có spoiler — nhấn để xem"
+(`data-testid="spoiler-veil"`). Mở veil chỉ ở client, không gọi server; moderator
+thấy thẳng nội dung và có badge `Spoiler` + nút "Đánh dấu spoiler"/"Bỏ spoiler".
+
 ## Duyệt phim: cuộn vô tận + chuyển nhanh
 
 - **Trang 1 vẫn SSR** (giữ indexable + paint đầu như cũ): mỗi `page.tsx` fetch

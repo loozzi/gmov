@@ -46,6 +46,7 @@ async def create(
         parent_id=data.parent_id,
         body=body,
         is_hidden=bool(hits),
+        has_spoiler=data.has_spoiler,
     )
     db.add(row)
     if hits:
@@ -138,6 +139,7 @@ async def list_paginated(
                 user=user_map[r.user_id],
                 body=None if (mask_hidden and r.is_hidden) else r.body,
                 is_hidden=r.is_hidden,
+                has_spoiler=r.has_spoiler,
                 reported=r.id in reported_ids,
                 created_at=r.created_at,
             )
@@ -150,6 +152,7 @@ async def list_paginated(
             user=user_map[t.user_id],
             body=None if (mask_hidden and t.is_hidden) else t.body,
             is_hidden=t.is_hidden,
+            has_spoiler=t.has_spoiler,
             reported=t.id in reported_ids,
             created_at=t.created_at,
             replies=grouped.get(t.id, []),

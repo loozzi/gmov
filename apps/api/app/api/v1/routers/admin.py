@@ -51,8 +51,10 @@ async def hide_comment(
     actor: User = Depends(require_moderator),
     db: AsyncSession = Depends(get_db),
 ) -> CommentVisibilityOut:
-    await report_service.hide_comment(db, actor, comment_id)
-    return CommentVisibilityOut(ok=True, is_hidden=True)
+    comment = await report_service.hide_comment(db, actor, comment_id)
+    return CommentVisibilityOut(
+        ok=True, is_hidden=True, has_spoiler=comment.has_spoiler
+    )
 
 
 @router.post(
@@ -63,8 +65,38 @@ async def unhide_comment(
     actor: User = Depends(require_moderator),
     db: AsyncSession = Depends(get_db),
 ) -> CommentVisibilityOut:
-    await report_service.unhide_comment(db, actor, comment_id)
-    return CommentVisibilityOut(ok=True, is_hidden=False)
+    comment = await report_service.unhide_comment(db, actor, comment_id)
+    return CommentVisibilityOut(
+        ok=True, is_hidden=False, has_spoiler=comment.has_spoiler
+    )
+
+
+@router.post(
+    "/comments/{comment_id}/spoiler", response_model=CommentVisibilityOut
+)
+async def mark_spoiler(
+    comment_id: uuid.UUID,
+    actor: User = Depends(require_moderator),
+    db: AsyncSession = Depends(get_db),
+) -> CommentVisibilityOut:
+    comment = await report_service.set_spoiler(db, actor, comment_id, True)
+    return CommentVisibilityOut(
+        ok=True, is_hidden=comment.is_hidden, has_spoiler=True
+    )
+
+
+@router.post(
+    "/comments/{comment_id}/unspoiler", response_model=CommentVisibilityOut
+)
+async def unmark_spoiler(
+    comment_id: uuid.UUID,
+    actor: User = Depends(require_moderator),
+    db: AsyncSession = Depends(get_db),
+) -> CommentVisibilityOut:
+    comment = await report_service.set_spoiler(db, actor, comment_id, False)
+    return CommentVisibilityOut(
+        ok=True, is_hidden=comment.is_hidden, has_spoiler=False
+    )
 
 
 @router.post("/reports/{report_id}/dismiss")

@@ -45,6 +45,7 @@ class ReportCommentInfo(BaseModel):
     id: uuid.UUID
     body: str
     is_hidden: bool
+    has_spoiler: bool = False
     movie_slug: str
     user: AdminCommentUser
     created_at: datetime
@@ -72,6 +73,7 @@ class PaginatedReports(BaseModel):
 class CommentVisibilityOut(BaseModel):
     ok: bool = True
     is_hidden: bool
+    has_spoiler: bool = False
 
 
 class BanIn(BaseModel):

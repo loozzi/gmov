@@ -225,13 +225,23 @@ def test_profile_preferences_cascades_when_profile_deleted(tmp_path, monkeypatch
 
 
 def test_m2_revision_follows_profiles_migration(tmp_path, monkeypatch):
+    """The M2 migration chains onto the profiles one.
+
+    Later migrations (comments.has_spoiler, …) may sit on top of it, so this
+    looks for the revision parented by the profiles migration instead of
+    assuming M2 is the head.
+    """
     from alembic.script import ScriptDirectory
 
     cfg, _ = _alembic_config(tmp_path, monkeypatch, "m2_revision.db")
     script = ScriptDirectory.from_config(cfg)
-    head = script.get_current_head()
-    revision = script.get_revision(head)
-    assert revision.down_revision == PREVIOUS_REVISION
+    children = [
+        rev
+        for rev in script.walk_revisions()
+        if rev.down_revision == PREVIOUS_REVISION
+    ]
+    assert children, "no migration follows the profiles migration"
+    assert any(rev.module.__name__.startswith("c46bc4737183") for rev in children)
 
 
 def test_downgrade_drops_m2_tables(tmp_path, monkeypatch):

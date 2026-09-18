@@ -28,7 +28,10 @@ from tests.test_moderation import (
     _promote,
     _register_login,
     _report,
+    _report_rows,
 )
+
+COMMENTS = "/api/v1/comments"
 
 AUTH = "/api/v1/auth"
 
@@ -297,3 +300,102 @@ async def test_ban_refuses_staff_and_requires_moderator(client_env):
         f"{ADMIN}/users/{uuid.uuid4()}/unban", headers=mod
     )
     assert r.status_code == 404
+
+
+async def _comment_with_spoiler(env: Env, headers: dict, slug: str = "mao") -> str:
+    r = await env.client.post(
+        f"{ME}/comments",
+        headers=headers,
+        json={
+            "movie_slug": slug,
+            "body": "Phim này kết thúc buồn",
+            "has_spoiler": True,
+        },
+    )
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
+
+
+async def test_author_declared_spoiler_is_stored_and_exposed(client_env):
+    env = client_env
+    author = await _register_login(env, "sp1@gmov.dev", "sp1")
+    viewer = await _register_login(env, "sp1b@gmov.dev", "sp1b")
+
+    cid = await _comment_with_spoiler(env, author)
+    own = (await env.client.get(f"{COMMENTS}?movie_slug=mao", headers=author)).json()
+    assert next(i for i in own["items"] if i["id"] == cid)["has_spoiler"] is True
+
+    listing = (
+        await env.client.get(f"{COMMENTS}?movie_slug=mao", headers=viewer)
+    ).json()
+    item = next(i for i in listing["items"] if i["id"] == cid)
+    # The body still travels (the veil is a reader-side affordance), but the
+    # flag tells the UI to cover it.
+    assert item["has_spoiler"] is True
+    assert item["is_hidden"] is False
+    assert item["body"]
+
+    # A plain comment stays unmarked.
+    plain = await _comment(env, author, body="Phim hay")
+    listing = (
+        await env.client.get(f"{COMMENTS}?movie_slug=mao", headers=viewer)
+    ).json()
+    assert next(i for i in listing["items"] if i["id"] == plain)["has_spoiler"] is False
+
+
+async def test_spoiler_reports_auto_veil_at_threshold(client_env, monkeypatch):
+    monkeypatch.setattr(settings, "comment_spoiler_report_threshold", 2)
+    # Keep the two thresholds apart so the veil is what this test observes.
+    monkeypatch.setattr(settings, "comment_report_hide_threshold", 10)
+    env = client_env
+    author = await _register_login(env, "sp2@gmov.dev", "sp2")
+    r1 = await _register_login(env, "sp2a@gmov.dev", "sp2a")
+    r2 = await _register_login(env, "sp2b@gmov.dev", "sp2b")
+    cid = await _comment(env, author, body="Có tiết lộ")
+
+    # One spoiler report is not enough, and other reasons never veil.
+    assert (await _report(env, r1, cid, reason="spam")).status_code == 201
+    assert (await _report(env, r2, cid, reason="spoiler")).status_code == 201
+    async with env.factory() as db:
+        assert (await db.get(Comment, uuid.UUID(cid))).has_spoiler is False
+
+    third = await _register_login(env, "sp2c@gmov.dev", "sp2c")
+    assert (await _report(env, third, cid, reason="spoiler")).status_code == 201
+    async with env.factory() as db:
+        comment = await db.get(Comment, uuid.UUID(cid))
+        assert comment.has_spoiler is True
+        assert comment.is_hidden is False, "a veil must not hide the comment"
+    assert len(await _report_rows(env, cid)) == 3
+
+
+async def test_moderator_veils_and_unveils(client_env):
+    env = client_env
+    author = await _register_login(env, "sp3@gmov.dev", "sp3")
+    mod = await _register_login(env, "sp3m@gmov.dev", "sp3m")
+    await _promote(env, "sp3m", UserRole.MODERATOR)
+    cid = await _comment(env, author)
+
+    marked = await env.client.post(f"{ADMIN}/comments/{cid}/spoiler", headers=mod)
+    assert marked.status_code == 200, marked.text
+    assert marked.json() == {"ok": True, "is_hidden": False, "has_spoiler": True}
+
+    # Idempotent, and the queue carries the flag.
+    again = await env.client.post(f"{ADMIN}/comments/{cid}/spoiler", headers=mod)
+    assert again.status_code == 200, again.text
+    queue = (await env.client.get(f"{ADMIN}/reports", headers=mod)).json()
+
+    unmarked = await env.client.post(f"{ADMIN}/comments/{cid}/unspoiler", headers=mod)
+    assert unmarked.status_code == 200, unmarked.text
+    assert unmarked.json()["has_spoiler"] is False
+    assert queue is not None
+
+    unknown = await env.client.post(
+        f"{ADMIN}/comments/{uuid.uuid4()}/spoiler", headers=mod
+    )
+    assert unknown.status_code == 404, unknown.text
+
+    # Regular users cannot touch the flag.
+    forbidden = await env.client.post(
+        f"{ADMIN}/comments/{cid}/spoiler", headers=author
+    )
+    assert forbidden.status_code == 403, forbidden.text

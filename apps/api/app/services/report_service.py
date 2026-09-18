@@ -11,7 +11,12 @@ from sqlalchemy.orm import aliased
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.db.models.comment import Comment
-from app.db.models.comment_report import CommentReport, ReportSource, ReportStatus
+from app.db.models.comment_report import (
+    CommentReport,
+    ReportReason,
+    ReportSource,
+    ReportStatus,
+)
 from app.db.models.user import User
 from app.schemas.moderation import (
     AdminCommentUser,
@@ -103,6 +108,23 @@ async def create(
         if open_count >= settings.comment_report_hide_threshold:
             comment.is_hidden = True
 
+        # A spoiler veil is softer than hiding: enough distinct readers saying
+        # "this spoils the film" veils the body, which readers can lift locally.
+        if data.reason == ReportReason.SPOILER:
+            spoiler_count = (
+                await db.execute(
+                    select(func.count(func.distinct(CommentReport.reporter_id)))
+                    .select_from(CommentReport)
+                    .where(
+                        CommentReport.comment_id == data.comment_id,
+                        CommentReport.status == ReportStatus.OPEN,
+                        CommentReport.reason == ReportReason.SPOILER,
+                    )
+                )
+            ).scalar_one()
+            if spoiler_count >= settings.comment_spoiler_report_threshold:
+                comment.has_spoiler = True
+
         await db.commit()
         await db.refresh(row)
         return row, True
@@ -181,6 +203,7 @@ async def list_reports(
                 id=comment.id,
                 body=comment.body,
                 is_hidden=comment.is_hidden,
+                has_spoiler=comment.has_spoiler,
                 movie_slug=comment.movie_slug,
                 user=AdminCommentUser(
                     id=author.id,
@@ -198,7 +221,7 @@ async def list_reports(
 
 async def hide_comment(
     db: AsyncSession, actor: User, comment_id: uuid.UUID
-) -> None:
+) -> Comment:
     try:
         comment = await _get_comment(db, comment_id)
         comment.is_hidden = True
@@ -216,6 +239,7 @@ async def hide_comment(
             report.resolved_by = actor.id
             report.resolved_at = now
         await db.commit()
+        return comment
     except Exception:
         await db.rollback()
         raise
@@ -223,11 +247,27 @@ async def hide_comment(
 
 async def unhide_comment(
     db: AsyncSession, actor: User, comment_id: uuid.UUID
-) -> None:
+) -> Comment:
     try:
         comment = await _get_comment(db, comment_id)
         comment.is_hidden = False
         await db.commit()
+        return comment
+    except Exception:
+        await db.rollback()
+        raise
+
+
+async def set_spoiler(
+    db: AsyncSession, actor: User, comment_id: uuid.UUID, value: bool
+) -> Comment:
+    """Moderator toggle for the spoiler veil (auto-veiled comments need a way
+    back, and a moderator may veil one no reader reported)."""
+    try:
+        comment = await _get_comment(db, comment_id)
+        comment.has_spoiler = value
+        await db.commit()
+        return comment
     except Exception:
         await db.rollback()
         raise

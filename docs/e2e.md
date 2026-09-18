@@ -77,6 +77,12 @@ storageState chung:
 5. Reporter F5 → card hiện placeholder "Bình luận đã bị ẩn", body gốc biến mất.
 6. Moderator chuyển filter "Đã xử lý" (report đã `resolved`), bấm "Bỏ ẩn";
    reporter F5 → bình luận trở lại.
+
+Thêm test độc lập (chỉ dùng account nền, không đăng ký thêm): bình luận không
+tick checkbox thì không có veil; bình luận có tick hiện
+`data-testid="spoiler-veil"` (che mờ + "nhấn để xem"), bấm vào thì veil biến mất
+và thấy nội dung. Cleanup xoá bình luận **qua API** (2 lần xoá qua UI sẽ đăng ký
+handler `dialog` hai lần).
 7. Cleanup: moderator xóa bình luận của chính mình (`Xóa bình luận`, accept
    `dialog` confirm của trình duyệt) và hạ account nền về `user` — test để lại
    data sạch ngoài row user.

@@ -71,10 +71,12 @@ with index — no cache table at current volume).
 | Method | Path | Success |
 |--------|------|---------|
 | GET | `/comments?movie_slug=&page=&per_page=20` (public, optional token) | 200 paginated top-level (newest first), each with `user`, `replies[]` (oldest first), `reply_count` |
-| POST | `/me/comments` `{movie_slug, body 1–2000, parent_id?}` (rate-limited 10 req/min/user) | 201 created comment |
+| POST | `/me/comments` `{movie_slug, body 1–2000, parent_id?, has_spoiler?}` (rate-limited 10 req/min/user) | 201 created comment |
 | DELETE | `/me/comments/{id}` | 200 `{"ok": true}` (owner only, deletes subtree; others → 404 `COMMENT_NOT_FOUND`) |
 
-`CommentOut`/`ReplyOut` include `is_hidden: bool`; `body` is `str | null` —
+`CommentOut`/`ReplyOut` include `is_hidden: bool` and `has_spoiler: bool`
+(author-declared or auto-veiled; the client blurs it behind a "nhấn để xem"
+button — see `docs/api-moderation.md`); `body` is `str | null` —
 for anonymous/normal users a hidden comment returns `body: null` (client shows
 a placeholder) while replies are still returned. A valid moderator/admin token
 (there is no 401 without one) widens `body` to the real text even when hidden.

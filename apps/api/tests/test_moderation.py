@@ -397,7 +397,7 @@ async def test_hide_resolves_open_reports_and_unhide_keeps_them(client_env):
 
     r = await env.client.post(f"{ADMIN}/comments/{cid}/hide", headers=moderator)
     assert r.status_code == 200, r.text
-    assert r.json() == {"ok": True, "is_hidden": True}
+    assert r.json() == {"ok": True, "is_hidden": True, "has_spoiler": False}
 
     rows = await _report_rows(env, cid)
     assert len(rows) == 2
@@ -417,7 +417,7 @@ async def test_hide_resolves_open_reports_and_unhide_keeps_them(client_env):
 
     r = await env.client.post(f"{ADMIN}/comments/{cid}/unhide", headers=moderator)
     assert r.status_code == 200, r.text
-    assert r.json() == {"ok": True, "is_hidden": False}
+    assert r.json() == {"ok": True, "is_hidden": False, "has_spoiler": False}
 
     rows = await _report_rows(env, cid)
     assert all(row.status == ReportStatus.RESOLVED for row in rows)

@@ -19,9 +19,11 @@ import {
   useBanUser,
   useDismissReport,
   useHideComment,
+  useMarkSpoiler,
   useReports,
   useUnbanUser,
   useUnhideComment,
+  useUnmarkSpoiler,
   type AdminCommentUser,
   type ReportItem,
   type ReportsFilter,
@@ -116,9 +118,17 @@ function ReportRow({ item }: { item: ReportItem }) {
   const toast = useToast();
   const hide = useHideComment(item.comment.movie_slug);
   const unhide = useUnhideComment(item.comment.movie_slug);
+  const markSpoiler = useMarkSpoiler(item.comment.movie_slug);
+  const unmarkSpoiler = useUnmarkSpoiler(item.comment.movie_slug);
   const dismiss = useDismissReport();
   const isHidden = item.comment.is_hidden;
-  const pending = hide.isPending || unhide.isPending || dismiss.isPending;
+  const hasSpoiler = item.comment.has_spoiler;
+  const pending =
+    hide.isPending ||
+    unhide.isPending ||
+    markSpoiler.isPending ||
+    unmarkSpoiler.isPending ||
+    dismiss.isPending;
 
   const handleToggle = () => {
     const options = {
@@ -131,6 +141,19 @@ function ReportRow({ item }: { item: ReportItem }) {
     };
     if (isHidden) unhide.mutate(item.comment.id, options);
     else hide.mutate(item.comment.id, options);
+  };
+
+  const handleSpoiler = () => {
+    const options = {
+      onSuccess: () =>
+        toast(
+          hasSpoiler ? "Đã bỏ đánh dấu spoiler." : "Đã đánh dấu spoiler.",
+          "success",
+        ),
+      onError: (error: unknown) => toast(toVietnameseMessage(error), "error"),
+    };
+    if (hasSpoiler) unmarkSpoiler.mutate(item.comment.id, options);
+    else markSpoiler.mutate(item.comment.id, options);
   };
 
   const handleDismiss = () => {
@@ -152,6 +175,11 @@ function ReportRow({ item }: { item: ReportItem }) {
         {isHidden && (
           <span className="rounded-full bg-muted px-2 py-0.5">
             Bình luận đang ẩn
+          </span>
+        )}
+        {hasSpoiler && (
+          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-medium text-amber-600 dark:text-amber-400">
+            Spoiler
           </span>
         )}
         <span>{formatDate(item.created_at)}</span>
@@ -200,6 +228,14 @@ function ReportRow({ item }: { item: ReportItem }) {
           disabled={pending}
         >
           {isHidden ? "Bỏ ẩn" : "Ẩn"}
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={handleSpoiler}
+          disabled={pending}
+        >
+          {hasSpoiler ? "Bỏ spoiler" : "Đánh dấu spoiler"}
         </Button>
         {item.status === "open" && (
           <Button

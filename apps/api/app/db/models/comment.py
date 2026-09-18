@@ -27,3 +27,9 @@ class Comment(Base, TimestampMixin):
     is_hidden: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false(), nullable=False
     )
+    # Author-marked (or moderator-marked) spoiler: readers get a veil they can
+    # lift locally. Deliberately separate from `is_hidden` (moderation) so a
+    # spoiler is not confused with a removed comment.
+    has_spoiler: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )

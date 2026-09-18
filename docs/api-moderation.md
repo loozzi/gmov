@@ -50,8 +50,8 @@ Lỗi:
 (`get_optional_user`): token thiếu/sai/hết hạn → coi như ẩn danh, **không bao
 giờ 401**.
 
-`CommentOut`/`ReplyOut` có thêm `is_hidden: bool` và `body` đổi thành `str |
-null`:
+`CommentOut`/`ReplyOut` có thêm `is_hidden: bool`, `has_spoiler: bool` và `body`
+đổi thành `str | null`:
 
 - Ẩn danh / user thường: bình luận bị ẩn trả `body: null` (client render
   placeholder "Bình luận đã bị ẩn"), `replies[]` và `reply_count` vẫn giữ.
@@ -74,6 +74,8 @@ token → `401`; đã đăng nhập nhưng role không đủ → `403 FORBIDDEN`
 | GET | `/admin/reports` | `status?` (`open\|resolved\|dismissed`), `page=1`, `per_page=20` (≤100) | 200 `PaginatedReports` |
 | POST | `/admin/comments/{comment_id}/hide` | — | 200 `{"ok": true, "is_hidden": true}` |
 | POST | `/admin/comments/{comment_id}/unhide` | — | 200 `{"ok": true, "is_hidden": false}` |
+| POST | `/admin/comments/{comment_id}/spoiler` | — | 200 `{"ok": true, "has_spoiler": true}` (idempotent) |
+| POST | `/admin/comments/{comment_id}/unspoiler` | — | 200 `{"ok": true, "has_spoiler": false}` |
 | POST | `/admin/reports/{report_id}/dismiss` | — | 200 `{"ok": true}` |
 | POST | `/admin/users/{user_id}/ban` | body `{reason?}` (≤200 ký tự) | 200 `BannedUserOut` |
 | POST | `/admin/users/{user_id}/unban` | — | 200 `BannedUserOut` |
@@ -130,11 +132,34 @@ idempotent, trả `{id, username, banned_at, ban_reason}`.
 `COMMENT_REPORT_HIDE_THRESHOLD` (mặc định 3), hệ thống đặt `is_hidden=true`.
 Báo cáo vẫn giữ `open` để moderator duyệt (auto-hide không resolve). Báo cáo
 mới nhắm vào bình luận đã ẩn bị từ chối `409 COMMENT_HIDDEN`. Hide thủ công
-của moderator mới là thao tác resolve báo cáo.
+của moderator mới là thao tác resolve báo cáo. (Ngưỡng spoiler ở mục dưới hoạt
+động độc lập và chỉ che mờ, không ẩn.)
 
 Báo cáo do bộ lọc từ khoá tạo (`source=auto`, `reporter_id=NULL`) **không** được
 đếm vào ngưỡng này: phép đếm là `count(distinct reporter_id)` và SQL bỏ qua
 `NULL` — nếu không, vài lần auto-ẩn sẽ vô tình đạt ngưỡng của báo cáo người dùng.
+
+## Spoiler veil (`has_spoiler`)
+
+Che nội dung tiết lộ là chuyện **khác** ẩn kiểm duyệt: `is_hidden` gỡ bình luận
+khỏi tầm đọc (`body: null` với non-staff), còn `has_spoiler` chỉ báo cho client
+che mờ nội dung kèm nút "Nhấn để xem" — `body` vẫn được trả về (veil là tiện
+ích cho người đọc, không phải hàng rào bảo mật), và client tự mở được không cần
+gọi server. Staff (`moderator`/`admin`) không bị che.
+
+- **Tác giả tự khai**: `POST /me/comments` nhận thêm `has_spoiler?: bool`
+  (mặc định `false`) — dùng cho checkbox "Nội dung có spoiler" ở form bình luận.
+- **Tự động theo ngưỡng**: khi một báo cáo `reason=spoiler` được tạo, đếm số
+  reporter **khác nhau** đang có báo cáo `open` **cùng reason spoiler**; đạt
+  `COMMENT_SPOILER_REPORT_THRESHOLD` (mặc định 2) → đặt `has_spoiler=true`.
+  Báo cáo vẫn `open` để moderator duyệt (giống auto-hide), và ngưỡng ẩn
+  (`COMMENT_REPORT_HIDE_THRESHOLD`, đếm **mọi** reason) vẫn độc lập.
+- **Moderator sửa tay**: `/admin/comments/{id}/spoiler` và `/unspoiler` (cần
+  thiết vì auto-veil phải có đường hoàn tác; cũng dùng để che bình luận không ai
+  báo). Queue `/admin/reports` trả `comment.has_spoiler` + nút "Đánh dấu
+  spoiler"/"Bỏ spoiler".
+- `CommentVisibilityOut` (response của hide/unhide/spoiler/unspoiler) nay có
+  `has_spoiler`.
 
 ## Auto-moderation theo từ khoá
 
@@ -156,6 +181,7 @@ dismiss. Mặc định danh sách rỗng = tắt hoàn toàn (không đổi hàn
 | Setting | Env | Mặc định |
 |---------|-----|----------|
 | `comment_report_hide_threshold` | `COMMENT_REPORT_HIDE_THRESHOLD` | `3` |
+| `comment_spoiler_report_threshold` | `COMMENT_SPOILER_REPORT_THRESHOLD` | `2` |
 | `moderation_blocked_keywords` | `MODERATION_BLOCKED_KEYWORDS` | rỗng (tắt) |
 
 Có mặt trong `.env.example` và service `api` của `docker-compose.yml`.

@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     popular_min_ratings: int = Field(default=3, ge=1)
 
     comment_report_hide_threshold: int = Field(default=3, ge=1)
+    comment_spoiler_report_threshold: int = Field(default=2, ge=1)
     moderation_blocked_keywords: Annotated[list[str], NoDecode] = Field(default=[])
 
     cors_origins: Annotated[list[str], NoDecode] = Field(

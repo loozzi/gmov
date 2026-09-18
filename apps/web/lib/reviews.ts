@@ -33,6 +33,7 @@ export interface CommentReply {
   user: CommentUser;
   body: string | null;
   is_hidden: boolean;
+  has_spoiler: boolean;
   reported: boolean;
   created_at: string;
 }
@@ -43,6 +44,7 @@ export interface MovieComment {
   user: CommentUser;
   body: string | null;
   is_hidden: boolean;
+  has_spoiler: boolean;
   reported: boolean;
   created_at: string;
   replies: CommentReply[];
@@ -153,12 +155,17 @@ export function useComments(movieSlug: string, page = 1) {
 export function useAddComment(movieSlug: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { body: string; parent_id?: string }) =>
+    mutationFn: (input: {
+      body: string;
+      parent_id?: string;
+      has_spoiler?: boolean;
+    }) =>
       apiFetch<MovieComment>("/api/v1/me/comments", {
         method: "POST",
         body: JSON.stringify({
           movie_slug: movieSlug,
           body: input.body,
+          ...(input.has_spoiler ? { has_spoiler: true } : {}),
           ...(input.parent_id ? { parent_id: input.parent_id } : {}),
         }),
       }),

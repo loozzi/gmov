@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { EyeOff } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
@@ -35,15 +36,38 @@ function Avatar({ name }: { name: string }) {
 function CommentBody({
   body,
   isHidden,
+  hasSpoiler,
   isModerator,
 }: {
   body: string | null;
   isHidden: boolean;
+  hasSpoiler: boolean;
   isModerator: boolean;
 }) {
+  // Local-only reveal: the veil is a reader affordance, not a security
+  // boundary, so lifting it needs no round trip.
+  const [revealed, setRevealed] = useState(false);
   if (body === null || (isHidden && !isModerator)) {
     return (
       <p className="text-sm text-muted-foreground italic">Bình luận đã bị ẩn</p>
+    );
+  }
+  if (hasSpoiler && !revealed && !isModerator) {
+    return (
+      <div className="relative">
+        <p aria-hidden className="text-sm whitespace-pre-wrap blur-sm select-none">
+          {body}
+        </p>
+        <button
+          type="button"
+          data-testid="spoiler-veil"
+          onClick={() => setRevealed(true)}
+          className="absolute inset-0 flex cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-background/60 text-xs font-medium text-muted-foreground backdrop-blur-[1px] hover:text-foreground"
+        >
+          <EyeOff className="size-3.5" />
+          Nội dung có spoiler — nhấn để xem
+        </button>
+      </div>
     );
   }
   return <p className="text-sm whitespace-pre-wrap">{body}</p>;
@@ -87,6 +111,7 @@ function ReplyItem({
           movieSlug={movieSlug}
           commentId={reply.id}
           isHidden={isHidden}
+          hasSpoiler={reply.has_spoiler}
           isOwner={isOwner}
           canReport={canReport}
           reported={reply.reported}
@@ -98,6 +123,7 @@ function ReplyItem({
       <CommentBody
         body={reply.body}
         isHidden={isHidden}
+        hasSpoiler={reply.has_spoiler}
         isModerator={isModerator}
       />
     </div>
@@ -163,6 +189,7 @@ export function CommentItem({
           movieSlug={movieSlug}
           commentId={comment.id}
           isHidden={isHidden}
+          hasSpoiler={comment.has_spoiler}
           isOwner={isOwner}
           canReport={canReport}
           reported={comment.reported}
@@ -174,6 +201,7 @@ export function CommentItem({
       <CommentBody
         body={comment.body}
         isHidden={isHidden}
+        hasSpoiler={comment.has_spoiler}
         isModerator={isModerator}
       />
       <div>

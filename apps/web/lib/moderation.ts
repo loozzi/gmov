@@ -31,6 +31,7 @@ export interface ReportedComment {
   id: string;
   body: string | null;
   is_hidden: boolean;
+  has_spoiler: boolean;
   movie_slug: string;
   user: AdminCommentUser;
   created_at: string;
@@ -110,11 +111,13 @@ export function useReports(status: ReportsFilter, page = 1) {
   });
 }
 
-function useCommentModeration(movieSlug: string, action: "hide" | "unhide") {
+type CommentFlagAction = "hide" | "unhide" | "spoiler" | "unspoiler";
+
+function useCommentModeration(movieSlug: string, action: CommentFlagAction) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (commentId: string) =>
-      apiFetch<{ ok: boolean; is_hidden: boolean }>(
+      apiFetch<{ ok: boolean; is_hidden: boolean; has_spoiler: boolean }>(
         `/api/v1/admin/comments/${commentId}/${action}`,
         { method: "POST" },
       ),
@@ -133,6 +136,14 @@ export function useHideComment(movieSlug: string) {
 
 export function useUnhideComment(movieSlug: string) {
   return useCommentModeration(movieSlug, "unhide");
+}
+
+export function useMarkSpoiler(movieSlug: string) {
+  return useCommentModeration(movieSlug, "spoiler");
+}
+
+export function useUnmarkSpoiler(movieSlug: string) {
+  return useCommentModeration(movieSlug, "unspoiler");
 }
 
 export function useDismissReport() {
