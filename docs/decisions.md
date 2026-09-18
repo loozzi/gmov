@@ -796,3 +796,18 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      `ensure_metadata()` backfill-on-demand (cap 50 slug, fail-open) cho slug có
      tín hiệu nhưng thiếu snapshot — nếu không, tín hiệu người dùng mất giá trị
      vì không map được sang thể loại.
+
+143. **SEO/Open Graph: helper chung + ảnh card động, base URL dùng `SITE_URL`
+     runtime.** `lib/seo.ts` gom `siteUrl()`, `buildMetadata()` (canonical,
+     `openGraph`, `twitter`, `noindex`) và các hàm JSON-LD; mọi trang khai báo
+     qua đó thay vì tự ghép, nên `og:type`/`og:url`/`locale`/`siteName` nhất quán.
+     Ảnh chia sẻ trang phim là route động `/phim/[slug]/opengraph-image`
+     (`ImageResponse`, edge) ghép poster + tên + năm/thể loại, fallback gradient
+     brand khi thiếu/lỗi poster; kèm `robots: index=false` cho `/xem` và
+     `/tim-kiem`. Font dùng Roboto tự subset latin+vietnamese (satori không có
+     glyph tiếng Việt và không hỗ trợ woff2); route phải chạy edge vì ở node
+     runtime webpack biến `new URL(asset, import.meta.url)` thành path
+     `/_next/...` mà `fetch` node không parse được. Base URL đổi từ
+     `NEXT_PUBLIC_SITE_URL` sang `SITE_URL` (server-only) — biến `NEXT_PUBLIC_*`
+     bị inline lúc build nên đổi domain phải rebuild image. Banner mặc định
+     toàn site vẫn là artwork brand, không dùng poster phim.

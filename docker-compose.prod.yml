@@ -25,6 +25,7 @@ services:
   web:
     environment:
       BACKEND_URL: http://api:8000
+      SITE_URL: https://${DOMAIN:?DOMAIN is required}
 
   nginx:
     ports:

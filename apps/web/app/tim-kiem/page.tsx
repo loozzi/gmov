@@ -1,8 +1,29 @@
+import type { Metadata } from "next";
+
 import { BrowseGrid } from "@/components/movies/browse-grid";
 import type { BrowseSource } from "@/lib/browse";
+import { buildMetadata } from "@/lib/seo";
 import { fetchSearch } from "@/lib/server-movies";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ keyword?: string }>;
+}): Promise<Metadata> {
+  const { keyword = "" } = await searchParams;
+  const q = keyword.trim();
+  return buildMetadata({
+    title: q ? `Tìm kiếm: ${q}` : "Tìm kiếm",
+    description: q
+      ? `Kết quả tìm kiếm cho "${q}" trên gmov.`
+      : "Tìm kiếm phim trên gmov.",
+    path: q ? `/tim-kiem?keyword=${encodeURIComponent(q)}` : "/tim-kiem",
+    // Search result pages are thin/duplicated; keep them out of the index.
+    noIndex: true,
+  });
+}
 
 export default async function TimKiemPage({
   searchParams,

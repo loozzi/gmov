@@ -1,12 +1,23 @@
+import type { Metadata } from "next";
+
 import { ContinueWatchingRail } from "@/components/movies/continue-watching-rail";
 import { HeroCarousel } from "@/components/movies/hero-carousel";
 import { MovieRail } from "@/components/movies/movie-rail";
 import { OnboardingCta } from "@/components/movies/onboarding-cta";
 import { RecommendationsRail } from "@/components/movies/recommendations-rail";
 import { Reveal } from "@/components/ui/reveal";
+import { buildMetadata } from "@/lib/seo";
 import { fetchGenre, fetchLatest, fetchList } from "@/lib/server-movies";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = buildMetadata({
+  title: "gmov — Xem phim và TV shows miễn phí",
+  description:
+    "Duyệt, tìm kiếm và theo dõi phim yêu thích: phim lẻ, phim bộ, hoạt hình và TV shows mới cập nhật mỗi ngày.",
+  path: "/",
+  absoluteTitle: true,
+});
 
 export default async function Home() {
   const [latest, phimLe, phimBo, hoatHinh, tvShows] = await Promise.all([

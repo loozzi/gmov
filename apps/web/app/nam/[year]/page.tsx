@@ -1,8 +1,24 @@
+import type { Metadata } from "next";
+
 import { BrowseGrid } from "@/components/movies/browse-grid";
 import type { BrowseSource } from "@/lib/browse";
+import { buildMetadata } from "@/lib/seo";
 import { fetchYear } from "@/lib/server-movies";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ year: string }>;
+}): Promise<Metadata> {
+  const { year } = await params;
+  return buildMetadata({
+    title: `Phim năm ${year}`,
+    description: `Danh sách phim năm ${year} mới cập nhật, xem online trên gmov.`,
+    path: `/nam/${year}`,
+  });
+}
 
 export default async function YearPage({
   params,

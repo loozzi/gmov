@@ -212,3 +212,21 @@ thấy thẳng nội dung và có badge `Spoiler` + nút "Đánh dấu spoiler"/
 - **Accessibility:** một reset `prefers-reduced-motion` toàn cục; `Reveal` mặc
   định hiển thị (không ẩn khi thiếu JS). Quyết định chi tiết: `docs/decisions.md`
   #85–90, thiết kế: `docs/superpowers/specs/2026-09-16-motion-design.md`.
+
+## SEO & chia sẻ
+
+- **Helper chung:** `lib/seo.ts` (`siteUrl`, `buildMetadata`, `movieSocialImage`,
+  `websiteJsonLd`/`movieJsonLd`/`breadcrumbJsonLd`) + `components/seo/json-ld.tsx`
+  (escape `<`). Mọi trang khai báo metadata qua `buildMetadata()` để có canonical,
+  Open Graph (`type`, `url`, `siteName`, `locale=vi_VN`) và Twitter card
+  `summary_large_image` giống nhau.
+- **Base URL:** `SITE_URL` (server-only, runtime) — canonical/OG/sitemap/robots
+  đều dùng; mặc định `http://localhost:3000`, production đặt
+  `SITE_URL=https://movie.thaonq.id.vn`.
+- **Ảnh chia sẻ:** banner brand mặc định ở `/opengraph-image`; trang phim có card
+  riêng `/phim/[slug]/opengraph-image` (1200×630, poster mờ + tên + năm/thể loại,
+  cache 24h). Facebook/Instagram/Zalo đọc các tag này khi dán link.
+- **JSON-LD:** `WebSite` + `SearchAction` toàn site, `Movie`/`TVSeries` +
+  `BreadcrumbList` ở trang phim.
+- **Noindex:** `/xem/*` (nội dung mỏng) và `/tim-kiem` (kết quả tìm kiếm) đặt
+  `robots: index=false`; `robots.ts` vẫn disallow `/api/`, `/me/`, `/xem/`.

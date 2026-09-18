@@ -1,17 +1,12 @@
 import type { MetadataRoute } from "next";
 
+import { siteUrl } from "@/lib/seo";
 import { fetchLatest } from "@/lib/server-movies";
 
 export const revalidate = 21600; // 6h: sitemap regen chậm, upstream mới vẫn index được
 
 const MAX_PAGES = 100; // 100 trang x 10 phim = ~1000 URL
 const CONCURRENCY = 5;
-
-function siteUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
-}
 
 async function collectSlugs(): Promise<string[]> {
   const seen = new Set<string>();

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { WatchView } from "@/components/player/watch-view";
+import { buildMetadata, movieSocialImage } from "@/lib/seo";
 import { fetchMovieDetail, stripHtml } from "@/lib/server-movies";
 
 export const dynamic = "force-dynamic";
@@ -18,14 +19,18 @@ export async function generateMetadata({
     .flatMap((s) => s.episodes)
     .find((e) => (e.slug ?? e.name) === episode);
   const title = `Xem ${movie.name}${ep ? ` - ${ep.name}` : ""}`;
-  return {
+  return buildMetadata({
     title,
-    description: stripHtml(movie.description).slice(0, 160),
-    openGraph: {
-      title,
-      images: movie.poster_url ? [movie.poster_url] : [],
-    },
-  };
+    description: [title, stripHtml(movie.description)]
+      .filter(Boolean)
+      .join(" — ")
+      .slice(0, 300),
+    path: `/xem/${slug}/${episode}`,
+    type: "video.episode",
+    images: [movieSocialImage(slug, movie.name)],
+    // Player pages are thin content and already disallowed in robots.txt.
+    noIndex: true,
+  });
 }
 
 export default async function WatchPage({

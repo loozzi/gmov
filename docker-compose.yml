@@ -121,6 +121,8 @@ services:
     environment:
       # Browser chỉ gọi cùng origin; /api/v1/* proxy server-side tới đây.
       BACKEND_URL: ${BACKEND_URL:-http://api:8000}
+      # URL public cho canonical/OG/sitemap (runtime, không inline lúc build).
+      SITE_URL: ${SITE_URL:-http://localhost:3000}
     depends_on:
       api:
         condition: service_healthy

@@ -11,8 +11,16 @@ import { StarInput } from "@/components/movies/star-input";
 import { CommentSection } from "@/components/movies/comment-section";
 import { MovieRail } from "@/components/movies/movie-rail";
 import { WatchlistButton } from "@/components/movies/watchlist-button";
+import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
+import { GENRES, labelFor } from "@/lib/catalog";
+import {
+  breadcrumbJsonLd,
+  buildMetadata,
+  movieJsonLd,
+  movieSocialImage,
+} from "@/lib/seo";
 import { fetchMovieDetail, fetchRelated, stripHtml } from "@/lib/server-movies";
 
 export const dynamic = "force-dynamic";
@@ -24,17 +32,24 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const movie = await fetchMovieDetail(slug);
-  if (!movie) return { title: "Không tìm thấy phim" };
-  const description = stripHtml(movie.description).slice(0, 160);
-  return {
+  if (!movie) {
+    return { title: "Không tìm thấy phim", robots: { index: false } };
+  }
+  const genres = movie.genres
+    .map((genre) => labelFor(GENRES, genre, genre))
+    .slice(0, 3);
+  const facts = [movie.year, genres.join(", ")].filter(Boolean).join(" · ");
+  const description = [facts, stripHtml(movie.description)]
+    .filter(Boolean)
+    .join(" — ")
+    .slice(0, 300);
+  return buildMetadata({
     title: movie.name,
     description,
-    openGraph: {
-      title: movie.name,
-      description,
-      images: movie.poster_url ? [movie.poster_url] : [],
-    },
-  };
+    path: `/phim/${slug}`,
+    type: "video.movie",
+    images: [movieSocialImage(slug, movie.name)],
+  });
 }
 
 function MetaRow({ label, value }: { label: string; value: string }) {
@@ -64,6 +79,13 @@ export default async function MovieDetailPage({
 
   return (
     <div className="space-y-8">
+      <JsonLd data={movieJsonLd(movie)} />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: "Trang chủ", path: "/" },
+          { name: movie.name, path: `/phim/${slug}` },
+        ])}
+      />
       <section className="border-border relative overflow-hidden rounded-2xl border">
         {poster && (
           <>
