@@ -7,6 +7,7 @@ import { Providers } from "@/components/providers";
 import { PwaRegister } from "@/components/pwa-register";
 import { JsonLd } from "@/components/seo/json-ld";
 import { THEME_INIT_SCRIPT } from "@/components/theme-provider";
+import { TV_INIT_SCRIPT } from "@/lib/tv";
 import {
   SITE_DESCRIPTION,
   SITE_LOCALE,
@@ -60,6 +61,7 @@ export default function RootLayout({
     <html lang="vi" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: TV_INIT_SCRIPT }} />
         <JsonLd data={websiteJsonLd()} />
         <link rel="preconnect" href="https://phim.nguonc.com" />
         <link rel="dns-prefetch" href="https://phim.nguonc.com" />

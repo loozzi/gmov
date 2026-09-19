@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { GuestProgressMerge } from "@/components/auth/guest-progress-merge";
+import { TvProvider } from "@/components/tv/tv-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -26,7 +27,9 @@ export function Providers({ children }: { children: ReactNode }) {
       <ThemeProvider>
         <AuthProvider>
           <GuestProgressMerge />
-          <Toaster>{children}</Toaster>
+          <Toaster>
+            <TvProvider>{children}</TvProvider>
+          </Toaster>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

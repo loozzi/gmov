@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
+@custom-variant tv (&:where(.tv-mode, .tv-mode *));
 
 @theme {
   --color-background: #fafafa;
@@ -261,6 +262,17 @@ body {
   color: var(--color-foreground);
   font-family: var(--font-sans);
   min-height: 100vh;
+}
+
+/* TV mode (remote-driven 10-foot UI, see lib/tv.ts): larger type, strong
+   focus ring for arrow-key navigation, no hover-dependent hiding (components
+   use the `tv:` variant for that). */
+.tv-mode {
+  font-size: 112.5%;
+}
+.tv-mode :focus {
+  outline: 3px solid var(--color-ring);
+  outline-offset: 3px;
 }
 
 /* Horizontal rails: hidden scrollbar (Netflix-style), scroll via drag/wheel/arrows */

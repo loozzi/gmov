@@ -111,7 +111,7 @@ export function HeroCarousel({ movies }: { movies: MovieCardType[] }) {
 
         {count > 1 && (
           <>
-            <div className="absolute top-1/2 right-3 left-3 hidden -translate-y-1/2 justify-between md:flex md:opacity-0 md:transition-opacity md:group-hover:opacity-100">
+            <div className="absolute top-1/2 right-3 left-3 hidden -translate-y-1/2 justify-between md:flex md:opacity-0 md:transition-opacity md:group-hover:opacity-100 tv:opacity-100">
               <Button
                 variant="secondary"
                 size="icon"

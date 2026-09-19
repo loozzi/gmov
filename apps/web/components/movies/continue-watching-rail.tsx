@@ -39,7 +39,7 @@ export function ContinueWatchingRail() {
         {isAuthenticated && (
           <Link
             href="/me/history"
-            className="text-muted-foreground hover:text-brand flex items-center gap-0.5 text-xs font-medium opacity-100 transition-all duration-200 group-hover/rail:translate-x-1 sm:opacity-0 sm:group-hover/rail:opacity-100"
+            className="text-muted-foreground hover:text-brand flex items-center gap-0.5 text-xs font-medium opacity-100 transition-all duration-200 group-hover/rail:translate-x-1 sm:opacity-0 sm:group-hover/rail:opacity-100 tv:opacity-100"
           >
             Lịch sử xem
           </Link>
@@ -75,7 +75,7 @@ export function ContinueWatchingRail() {
                   sizes="(max-width: 640px) 256px, 288px"
                 />
                 <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-                <span className="relative flex size-12 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                <span className="relative flex size-12 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100 tv:opacity-100">
                   <Play className="size-5 fill-white" />
                 </span>
                 <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold text-white">

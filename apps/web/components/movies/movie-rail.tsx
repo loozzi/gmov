@@ -33,7 +33,7 @@ export function MovieRail({
         {href && (
           <Link
             href={href}
-            className="flex translate-x-0 items-center gap-0.5 text-xs font-medium text-muted-foreground opacity-100 transition-all duration-200 group-hover/rail:translate-x-1 hover:text-brand sm:opacity-0 sm:group-hover/rail:opacity-100"
+            className="flex translate-x-0 items-center gap-0.5 text-xs font-medium text-muted-foreground opacity-100 transition-all duration-200 group-hover/rail:translate-x-1 hover:text-brand sm:opacity-0 sm:group-hover/rail:opacity-100 tv:opacity-100"
           >
             Xem tất cả <ChevronRight className="size-3.5" />
           </Link>

@@ -811,3 +811,16 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      `NEXT_PUBLIC_SITE_URL` sang `SITE_URL` (server-only) — biến `NEXT_PUBLIC_*`
      bị inline lúc build nên đổi domain phải rebuild image. Banner mặc định
      toàn site vẫn là artwork brand, không dùng poster phim.
+
+144. **TV mode tối thiểu (spike để test trên TV thật): tự nhận diện + `?tv=1`.**
+     `lib/tv.ts` gom nhận diện UA (`Tizen|WebOS|GoogleTV|Android TV|AFT…`),
+     `resolveTvMode()` theo thứ tự `?tv=` → localStorage `gmov-tv` → UA;
+     `TvProvider` đồng bộ class `tv-mode` lên `<html>`, kèm `TV_INIT_SCRIPT`
+     pre-paint trong `<head>` (cùng pattern `THEME_INIT_SCRIPT`) để TV không
+     nháy giao diện desktop. `TvSpatialNav` bắt phím mũi tên toàn trang, focus
+     phần tử gần nhất theo hướng (hình học rect); nhường phím khi đang gõ
+     input (gợi ý tìm kiếm) và khi trang đã `preventDefault()` (phím tắt player
+     tua/âm lượng). CSS: variant Tailwind `tv:` + `.tv-mode` (chữ 112.5%,
+     focus ring 3px); hiện cứng các nút ẩn chờ hover ("Xem tất cả", play
+     overlay "Xem tiếp", mũi tên hero) bằng `tv:opacity-100`. Cố ý KHÔNG làm
+     10-foot UI riêng — spike này chỉ trả lời "remote dùng được không".
