@@ -66,6 +66,9 @@ Top-level keys: `status`, `paginate`, `items`, plus `cat` on endpoints 2/4/5/6
 }
 ```
 
+> Note (2026-10): newer items return image URLs on `https://img.nguonc.com/images/...`;
+> the web `next.config.ts` allows any `*.nguonc.com` host for `next/image`.
+
 Notes (observed):
 - List items have NO `id` field. Detail movie HAS `id`.
 - List items HAVE `year` (string, may be year like `"2026"`). Detail movie has NO `year`

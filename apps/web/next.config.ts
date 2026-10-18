@@ -6,7 +6,8 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   images: {
     remotePatterns: [
-      { protocol: "https", hostname: "phim.nguonc.com", pathname: "/**" },
+      // Upstream serves images from phim.nguonc.com and (since 2026-10) img.nguonc.com.
+      { protocol: "https", hostname: "**.nguonc.com", pathname: "/**" },
     ],
   },
   async redirects() {
