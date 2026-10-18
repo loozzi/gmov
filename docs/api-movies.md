@@ -15,7 +15,7 @@ Base: `/api/v1/movies`. Every response carries `X-Cache: HIT | MISS | STALE`.
 | GET | `/search?keyword=&page=1` | `/films/search` | 5 min |
 | GET | `/{slug}` | `/film/{slug}` | 30 min |
 | GET | `/{slug}/related?limit=12` | computed, xem bên dưới | 30 min |
-| GET | `/{slug}/resolve` | `/film/{slug}` + `/films/search` | 24 h (miss: 1 h) |
+| GET | `/{slug}/resolve` | `/film/{slug}` + `/films/search` | 30 days (miss: 1 h) |
 
 Unknown `type` → 404 `INVALID_LIST_TYPE`; bad year → 400 `INVALID_YEAR`;
 unknown slug → 404 `MOVIE_NOT_FOUND` (from upstream); upstream down with no
