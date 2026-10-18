@@ -65,6 +65,18 @@ export function fetchMovieDetail(slug: string) {
   return get<MovieDetail>(`/api/v1/movies/${slug}`, 1800);
 }
 
+/**
+ * Current slug for a movie whose slug 404s: upstream sometimes renames slugs
+ * (e.g. `bac-si-x-phan-1` -> `bac-si-x`). Null when it cannot be resolved.
+ */
+export async function resolveMovieSlug(slug: string): Promise<string | null> {
+  const data = await get<{ slug: string }>(
+    `/api/v1/movies/${encodeURIComponent(slug)}/resolve`,
+    0,
+  );
+  return data && data.slug !== slug ? data.slug : null;
+}
+
 export function fetchRelated(slug: string, limit = 12) {
   return get<RelatedMovies>(
     `/api/v1/movies/${slug}/related?limit=${limit}`,

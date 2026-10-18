@@ -9,8 +9,20 @@ from app.core.exceptions import AppException
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.library import CommentOut, PaginatedComments, RatingSummary
-from app.schemas.movie import MovieDetail, PaginatedMovies, RelatedMovies
-from app.services import cache, comment_service, nguonc, rating_service, related_service
+from app.schemas.movie import (
+    MovieDetail,
+    PaginatedMovies,
+    RelatedMovies,
+    ResolvedSlug,
+)
+from app.services import (
+    cache,
+    comment_service,
+    nguonc,
+    rating_service,
+    related_service,
+    slug_resolver,
+)
 from app.services.cache import DETAIL_TTL, LIST_TTL, SEARCH_TTL
 from app.services.related_service import RELATED_TTL
 
@@ -119,6 +131,24 @@ async def detail(slug: str, response: Response):
         response, f"detail:{slug}", {}, DETAIL_TTL, MovieDetail,
         lambda: nguonc.fetch_detail(slug),
     )
+
+
+@router.get("/{slug}/resolve", response_model=ResolvedSlug)
+async def resolve_slug(
+    slug: str, response: Response, db: AsyncSession = Depends(get_db)
+) -> ResolvedSlug:
+    """Current slug for `slug`: itself if upstream still has it, else the slug
+    upstream renamed it to (profile data is migrated along). 404 if unknown."""
+    try:
+        await detail(slug, response)
+        return ResolvedSlug(slug=slug)
+    except AppException as exc:
+        if exc.status_code != 404:
+            raise
+    new = await slug_resolver.resolve(db, slug)
+    if new is None:
+        raise AppException("Movie not found", "MOVIE_NOT_FOUND", 404)
+    return ResolvedSlug(slug=new)
 
 
 @router.get("/{slug}/related", response_model=RelatedMovies)

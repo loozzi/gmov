@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { WatchView } from "@/components/player/watch-view";
 import { buildMetadata, movieSocialImage } from "@/lib/seo";
-import { fetchMovieDetail, stripHtml } from "@/lib/server-movies";
+import {
+  fetchMovieDetail,
+  resolveMovieSlug,
+  stripHtml,
+} from "@/lib/server-movies";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +44,11 @@ export default async function WatchPage({
 }) {
   const { slug, episode } = await params;
   const movie = await fetchMovieDetail(slug);
-  if (!movie) notFound();
+  if (!movie) {
+    const moved = await resolveMovieSlug(slug);
+    if (moved) redirect(`/xem/${moved}/${episode}`);
+    notFound();
+  }
   const exists = movie.servers
     .flatMap((s) => s.episodes)
     .some((e) => (e.slug ?? e.name) === episode);

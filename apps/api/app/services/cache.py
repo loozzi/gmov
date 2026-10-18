@@ -49,13 +49,17 @@ async def cached_fetch(
     """Return (data, status) where status is HIT, MISS or STALE.
 
     On upstream failure, serve the stale copy if present instead of erroring.
+    A 404 is an answer, not a failure (e.g. the slug was renamed upstream), so
+    it is never masked by a stale copy.
     """
     cached = await _safe_get(key)
     if cached is not None:
         return model.model_validate_json(cached), "HIT"
     try:
         data = await fetcher()
-    except AppException:
+    except AppException as exc:
+        if exc.status_code == 404:
+            raise
         stale = await _safe_get(f"{key}:stale")
         if stale is not None:
             return model.model_validate_json(stale), "STALE"

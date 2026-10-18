@@ -824,3 +824,10 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      focus ring 3px); hiện cứng các nút ẩn chờ hover ("Xem tất cả", play
      overlay "Xem tiếp", mũi tên hero) bằng `tv:opacity-100`. Cố ý KHÔNG làm
      10-foot UI riêng — spike này chỉ trả lời "remote dùng được không".
+145. **Theo dấu slug bị upstream đổi tên: `GET /movies/{slug}/resolve`.**
+     NguonC không redirect slug cũ, nên lịch sử xem/yêu thích trỏ vào trang 404.
+     Resolve chỉ chạy khi `/film/{slug}` thật sự 404, tìm lại bằng tên + poster
+     đã lưu, rồi migrate dữ liệu profile ngay trong GET (idempotent; kết quả cache
+     Redis `slug_alias:*` 24h, miss 1h để không search lại liên tục). Cùng lúc,
+     `cached_fetch` thôi trả bản stale khi upstream 404 — trước đây slug cũ vẫn
+     hiện danh sách tập cũ tới 24h thay vì được resolve.

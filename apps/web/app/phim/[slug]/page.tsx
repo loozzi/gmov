@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Calendar, Clock, MonitorPlay } from "lucide-react";
 
 import { FavoriteButton } from "@/components/movies/favorite-button";
@@ -21,7 +21,12 @@ import {
   movieJsonLd,
   movieSocialImage,
 } from "@/lib/seo";
-import { fetchMovieDetail, fetchRelated, stripHtml } from "@/lib/server-movies";
+import {
+  fetchMovieDetail,
+  fetchRelated,
+  resolveMovieSlug,
+  stripHtml,
+} from "@/lib/server-movies";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +76,11 @@ export default async function MovieDetailPage({
     fetchMovieDetail(slug),
     fetchRelated(slug),
   ]);
-  if (!movie) notFound();
+  if (!movie) {
+    const moved = await resolveMovieSlug(slug);
+    if (moved) redirect(`/phim/${moved}`);
+    notFound();
+  }
 
   const poster = movie.poster_url || movie.thumb_url;
   const firstEpisode = movie.servers.flatMap((s) => s.episodes)[0] ?? null;

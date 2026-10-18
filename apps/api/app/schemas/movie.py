@@ -69,3 +69,7 @@ class CandidatePage(BaseModel):
 
 class RelatedMovies(BaseModel):
     items: list[MovieCard] = Field(default_factory=list)
+
+
+class ResolvedSlug(BaseModel):
+    slug: str

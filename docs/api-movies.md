@@ -15,10 +15,24 @@ Base: `/api/v1/movies`. Every response carries `X-Cache: HIT | MISS | STALE`.
 | GET | `/search?keyword=&page=1` | `/films/search` | 5 min |
 | GET | `/{slug}` | `/film/{slug}` | 30 min |
 | GET | `/{slug}/related?limit=12` | computed, xem bên dưới | 30 min |
+| GET | `/{slug}/resolve` | `/film/{slug}` + `/films/search` | 24 h (miss: 1 h) |
 
 Unknown `type` → 404 `INVALID_LIST_TYPE`; bad year → 400 `INVALID_YEAR`;
 unknown slug → 404 `MOVIE_NOT_FOUND` (from upstream); upstream down with no
-cache → 502 `UPSTREAM_ERROR`. `limit` ngoài 1–24 → 422.
+cache → 502 `UPSTREAM_ERROR`. `limit` ngoài 1–24 → 422. Upstream 404 không
+bao giờ được che bằng bản `STALE` (404 là câu trả lời, không phải sự cố).
+
+## Slug bị đổi (`/{slug}/resolve`)
+
+NguonC đôi khi đổi slug (vd. `bac-si-x-phan-1` → `bac-si-x` khi ra tập mới),
+slug cũ 404. Trả `{"slug": ...}`: chính nó nếu upstream còn; nếu không, dùng
+tên + poster đã lưu (`watch_progress`, `catalog_items`) để search upstream —
+khớp poster URL là quyết định, không thì khớp tên (bỏ hậu tố `(Phần N)`) duy
+nhất. Tìm được thì chuyển dữ liệu profile (`watch_progress`, `favorites`,
+`watchlist`, `ratings`, `recommendation_feedback`, `comments`) sang slug mới
+(trùng khoá thì giữ dòng của slug mới) và xoá catalog item cũ. Không tìm được →
+404 `MOVIE_NOT_FOUND`. Web `/phim/{slug}` và `/xem/{slug}/{ep}` gọi endpoint
+này khi detail 404 rồi redirect.
 
 ## Phim liên quan (`/{slug}/related`)
 
