@@ -828,6 +828,6 @@ Log ambiguous decisions here (Phase 0+). Newest last.
      NguonC không redirect slug cũ, nên lịch sử xem/yêu thích trỏ vào trang 404.
      Resolve chỉ chạy khi `/film/{slug}` thật sự 404, tìm lại bằng tên + poster
      đã lưu, rồi migrate dữ liệu profile ngay trong GET (idempotent; kết quả cache
-     Redis `slug_alias:*` 24h, miss 1h để không search lại liên tục). Cùng lúc,
+     Redis `slug_alias:*` 30 ngày vì sau migrate DB không còn nhớ slug cũ; miss 1h ghi bằng `nx` để request chạy song song không đè alias vừa tìm được). Cùng lúc,
      `cached_fetch` thôi trả bản stale khi upstream 404 — trước đây slug cũ vẫn
      hiện danh sách tập cũ tới 24h thay vì được resolve.

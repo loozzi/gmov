@@ -25,7 +25,9 @@ from app.services import nguonc
 
 logger = logging.getLogger("gmov.slug_resolver")
 
-FOUND_TTL = 86400  # 24h
+# After migration nothing in the DB remembers the old slug any more, so the
+# alias is the only way old links (bookmarks, shared URLs) keep working.
+FOUND_TTL = 30 * 86400
 MISS_TTL = 3600  # 1h: don't re-search upstream on every 404 hit
 
 # Tables referencing a movie by slug, with the columns (besides movie_slug)
@@ -126,7 +128,12 @@ async def resolve(db: AsyncSession, slug: str) -> str | None:
         logger.info("slug renamed upstream: %s -> %s", slug, new)
         await migrate(db, slug, new)
     try:
-        await redis.set(key, new or "", ex=FOUND_TTL if new else MISS_TTL)
+        if new:
+            await redis.set(key, new, ex=FOUND_TTL)
+        else:
+            # nx: a concurrent request may have just resolved + migrated (which
+            # is why our hints came back empty); never clobber its alias.
+            await redis.set(key, "", ex=MISS_TTL, nx=True)
     except Exception:
         pass
     return new

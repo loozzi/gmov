@@ -135,3 +135,25 @@ async def test_detail_404_not_masked_by_stale(client, _redis):
     )
     r = await client.get("/api/v1/movies/old")
     assert r.status_code == 404
+
+
+@respx.mock
+async def test_miss_never_overwrites_concurrent_alias(client, _redis, monkeypatch):
+    """A request racing the migrating one finds no hints; it must not
+    replace the alias with a cached miss."""
+    from app.services import slug_resolver
+
+    async def _hints(_db, _slug):
+        # simulates: the other request resolved + migrated meanwhile
+        await _redis.set("slug_alias:old", "new", ex=60)
+        return set(), set()
+
+    respx.get(f"{BASE}/film/old").mock(
+        return_value=httpx.Response(404, json=NOT_FOUND)
+    )
+    monkeypatch.setattr(slug_resolver, "_hints", _hints)
+    r = await client.get("/api/v1/movies/old/resolve")
+    assert r.status_code == 404
+    assert await _redis.get("slug_alias:old") == "new"
+    r = await client.get("/api/v1/movies/old/resolve")
+    assert r.json() == {"slug": "new"}
